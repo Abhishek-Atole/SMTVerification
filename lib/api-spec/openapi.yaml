@@ -17,6 +17,8 @@ tags:
     description: Feeder scan operations
   - name: reports
     description: Report generation
+  - name: analytics
+    description: Analytics and statistics
 paths:
   /healthz:
     get:
@@ -256,6 +258,53 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SessionReport"
+
+  /analytics/overview:
+    get:
+      operationId: getAnalyticsOverview
+      tags: [analytics]
+      summary: Get overall system analytics overview
+      responses:
+        "200":
+          description: Analytics overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsOverview"
+
+  /analytics/pareto:
+    get:
+      operationId: getAnalyticsPareto
+      tags: [analytics]
+      summary: Get Pareto rejection analysis across all sessions
+      parameters:
+        - name: sessionId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Pareto rejection data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParetoData"
+
+  /analytics/trends:
+    get:
+      operationId: getAnalyticsTrends
+      tags: [analytics]
+      summary: Get session trend data over the last 30 days
+      responses:
+        "200":
+          description: Trend data by date
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SessionTrend"
 
 components:
   schemas:
@@ -543,3 +592,69 @@ components:
           items:
             $ref: "#/components/schemas/BomItem"
       required: [session, summary, bomItems]
+
+    AnalyticsOverview:
+      type: object
+      properties:
+        totalSessions:
+          type: integer
+        activeSessions:
+          type: integer
+        completedSessions:
+          type: integer
+        totalScans:
+          type: integer
+        totalOk:
+          type: integer
+        totalReject:
+          type: integer
+        overallOkRate:
+          type: number
+        totalBoms:
+          type: integer
+        avgDurationMinutes:
+          type: number
+      required: [totalSessions, activeSessions, completedSessions, totalScans, totalOk, totalReject, overallOkRate, totalBoms]
+
+    ParetoItem:
+      type: object
+      properties:
+        feederNumber:
+          type: string
+        partNumber:
+          type: string
+        description:
+          type: string
+        rejectCount:
+          type: integer
+        cumulativePercent:
+          type: number
+      required: [feederNumber, rejectCount, cumulativePercent]
+
+    ParetoData:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ParetoItem"
+        totalRejects:
+          type: integer
+      required: [items, totalRejects]
+
+    SessionTrend:
+      type: object
+      properties:
+        date:
+          type: string
+        sessions:
+          type: integer
+        totalScans:
+          type: integer
+        okCount:
+          type: integer
+        rejectCount:
+          type: integer
+        okRate:
+          type: number
+      required: [date, sessions, totalScans, okCount, rejectCount, okRate]

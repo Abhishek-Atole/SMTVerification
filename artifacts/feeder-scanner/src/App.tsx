@@ -1,7 +1,8 @@
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useEffect } from "react";
 import NotFound from "@/pages/not-found";
 import { Layout } from "@/components/layout";
 
@@ -12,36 +13,86 @@ import SessionNew from "@/pages/session-new";
 import SessionActive from "@/pages/session-active";
 import SessionReport from "@/pages/session-report";
 import SessionHistory from "@/pages/session-history";
+import Login from "@/pages/login";
+import Analytics from "@/pages/analytics";
+import { AuthProvider, useAuth } from "@/context/auth-context";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const queryClient = new QueryClient();
 
+function ProtectedRoute({ component: Component, allowedRoles }: { component: any, allowedRoles?: string[] }) {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!user) {
+      setLocation("/login");
+    } else if (allowedRoles && !allowedRoles.includes(user.role)) {
+      setLocation("/");
+    }
+  }, [user, setLocation, allowedRoles]);
+
+  if (!user) return null;
+  if (allowedRoles && !allowedRoles.includes(user.role)) return null;
+
+  return <Component />;
+}
+
 function Router() {
+  const { user } = useAuth();
+  
   return (
-    <Layout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/bom" component={Boms} />
-        <Route path="/bom/:id" component={BomDetail} />
-        <Route path="/session/new" component={SessionNew} />
-        <Route path="/session/:id" component={SessionActive} />
-        <Route path="/session/:id/report" component={SessionReport} />
-        <Route path="/sessions" component={SessionHistory} />
-        <Route component={NotFound} />
-      </Switch>
-    </Layout>
+    <Switch>
+      <Route path="/login" component={Login} />
+      <Route>
+        {user ? (
+          <Layout>
+            <Switch>
+              <Route path="/" component={Dashboard} />
+              <Route path="/bom">
+                {() => <ProtectedRoute component={Boms} allowedRoles={["engineer"]} />}
+              </Route>
+              <Route path="/bom/:id">
+                {() => <ProtectedRoute component={BomDetail} allowedRoles={["engineer"]} />}
+              </Route>
+              <Route path="/session/new">
+                {() => <ProtectedRoute component={SessionNew} allowedRoles={["engineer", "operator"]} />}
+              </Route>
+              <Route path="/session/:id">
+                {() => <ProtectedRoute component={SessionActive} allowedRoles={["engineer", "operator", "qa"]} />}
+              </Route>
+              <Route path="/session/:id/report">
+                {() => <ProtectedRoute component={SessionReport} allowedRoles={["engineer", "operator", "qa"]} />}
+              </Route>
+              <Route path="/sessions" component={SessionHistory} />
+              <Route path="/analytics">
+                {() => <ProtectedRoute component={Analytics} allowedRoles={["engineer", "qa"]} />}
+              </Route>
+              <Route component={NotFound} />
+            </Switch>
+          </Layout>
+        ) : (
+          <Login />
+        )}
+      </Route>
+    </Switch>
   );
 }
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
+      <AuthProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
+              <Router />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </QueryClientProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

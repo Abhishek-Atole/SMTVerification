@@ -183,3 +183,41 @@ export interface SessionReport {
   summary: SessionSummary;
   bomItems: BomItem[];
 }
+
+export interface AnalyticsOverview {
+  totalSessions: number;
+  activeSessions: number;
+  completedSessions: number;
+  totalScans: number;
+  totalOk: number;
+  totalReject: number;
+  overallOkRate: number;
+  totalBoms: number;
+  avgDurationMinutes?: number;
+}
+
+export interface ParetoItem {
+  feederNumber: string;
+  partNumber?: string;
+  description?: string;
+  rejectCount: number;
+  cumulativePercent: number;
+}
+
+export interface ParetoData {
+  items: ParetoItem[];
+  totalRejects: number;
+}
+
+export interface SessionTrend {
+  date: string;
+  sessions: number;
+  totalScans: number;
+  okCount: number;
+  rejectCount: number;
+  okRate: number;
+}
+
+export type GetAnalyticsParetoParams = {
+  sessionId?: number;
+};

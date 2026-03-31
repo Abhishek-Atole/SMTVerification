@@ -17,19 +17,23 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AnalyticsOverview,
   Bom,
   BomDetail,
   BomItem,
   CreateBomItemRequest,
   CreateBomRequest,
   CreateSessionRequest,
+  GetAnalyticsParetoParams,
   HealthStatus,
+  ParetoData,
   ScanFeederRequest,
   ScanResult,
   Session,
   SessionDetail,
   SessionReport,
   SessionSummary,
+  SessionTrend,
   UpdateSessionRequest,
 } from "./api.schemas";
 
@@ -1106,6 +1110,253 @@ export function useGetSessionReport<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetSessionReportQueryOptions(sessionId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get overall system analytics overview
+ */
+export const getGetAnalyticsOverviewUrl = () => {
+  return `/api/analytics/overview`;
+};
+
+export const getAnalyticsOverview = async (
+  options?: RequestInit,
+): Promise<AnalyticsOverview> => {
+  return customFetch<AnalyticsOverview>(getGetAnalyticsOverviewUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAnalyticsOverviewQueryKey = () => {
+  return [`/api/analytics/overview`] as const;
+};
+
+export const getGetAnalyticsOverviewQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAnalyticsOverview>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAnalyticsOverview>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAnalyticsOverviewQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAnalyticsOverview>>
+  > = ({ signal }) => getAnalyticsOverview({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAnalyticsOverview>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAnalyticsOverviewQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAnalyticsOverview>>
+>;
+export type GetAnalyticsOverviewQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get overall system analytics overview
+ */
+
+export function useGetAnalyticsOverview<
+  TData = Awaited<ReturnType<typeof getAnalyticsOverview>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAnalyticsOverview>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAnalyticsOverviewQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get Pareto rejection analysis across all sessions
+ */
+export const getGetAnalyticsParetoUrl = (params?: GetAnalyticsParetoParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/analytics/pareto?${stringifiedParams}`
+    : `/api/analytics/pareto`;
+};
+
+export const getAnalyticsPareto = async (
+  params?: GetAnalyticsParetoParams,
+  options?: RequestInit,
+): Promise<ParetoData> => {
+  return customFetch<ParetoData>(getGetAnalyticsParetoUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAnalyticsParetoQueryKey = (
+  params?: GetAnalyticsParetoParams,
+) => {
+  return [`/api/analytics/pareto`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetAnalyticsParetoQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAnalyticsPareto>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAnalyticsParetoParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAnalyticsPareto>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetAnalyticsParetoQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAnalyticsPareto>>
+  > = ({ signal }) => getAnalyticsPareto(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAnalyticsPareto>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAnalyticsParetoQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAnalyticsPareto>>
+>;
+export type GetAnalyticsParetoQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get Pareto rejection analysis across all sessions
+ */
+
+export function useGetAnalyticsPareto<
+  TData = Awaited<ReturnType<typeof getAnalyticsPareto>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetAnalyticsParetoParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getAnalyticsPareto>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAnalyticsParetoQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get session trend data over the last 30 days
+ */
+export const getGetAnalyticsTrendsUrl = () => {
+  return `/api/analytics/trends`;
+};
+
+export const getAnalyticsTrends = async (
+  options?: RequestInit,
+): Promise<SessionTrend[]> => {
+  return customFetch<SessionTrend[]>(getGetAnalyticsTrendsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAnalyticsTrendsQueryKey = () => {
+  return [`/api/analytics/trends`] as const;
+};
+
+export const getGetAnalyticsTrendsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAnalyticsTrends>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAnalyticsTrends>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAnalyticsTrendsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAnalyticsTrends>>
+  > = ({ signal }) => getAnalyticsTrends({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAnalyticsTrends>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAnalyticsTrendsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAnalyticsTrends>>
+>;
+export type GetAnalyticsTrendsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get session trend data over the last 30 days
+ */
+
+export function useGetAnalyticsTrends<
+  TData = Awaited<ReturnType<typeof getAnalyticsTrends>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAnalyticsTrends>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAnalyticsTrendsQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

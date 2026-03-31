@@ -295,3 +295,53 @@ export const GetSessionReportResponse = zod.object({
     }),
   ),
 });
+
+/**
+ * @summary Get overall system analytics overview
+ */
+export const GetAnalyticsOverviewResponse = zod.object({
+  totalSessions: zod.number(),
+  activeSessions: zod.number(),
+  completedSessions: zod.number(),
+  totalScans: zod.number(),
+  totalOk: zod.number(),
+  totalReject: zod.number(),
+  overallOkRate: zod.number(),
+  totalBoms: zod.number(),
+  avgDurationMinutes: zod.number().optional(),
+});
+
+/**
+ * @summary Get Pareto rejection analysis across all sessions
+ */
+export const GetAnalyticsParetoQueryParams = zod.object({
+  sessionId: zod.coerce.number().optional(),
+});
+
+export const GetAnalyticsParetoResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      feederNumber: zod.string(),
+      partNumber: zod.string().optional(),
+      description: zod.string().optional(),
+      rejectCount: zod.number(),
+      cumulativePercent: zod.number(),
+    }),
+  ),
+  totalRejects: zod.number(),
+});
+
+/**
+ * @summary Get session trend data over the last 30 days
+ */
+export const GetAnalyticsTrendsResponseItem = zod.object({
+  date: zod.string(),
+  sessions: zod.number(),
+  totalScans: zod.number(),
+  okCount: zod.number(),
+  rejectCount: zod.number(),
+  okRate: zod.number(),
+});
+export const GetAnalyticsTrendsResponse = zod.array(
+  GetAnalyticsTrendsResponseItem,
+);

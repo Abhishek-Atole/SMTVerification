@@ -6,13 +6,17 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./analyticsOverview";
 export * from "./bom";
 export * from "./bomDetail";
 export * from "./bomItem";
 export * from "./createBomItemRequest";
 export * from "./createBomRequest";
 export * from "./createSessionRequest";
+export * from "./getAnalyticsParetoParams";
 export * from "./healthStatus";
+export * from "./paretoData";
+export * from "./paretoItem";
 export * from "./scanFeederRequest";
 export * from "./scanRecord";
 export * from "./scanRecordStatus";
@@ -24,5 +28,6 @@ export * from "./sessionDetailStatus";
 export * from "./sessionReport";
 export * from "./sessionStatus";
 export * from "./sessionSummary";
+export * from "./sessionTrend";
 export * from "./updateSessionRequest";
 export * from "./updateSessionRequestStatus";
