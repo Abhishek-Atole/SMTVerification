@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import { useRoute, useLocation } from "wouter";
+import { useRoute, useLocation, Link } from "wouter";
 import { useGetSession, useScanFeeder, useUpdateSession } from "@workspace/api-client-react";
 import { getGetSessionQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, ScanLine, AlertCircle, CheckCircle2, FileText, Download } from "lucide-react";
+import { Loader2, ScanLine, AlertCircle, CheckCircle2 } from "lucide-react";
 import { format, differenceInSeconds } from "date-fns";
 
 export default function SessionActive() {
