@@ -1,22 +1,28 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: SMT Feeder Scanning & Verification System API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: bom
+    description: Bill of Materials operations
+  - name: sessions
+    description: Production session operations
+  - name: feeders
+    description: Feeder scan operations
+  - name: reports
+    description: Report generation
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +30,233 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /bom:
+    get:
+      operationId: listBoms
+      tags: [bom]
+      summary: List all BOMs
+      responses:
+        "200":
+          description: List of BOMs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bom"
+    post:
+      operationId: createBom
+      tags: [bom]
+      summary: Create a new BOM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBomRequest"
+      responses:
+        "201":
+          description: BOM created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bom"
+
+  /bom/{bomId}:
+    get:
+      operationId: getBom
+      tags: [bom]
+      summary: Get a BOM by ID
+      parameters:
+        - name: bomId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: BOM detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BomDetail"
+    delete:
+      operationId: deleteBom
+      tags: [bom]
+      summary: Delete a BOM
+      parameters:
+        - name: bomId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /bom/{bomId}/items:
+    post:
+      operationId: addBomItem
+      tags: [bom]
+      summary: Add a feeder item to BOM
+      parameters:
+        - name: bomId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBomItemRequest"
+      responses:
+        "201":
+          description: BOM item created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BomItem"
+
+  /sessions:
+    get:
+      operationId: listSessions
+      tags: [sessions]
+      summary: List all production sessions
+      responses:
+        "200":
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+    post:
+      operationId: createSession
+      tags: [sessions]
+      summary: Create a new production session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+  /sessions/{sessionId}:
+    get:
+      operationId: getSession
+      tags: [sessions]
+      summary: Get a session with all scan results
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Session detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionDetail"
+    patch:
+      operationId: updateSession
+      tags: [sessions]
+      summary: Update session (end time, count, etc.)
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSessionRequest"
+      responses:
+        "200":
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+  /sessions/{sessionId}/scans:
+    post:
+      operationId: scanFeeder
+      tags: [feeders]
+      summary: Scan a feeder and verify against BOM
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanFeederRequest"
+      responses:
+        "200":
+          description: Scan result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+
+  /sessions/{sessionId}/summary:
+    get:
+      operationId: getSessionSummary
+      tags: [sessions]
+      summary: Get session verification summary stats
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionSummary"
+
+  /sessions/{sessionId}/report:
+    get:
+      operationId: getSessionReport
+      tags: [reports]
+      summary: Get full session report data for PDF/Excel export
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Full report data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionReport"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +264,282 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    Bom:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        itemCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, itemCount, createdAt]
+
+    BomItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        bomId:
+          type: integer
+        feederNumber:
+          type: string
+        partNumber:
+          type: string
+        description:
+          type: string
+        location:
+          type: string
+        quantity:
+          type: integer
+      required: [id, bomId, feederNumber, partNumber, quantity]
+
+    BomDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BomItem"
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, items, createdAt]
+
+    CreateBomRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+      required: [name]
+
+    CreateBomItemRequest:
+      type: object
+      properties:
+        feederNumber:
+          type: string
+        partNumber:
+          type: string
+        description:
+          type: string
+        location:
+          type: string
+        quantity:
+          type: integer
+      required: [feederNumber, partNumber, quantity]
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: integer
+        bomId:
+          type: integer
+        bomName:
+          type: string
+        companyName:
+          type: string
+        customerName:
+          type: string
+        panelName:
+          type: string
+        supervisorName:
+          type: string
+        operatorName:
+          type: string
+        shiftName:
+          type: string
+        shiftDate:
+          type: string
+        logoUrl:
+          type: string
+        productionCount:
+          type: integer
+        status:
+          type: string
+          enum: [active, completed]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, bomId, companyName, panelName, supervisorName, operatorName, shiftName, shiftDate, status, startTime, createdAt]
+
+    SessionDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        bomId:
+          type: integer
+        bomName:
+          type: string
+        companyName:
+          type: string
+        customerName:
+          type: string
+        panelName:
+          type: string
+        supervisorName:
+          type: string
+        operatorName:
+          type: string
+        shiftName:
+          type: string
+        shiftDate:
+          type: string
+        logoUrl:
+          type: string
+        productionCount:
+          type: integer
+        status:
+          type: string
+          enum: [active, completed]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        scans:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanRecord"
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, bomId, companyName, panelName, supervisorName, operatorName, shiftName, shiftDate, status, startTime, scans, createdAt]
+
+    ScanRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        feederNumber:
+          type: string
+        status:
+          type: string
+          enum: [ok, reject]
+        partNumber:
+          type: string
+        description:
+          type: string
+        location:
+          type: string
+        scannedAt:
+          type: string
+          format: date-time
+      required: [id, sessionId, feederNumber, status, scannedAt]
+
+    CreateSessionRequest:
+      type: object
+      properties:
+        bomId:
+          type: integer
+        companyName:
+          type: string
+        customerName:
+          type: string
+        panelName:
+          type: string
+        supervisorName:
+          type: string
+        operatorName:
+          type: string
+        shiftName:
+          type: string
+        shiftDate:
+          type: string
+        logoUrl:
+          type: string
+        productionCount:
+          type: integer
+      required: [bomId, companyName, panelName, supervisorName, operatorName, shiftName, shiftDate]
+
+    UpdateSessionRequest:
+      type: object
+      properties:
+        endTime:
+          type: string
+          format: date-time
+        productionCount:
+          type: integer
+        status:
+          type: string
+          enum: [active, completed]
+        logoUrl:
+          type: string
+
+    ScanFeederRequest:
+      type: object
+      properties:
+        feederNumber:
+          type: string
+      required: [feederNumber]
+
+    ScanResult:
+      type: object
+      properties:
+        scan:
+          $ref: "#/components/schemas/ScanRecord"
+        status:
+          type: string
+          enum: [ok, reject]
+        message:
+          type: string
+      required: [scan, status, message]
+
+    SessionSummary:
+      type: object
+      properties:
+        sessionId:
+          type: integer
+        totalBomItems:
+          type: integer
+        scannedCount:
+          type: integer
+        okCount:
+          type: integer
+        rejectCount:
+          type: integer
+        missingCount:
+          type: integer
+        completionPercent:
+          type: number
+        durationMinutes:
+          type: number
+      required: [sessionId, totalBomItems, scannedCount, okCount, rejectCount, missingCount, completionPercent]
+
+    SessionReport:
+      type: object
+      properties:
+        session:
+          $ref: "#/components/schemas/SessionDetail"
+        summary:
+          $ref: "#/components/schemas/SessionSummary"
+        bomItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/BomItem"
+      required: [session, summary, bomItems]
