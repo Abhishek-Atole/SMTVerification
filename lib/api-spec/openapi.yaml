@@ -200,7 +200,7 @@ paths:
     post:
       operationId: scanFeeder
       tags: [feeders]
-      summary: Scan a feeder and verify against BOM
+      summary: Scan a feeder (with optional spool barcode) and verify against BOM
       parameters:
         - name: sessionId
           in: path
@@ -220,6 +220,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ScanResult"
+
+  /sessions/{sessionId}/splices:
+    get:
+      operationId: listSplices
+      tags: [feeders]
+      summary: List all splice records for a session
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of splice records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SpliceRecord"
+    post:
+      operationId: recordSplice
+      tags: [feeders]
+      summary: Record a feeder spool splice event
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSpliceRequest"
+      responses:
+        "201":
+          description: Splice recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpliceRecord"
 
   /sessions/{sessionId}/summary:
     get:
