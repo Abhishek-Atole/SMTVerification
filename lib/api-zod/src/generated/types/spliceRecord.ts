@@ -6,7 +6,12 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ScanFeederRequest {
+export interface SpliceRecord {
+  id: number;
+  sessionId: number;
   feederNumber: string;
-  spoolBarcode?: string;
+  oldSpoolBarcode: string;
+  newSpoolBarcode: string;
+  splicedAt: Date;
+  durationSeconds?: number;
 }

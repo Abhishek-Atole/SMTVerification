@@ -25,6 +25,7 @@ export const scanRecordsTable = pgTable("scan_records", {
   id: serial("id").primaryKey(),
   sessionId: integer("session_id").notNull().references(() => sessionsTable.id, { onDelete: "cascade" }),
   feederNumber: text("feeder_number").notNull(),
+  spoolBarcode: text("spool_barcode"),
   status: text("status").notNull(),
   partNumber: text("part_number"),
   description: text("description"),
@@ -32,10 +33,23 @@ export const scanRecordsTable = pgTable("scan_records", {
   scannedAt: timestamp("scanned_at").defaultNow().notNull(),
 });
 
+export const spliceRecordsTable = pgTable("splice_records", {
+  id: serial("id").primaryKey(),
+  sessionId: integer("session_id").notNull().references(() => sessionsTable.id, { onDelete: "cascade" }),
+  feederNumber: text("feeder_number").notNull(),
+  oldSpoolBarcode: text("old_spool_barcode").notNull(),
+  newSpoolBarcode: text("new_spool_barcode").notNull(),
+  durationSeconds: integer("duration_seconds"),
+  splicedAt: timestamp("spliced_at").defaultNow().notNull(),
+});
+
 export const insertSessionSchema = createInsertSchema(sessionsTable).omit({ id: true, createdAt: true, startTime: true });
 export const insertScanRecordSchema = createInsertSchema(scanRecordsTable).omit({ id: true, scannedAt: true });
+export const insertSpliceRecordSchema = createInsertSchema(spliceRecordsTable).omit({ id: true, splicedAt: true });
 
 export type Session = typeof sessionsTable.$inferSelect;
 export type InsertSession = z.infer<typeof insertSessionSchema>;
 export type ScanRecord = typeof scanRecordsTable.$inferSelect;
 export type InsertScanRecord = z.infer<typeof insertScanRecordSchema>;
+export type SpliceRecord = typeof spliceRecordsTable.$inferSelect;
+export type InsertSpliceRecord = z.infer<typeof insertSpliceRecordSchema>;

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { sessionsTable, scanRecordsTable, bomItemsTable, bomsTable } from "@workspace/db/schema";
+import { sessionsTable, scanRecordsTable, spliceRecordsTable, bomItemsTable, bomsTable } from "@workspace/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -103,7 +103,7 @@ router.patch("/sessions/:sessionId", async (req, res) => {
 router.post("/sessions/:sessionId/scans", async (req, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
-    const { feederNumber } = req.body;
+    const { feederNumber, spoolBarcode } = req.body;
 
     if (!feederNumber) {
       res.status(400).json({ error: "feederNumber is required" });
@@ -127,6 +127,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
       .values({
         sessionId,
         feederNumber: feederNumber.trim(),
+        spoolBarcode: spoolBarcode?.trim() ?? null,
         status: scanStatus,
         partNumber: matched?.partNumber ?? null,
         description: matched?.description ?? null,
@@ -142,6 +143,55 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to scan feeder" });
+  }
+});
+
+router.get("/sessions/:sessionId/splices", async (req, res) => {
+  try {
+    const sessionId = Number(req.params.sessionId);
+    const splices = await db
+      .select()
+      .from(spliceRecordsTable)
+      .where(eq(spliceRecordsTable.sessionId, sessionId))
+      .orderBy(spliceRecordsTable.splicedAt);
+    res.json(splices);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to list splices" });
+  }
+});
+
+router.post("/sessions/:sessionId/splices", async (req, res) => {
+  try {
+    const sessionId = Number(req.params.sessionId);
+    const { feederNumber, oldSpoolBarcode, newSpoolBarcode, durationSeconds } = req.body;
+
+    if (!feederNumber || !oldSpoolBarcode || !newSpoolBarcode) {
+      res.status(400).json({ error: "feederNumber, oldSpoolBarcode, and newSpoolBarcode are required" });
+      return;
+    }
+
+    const [session] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    const [splice] = await db
+      .insert(spliceRecordsTable)
+      .values({
+        sessionId,
+        feederNumber: feederNumber.trim(),
+        oldSpoolBarcode: oldSpoolBarcode.trim(),
+        newSpoolBarcode: newSpoolBarcode.trim(),
+        durationSeconds: durationSeconds ?? null,
+      })
+      .returning();
+
+    res.status(201).json(splice);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to record splice" });
   }
 });
 

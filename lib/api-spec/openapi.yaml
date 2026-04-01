@@ -531,6 +531,8 @@ components:
           type: integer
         feederNumber:
           type: string
+        spoolBarcode:
+          type: string
         status:
           type: string
           enum: [ok, reject]
@@ -544,6 +546,39 @@ components:
           type: string
           format: date-time
       required: [id, sessionId, feederNumber, status, scannedAt]
+
+    SpliceRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        sessionId:
+          type: integer
+        feederNumber:
+          type: string
+        oldSpoolBarcode:
+          type: string
+        newSpoolBarcode:
+          type: string
+        splicedAt:
+          type: string
+          format: date-time
+        durationSeconds:
+          type: integer
+      required: [id, sessionId, feederNumber, oldSpoolBarcode, newSpoolBarcode, splicedAt]
+
+    CreateSpliceRequest:
+      type: object
+      properties:
+        feederNumber:
+          type: string
+        oldSpoolBarcode:
+          type: string
+        newSpoolBarcode:
+          type: string
+        durationSeconds:
+          type: integer
+      required: [feederNumber, oldSpoolBarcode, newSpoolBarcode]
 
     CreateSessionRequest:
       type: object
@@ -588,6 +623,8 @@ components:
       type: object
       properties:
         feederNumber:
+          type: string
+        spoolBarcode:
           type: string
       required: [feederNumber]
 

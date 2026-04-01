@@ -6,7 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ScanFeederRequest {
+export interface CreateSpliceRequest {
   feederNumber: string;
-  spoolBarcode?: string;
+  oldSpoolBarcode: string;
+  newSpoolBarcode: string;
+  durationSeconds?: number;
 }

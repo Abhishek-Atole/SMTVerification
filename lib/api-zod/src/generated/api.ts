@@ -148,6 +148,7 @@ export const GetSessionResponse = zod.object({
       id: zod.number(),
       sessionId: zod.number(),
       feederNumber: zod.string(),
+      spoolBarcode: zod.string().optional(),
       status: zod.enum(["ok", "reject"]),
       partNumber: zod.string().optional(),
       description: zod.string().optional(),
@@ -192,7 +193,7 @@ export const UpdateSessionResponse = zod.object({
 });
 
 /**
- * @summary Scan a feeder and verify against BOM
+ * @summary Scan a feeder (with optional spool barcode) and verify against BOM
  */
 export const ScanFeederParams = zod.object({
   sessionId: zod.coerce.number(),
@@ -200,6 +201,7 @@ export const ScanFeederParams = zod.object({
 
 export const ScanFeederBody = zod.object({
   feederNumber: zod.string(),
+  spoolBarcode: zod.string().optional(),
 });
 
 export const ScanFeederResponse = zod.object({
@@ -207,6 +209,7 @@ export const ScanFeederResponse = zod.object({
     id: zod.number(),
     sessionId: zod.number(),
     feederNumber: zod.string(),
+    spoolBarcode: zod.string().optional(),
     status: zod.enum(["ok", "reject"]),
     partNumber: zod.string().optional(),
     description: zod.string().optional(),
@@ -215,6 +218,38 @@ export const ScanFeederResponse = zod.object({
   }),
   status: zod.enum(["ok", "reject"]),
   message: zod.string(),
+});
+
+/**
+ * @summary List all splice records for a session
+ */
+export const ListSplicesParams = zod.object({
+  sessionId: zod.coerce.number(),
+});
+
+export const ListSplicesResponseItem = zod.object({
+  id: zod.number(),
+  sessionId: zod.number(),
+  feederNumber: zod.string(),
+  oldSpoolBarcode: zod.string(),
+  newSpoolBarcode: zod.string(),
+  splicedAt: zod.coerce.date(),
+  durationSeconds: zod.number().optional(),
+});
+export const ListSplicesResponse = zod.array(ListSplicesResponseItem);
+
+/**
+ * @summary Record a feeder spool splice event
+ */
+export const RecordSpliceParams = zod.object({
+  sessionId: zod.coerce.number(),
+});
+
+export const RecordSpliceBody = zod.object({
+  feederNumber: zod.string(),
+  oldSpoolBarcode: zod.string(),
+  newSpoolBarcode: zod.string(),
+  durationSeconds: zod.number().optional(),
 });
 
 /**
@@ -264,6 +299,7 @@ export const GetSessionReportResponse = zod.object({
         id: zod.number(),
         sessionId: zod.number(),
         feederNumber: zod.string(),
+        spoolBarcode: zod.string().optional(),
         status: zod.enum(["ok", "reject"]),
         partNumber: zod.string().optional(),
         description: zod.string().optional(),

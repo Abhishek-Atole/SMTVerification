@@ -24,6 +24,7 @@ import type {
   CreateBomItemRequest,
   CreateBomRequest,
   CreateSessionRequest,
+  CreateSpliceRequest,
   GetAnalyticsParetoParams,
   HealthStatus,
   ParetoData,
@@ -34,6 +35,7 @@ import type {
   SessionReport,
   SessionSummary,
   SessionTrend,
+  SpliceRecord,
   UpdateSessionRequest,
 } from "./api.schemas";
 
@@ -854,7 +856,7 @@ export const useUpdateSession = <
 };
 
 /**
- * @summary Scan a feeder and verify against BOM
+ * @summary Scan a feeder (with optional spool barcode) and verify against BOM
  */
 export const getScanFeederUrl = (sessionId: number) => {
   return `/api/sessions/${sessionId}/scans`;
@@ -918,7 +920,7 @@ export type ScanFeederMutationBody = BodyType<ScanFeederRequest>;
 export type ScanFeederMutationError = ErrorType<unknown>;
 
 /**
- * @summary Scan a feeder and verify against BOM
+ * @summary Scan a feeder (with optional spool barcode) and verify against BOM
  */
 export const useScanFeeder = <
   TError = ErrorType<unknown>,
@@ -938,6 +940,180 @@ export const useScanFeeder = <
   TContext
 > => {
   return useMutation(getScanFeederMutationOptions(options));
+};
+
+/**
+ * @summary List all splice records for a session
+ */
+export const getListSplicesUrl = (sessionId: number) => {
+  return `/api/sessions/${sessionId}/splices`;
+};
+
+export const listSplices = async (
+  sessionId: number,
+  options?: RequestInit,
+): Promise<SpliceRecord[]> => {
+  return customFetch<SpliceRecord[]>(getListSplicesUrl(sessionId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListSplicesQueryKey = (sessionId: number) => {
+  return [`/api/sessions/${sessionId}/splices`] as const;
+};
+
+export const getListSplicesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listSplices>>,
+  TError = ErrorType<unknown>,
+>(
+  sessionId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSplices>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListSplicesQueryKey(sessionId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listSplices>>> = ({
+    signal,
+  }) => listSplices(sessionId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!sessionId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listSplices>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListSplicesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listSplices>>
+>;
+export type ListSplicesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all splice records for a session
+ */
+
+export function useListSplices<
+  TData = Awaited<ReturnType<typeof listSplices>>,
+  TError = ErrorType<unknown>,
+>(
+  sessionId: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listSplices>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListSplicesQueryOptions(sessionId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Record a feeder spool splice event
+ */
+export const getRecordSpliceUrl = (sessionId: number) => {
+  return `/api/sessions/${sessionId}/splices`;
+};
+
+export const recordSplice = async (
+  sessionId: number,
+  createSpliceRequest: CreateSpliceRequest,
+  options?: RequestInit,
+): Promise<SpliceRecord> => {
+  return customFetch<SpliceRecord>(getRecordSpliceUrl(sessionId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createSpliceRequest),
+  });
+};
+
+export const getRecordSpliceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordSplice>>,
+    TError,
+    { sessionId: number; data: BodyType<CreateSpliceRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recordSplice>>,
+  TError,
+  { sessionId: number; data: BodyType<CreateSpliceRequest> },
+  TContext
+> => {
+  const mutationKey = ["recordSplice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recordSplice>>,
+    { sessionId: number; data: BodyType<CreateSpliceRequest> }
+  > = (props) => {
+    const { sessionId, data } = props ?? {};
+
+    return recordSplice(sessionId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecordSpliceMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recordSplice>>
+>;
+export type RecordSpliceMutationBody = BodyType<CreateSpliceRequest>;
+export type RecordSpliceMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Record a feeder spool splice event
+ */
+export const useRecordSplice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordSplice>>,
+    TError,
+    { sessionId: number; data: BodyType<CreateSpliceRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recordSplice>>,
+  TError,
+  { sessionId: number; data: BodyType<CreateSpliceRequest> },
+  TContext
+> => {
+  return useMutation(getRecordSpliceMutationOptions(options));
 };
 
 /**

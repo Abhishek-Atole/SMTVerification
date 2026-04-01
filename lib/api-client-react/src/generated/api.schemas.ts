@@ -94,6 +94,7 @@ export interface ScanRecord {
   id: number;
   sessionId: number;
   feederNumber: string;
+  spoolBarcode?: string;
   status: ScanRecordStatus;
   partNumber?: string;
   description?: string;
@@ -119,6 +120,23 @@ export interface SessionDetail {
   endTime?: string;
   scans: ScanRecord[];
   createdAt: string;
+}
+
+export interface SpliceRecord {
+  id: number;
+  sessionId: number;
+  feederNumber: string;
+  oldSpoolBarcode: string;
+  newSpoolBarcode: string;
+  splicedAt: string;
+  durationSeconds?: number;
+}
+
+export interface CreateSpliceRequest {
+  feederNumber: string;
+  oldSpoolBarcode: string;
+  newSpoolBarcode: string;
+  durationSeconds?: number;
 }
 
 export interface CreateSessionRequest {
@@ -151,6 +169,7 @@ export interface UpdateSessionRequest {
 
 export interface ScanFeederRequest {
   feederNumber: string;
+  spoolBarcode?: string;
 }
 
 export type ScanResultStatus =

@@ -11,6 +11,7 @@ export interface ScanRecord {
   id: number;
   sessionId: number;
   feederNumber: string;
+  spoolBarcode?: string;
   status: ScanRecordStatus;
   partNumber?: string;
   description?: string;
