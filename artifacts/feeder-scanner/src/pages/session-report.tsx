@@ -62,67 +62,112 @@ export default function SessionReport() {
 
   const exportPDF = () => {
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-    const M = 8;
+    const pageW = doc.internal.pageSize.getWidth(); // 297mm
+    const pageH = doc.internal.pageSize.getHeight(); // 210mm
+    const M = 10; // outer margin
 
     const changeoverId = `CHG${String(session.id).padStart(8, "0")}`;
     const startTimeStr = session.startTime ? format(new Date(session.startTime), "hh:mm:ss aa") : "N/A";
     const endTimeStr = session.endTime ? format(new Date(session.endTime), "hh:mm:ss aa") : "N/A";
 
-    doc.setDrawColor(80, 80, 80);
-    doc.setLineWidth(0.7);
+    // ── Outer border ─────────────────────────────────────────────────
+    doc.setDrawColor(60, 60, 60);
+    doc.setLineWidth(1.0);
     doc.rect(M, M, pageW - 2 * M, pageH - 2 * M);
 
+    // ── Logo + Title ─────────────────────────────────────────────────
     let y = M + 5;
+    const logoSize = 24;
+    const logoX = M + 4;
 
     if (session.logoUrl) {
-      try { doc.addImage(session.logoUrl, "JPEG", M + 3, y, 22, 22); } catch (_) {}
+      try {
+        const fmt = session.logoUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+        doc.addImage(session.logoUrl, fmt, logoX, y, logoSize, logoSize);
+      } catch (_) {
+        doc.setFontSize(7);
+        doc.setTextColor(100, 100, 100);
+        doc.text("LOGO", logoX + 8, y + 13, { align: "center" });
+      }
+    } else {
+      // Company name in logo box
+      doc.setDrawColor(200, 210, 230);
+      doc.setLineWidth(0.3);
+      doc.rect(logoX, y, logoSize, logoSize);
+      doc.setFontSize(5.5);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+      const co = session.companyName.split(" ");
+      co.forEach((word, i) => doc.text(word, logoX + logoSize / 2, y + 5 + i * 4.5, { align: "center" }));
     }
 
-    doc.setFontSize(17);
-    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+    doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
-    doc.text("SMT CHANGEOVER VERIFICATION REPORT", pageW / 2, y + 13, { align: "center" });
+    doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
+    doc.text("SMT CHANGEOVER VERIFICATION REPORT", pageW / 2 + 10, y + 14, { align: "center" });
 
-    y += 28;
+    y += logoSize + 4;
 
-    const printCell = (label: string, value: string, x: number, yp: number) => {
+    // ── Header separator line ─────────────────────────────────────────
+    doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
+    doc.setLineWidth(0.4);
+    doc.line(M + 2, y, pageW - M - 2, y);
+    y += 4;
+
+    // ── Details grid (3 rows × 5 cols) ───────────────────────────────
+    const printKV = (label: string, value: string, x: number, yp: number) => {
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(7.5);
+      doc.setTextColor(30, 30, 30);
       doc.text(label, x, yp);
       doc.setFont("helvetica", "normal");
-      doc.text(value, x + doc.getTextWidth(label) + 1.5, yp);
+      doc.setTextColor(0, 0, 0);
+      const lw = doc.getTextWidth(label);
+      doc.text(String(value), x + lw + 1, yp);
     };
 
-    const cx = (i: number) => M + 5 + i * 57;
-    printCell("Changeover ID:", changeoverId, cx(0), y);
-    printCell("Panel ID:", session.panelName, cx(1), y);
-    printCell("Shift:", session.shiftName, cx(2), y);
-    printCell("Date :", session.shiftDate, cx(3), y);
-    printCell("Duration:", `${summary.durationMinutes || 0} min`, cx(4), y);
+    const colStep = (pageW - 2 * M - 4) / 5;
+    const baseX = M + 3;
+    const colX = (i: number) => baseX + i * colStep;
 
+    printKV("Changeover ID:", changeoverId, colX(0), y);
+    printKV("Panel ID:", session.panelName, colX(1), y);
+    printKV("Shift:", session.shiftName, colX(2), y);
+    printKV("Date:", session.shiftDate, colX(3), y);
+    printKV("Duration:", `${summary.durationMinutes || 0} min`, colX(4), y);
     y += 5.5;
-    printCell("Customer:", session.customerName || "N/A", cx(0), y);
-    printCell("Machine:", "N/A", cx(1), y);
-    printCell("Operator :", session.operatorName, cx(2), y);
-    printCell("Start Time:", startTimeStr, cx(3), y);
-    printCell("BOM Version:", session.bomName || "N/A", cx(4), y);
 
+    printKV("Customer:", session.customerName || "N/A", colX(0), y);
+    printKV("Machine:", "N/A", colX(1), y);
+    printKV("Operator:", session.operatorName, colX(2), y);
+    printKV("Start Time:", startTimeStr, colX(3), y);
+    printKV("BOM Version:", session.bomName || "N/A", colX(4), y);
     y += 5.5;
-    printCell("PCB /", session.panelName.split(" ")[0] || "", cx(0), y);
-    printCell("Line:", "N/A", cx(1), y);
-    printCell("QA:", "N/A", cx(2), y);
-    printCell("End Time:", endTimeStr, cx(3), y);
 
-    y += 9;
+    printKV("PCB/:", session.panelName.split(" ")[0] || "N/A", colX(0), y);
+    printKV("Line:", "N/A", colX(1), y);
+    printKV("QA:", "N/A", colX(2), y);
+    printKV("End Time:", endTimeStr, colX(3), y);
+    printKV("Supervisor:", session.supervisorName, colX(4), y);
+    y += 6;
 
-    doc.setFontSize(12);
+    // ── Section title ────────────────────────────────────────────────
+    doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
     doc.text("Component Verification Details", pageW / 2, y, { align: "center" });
     y += 5;
+
+    // ── Main Verification Table ───────────────────────────────────────
+    const tblL = M + 2;
+    const tblR = pageW - M - 2;
+    const tblW = tblR - tblL; // 277mm
+
+    // Column proportions summing to 1.0
+    const props = [0.083, 0.075, 0.135, 0.062, 0.085, 0.16, 0.16, 0.053, 0.083, 0.084];
+    const cw = props.map((p) => p * tblW);
+    const colStyles: Record<number, any> = {};
+    cw.forEach((w, i) => { colStyles[i] = { cellWidth: w }; });
 
     const tableRows = report.bomItems.map((item) => {
       const scan = bestScanMap.get(item.feederNumber.toLowerCase());
@@ -130,7 +175,7 @@ export default function SessionReport() {
       return [
         item.feederNumber,
         item.location || "N/A",
-        item.description || item.partNumber,
+        item.description || item.partNumber || "",
         "N/A",
         "N/A",
         item.partNumber,
@@ -146,6 +191,8 @@ export default function SessionReport() {
       head: [["Feeder No.", "Ref / Des", "Component", "Value", "Package\nSize", "Part Number", "Scanned Number", "Lot", "Status", "Time"]],
       body: tableRows,
       theme: "grid",
+      tableWidth: tblW,
+      margin: { left: tblL, right: M + 2 },
       headStyles: {
         fillColor: NAVY,
         textColor: WHITE,
@@ -153,55 +200,51 @@ export default function SessionReport() {
         fontSize: 7.5,
         halign: "center",
         valign: "middle",
-        minCellHeight: 8,
+        cellPadding: 2,
+        minCellHeight: 9,
       },
-      bodyStyles: { fontSize: 7.5, halign: "center", valign: "middle" },
+      bodyStyles: {
+        fontSize: 7.5,
+        halign: "center",
+        valign: "middle",
+        cellPadding: 1.5,
+        minCellHeight: 7,
+      },
       alternateRowStyles: { fillColor: LIGHT_ROW },
+      columnStyles: colStyles,
       didParseCell: (data: any) => {
         if (data.section === "body" && data.column.index === 8) {
-          const v = data.cell.raw;
-          if (v === "PASS") { data.cell.styles.textColor = [0, 140, 0]; data.cell.styles.fontStyle = "bold"; }
-          else if (v === "FAIL") { data.cell.styles.textColor = [190, 0, 0]; data.cell.styles.fontStyle = "bold"; }
-          else if (v === "MISSING") { data.cell.styles.textColor = [150, 80, 0]; }
+          if (data.cell.raw === "PASS") { data.cell.styles.textColor = [0, 140, 0]; data.cell.styles.fontStyle = "bold"; }
+          else if (data.cell.raw === "FAIL") { data.cell.styles.textColor = [190, 0, 0]; data.cell.styles.fontStyle = "bold"; }
+          else if (data.cell.raw === "MISSING") { data.cell.styles.textColor = [160, 90, 0]; }
         }
-      },
-      margin: { left: M + 2, right: M + 2 },
-      columnStyles: {
-        0: { cellWidth: 18 },
-        1: { cellWidth: 18 },
-        2: { cellWidth: 30 },
-        3: { cellWidth: 14 },
-        4: { cellWidth: 18 },
-        5: { cellWidth: 34 },
-        6: { cellWidth: 34 },
-        7: { cellWidth: 12 },
-        8: { cellWidth: 18 },
-        9: { cellWidth: 18 },
       },
     });
 
-    y = (doc as any).lastAutoTable.finalY + 8;
+    y = (doc as any).lastAutoTable.finalY + 7;
 
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(0, 0, 0);
-    doc.text("Summary :", M + 3, y);
-    y += 5;
-
+    // ── Summary Table ────────────────────────────────────────────────
     const totalBomItems = report.bomItems.length;
     const passCount = [...bestScanMap.values()].filter((s) => s.status === "ok").length;
     const failCount = [...bestScanMap.values()].filter((s) => s.status === "reject").length;
-    const passRate = totalBomItems > 0 ? (passCount / totalBomItems).toFixed(2) : "0.00";
+    const passRate = totalBomItems > 0 ? `${((passCount / totalBomItems) * 100).toFixed(1)}%` : "0%";
     const isComplete = passCount === totalBomItems;
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("Summary :", tblL, y);
+    y += 4;
 
     autoTable(doc, {
       startY: y,
       head: [["Total Feeders Scanned", "PASS", "FAIL", "WARNING", "Pass Rate", "Status"]],
       body: [[totalBomItems.toString(), passCount.toString(), failCount.toString(), "0", passRate, isComplete ? "COMPLETE" : "INCOMPLETE"]],
       theme: "grid",
-      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: "bold", fontSize: 9, halign: "center" },
-      bodyStyles: { fontSize: 9, halign: "center", fontStyle: "bold" },
-      margin: { left: M + 2, right: M + 2 },
+      tableWidth: tblW,
+      margin: { left: tblL, right: M + 2 },
+      headStyles: { fillColor: NAVY, textColor: WHITE, fontStyle: "bold", fontSize: 8.5, halign: "center", minCellHeight: 8 },
+      bodyStyles: { fontSize: 9, halign: "center", fontStyle: "bold", minCellHeight: 8 },
       didParseCell: (data: any) => {
         if (data.section === "body") {
           if (data.column.index === 1) data.cell.styles.textColor = [0, 140, 0];
@@ -211,152 +254,295 @@ export default function SessionReport() {
       },
     });
 
+    // ── Splice Log (if any) ──────────────────────────────────────────
     if (showSplices && splices && splices.length > 0) {
-      y = (doc as any).lastAutoTable.finalY + 8;
-      doc.setFontSize(11);
+      y = (doc as any).lastAutoTable.finalY + 6;
+      if (y + 20 > pageH - M) { doc.addPage(); y = M + 10; }
+      doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(0, 0, 0);
-      doc.text("Splice Log :", M + 3, y);
-      y += 5;
+      doc.text("Splice Log :", tblL, y);
+      y += 4;
       autoTable(doc, {
         startY: y,
         head: [["Feeder No.", "Old Spool Barcode", "New Spool Barcode", "Duration (s)", "Time"]],
-        body: splices.map((sp) => [
-          sp.feederNumber,
-          sp.oldSpoolBarcode,
-          sp.newSpoolBarcode,
-          sp.durationSeconds?.toString() || "-",
-          format(new Date(sp.splicedAt), "HH:mm:ss"),
-        ]),
+        body: splices.map((sp) => [sp.feederNumber, sp.oldSpoolBarcode, sp.newSpoolBarcode, sp.durationSeconds?.toString() || "-", format(new Date(sp.splicedAt), "HH:mm:ss")]),
         theme: "grid",
-        headStyles: { fillColor: [150, 100, 0] as [number,number,number], textColor: WHITE, fontStyle: "bold", fontSize: 8, halign: "center" },
+        tableWidth: tblW,
+        margin: { left: tblL, right: M + 2 },
+        headStyles: { fillColor: [140, 90, 0] as [number, number, number], textColor: WHITE, fontStyle: "bold", fontSize: 8, halign: "center" },
         bodyStyles: { fontSize: 8, halign: "center" },
-        margin: { left: M + 2, right: M + 2 },
       });
     }
 
-    y = (doc as any).lastAutoTable.finalY + 10;
+    // ── Approvals ────────────────────────────────────────────────────
+    y = (doc as any).lastAutoTable.finalY + 8;
+    if (y + 28 > pageH - M) { doc.addPage(); y = M + 10; }
 
-    const remaining = pageH - M - y;
-    if (remaining < 30) {
-      doc.addPage();
-      y = M + 10;
-    }
-
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 0);
-    doc.text("Approvals :", M + 3, y);
-    y += 8;
+    doc.text("Approvals :", tblL, y);
+    y += 7;
 
-    const col1 = M + 42;
-    const col2 = pageW / 2;
-    const col3 = pageW - M - 42;
+    const aCol1 = tblL + 35;
+    const aCol2 = pageW / 2;
+    const aCol3 = tblR - 35;
 
-    doc.setFontSize(9.5);
-    doc.setFont("helvetica", "normal");
-    doc.text("Supervisor", col1, y, { align: "center" });
-    doc.setFont("helvetica", "bold");
-    doc.text("OPERATOR", col2, y, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.text("QA", col3, y, { align: "center" });
-
-    y += 6;
     doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text(session.supervisorName, col1, y, { align: "center" });
-    doc.text(session.operatorName, col2, y, { align: "center" });
-    doc.text("N/A", col3, y, { align: "center" });
-
-    y += 5;
-    doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(130, 130, 130);
-    doc.text("Name & Date", col1, y, { align: "center" });
-    doc.text("Name & Date", col2, y, { align: "center" });
-    doc.text("Name & Date", col3, y, { align: "center" });
+    doc.text("Supervisor", aCol1, y, { align: "center" });
+    doc.setFont("helvetica", "bold");
+    doc.text("OPERATOR", aCol2, y, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.text("QA", aCol3, y, { align: "center" });
 
-    y += 8;
-    doc.setDrawColor(100, 100, 100);
-    const dash: [number, number] = [2, 2];
-    doc.setLineDashPattern(dash, 0);
-    const lw = 46;
-    doc.line(col1 - lw / 2, y, col1 + lw / 2, y);
-    doc.line(col2 - lw / 2, y, col2 + lw / 2, y);
-    doc.line(col3 - lw / 2, y, col3 + lw / 2, y);
+    y += 5.5;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text(session.supervisorName, aCol1, y, { align: "center" });
+    doc.text(session.operatorName, aCol2, y, { align: "center" });
+    doc.text("N/A", aCol3, y, { align: "center" });
+
+    y += 4.5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(130, 130, 130);
+    doc.text("Name & Date", aCol1, y, { align: "center" });
+    doc.text("Name & Date", aCol2, y, { align: "center" });
+    doc.text("Name & Date", aCol3, y, { align: "center" });
+
+    y += 7;
+    doc.setDrawColor(90, 90, 90);
+    doc.setLineDashPattern([2, 2], 0);
+    const lineHalf = 44;
+    doc.line(aCol1 - lineHalf, y, aCol1 + lineHalf, y);
+    doc.line(aCol2 - lineHalf, y, aCol2 + lineHalf, y);
+    doc.line(aCol3 - lineHalf, y, aCol3 + lineHalf, y);
+    doc.setLineDashPattern([], 0);
 
     doc.save(`smt-changeover-report-${session.id}.pdf`);
   };
 
   const exportExcel = () => {
-    const summarySheet = XLSX.utils.json_to_sheet([
-      { Metric: "Changeover ID", Value: `CHG${String(session.id).padStart(8, "0")}` },
-      { Metric: "Company", Value: session.companyName },
-      { Metric: "Panel ID", Value: session.panelName },
-      { Metric: "BOM Version", Value: session.bomName || session.bomId },
-      { Metric: "Customer", Value: session.customerName || "N/A" },
-      { Metric: "Supervisor", Value: session.supervisorName },
-      { Metric: "Operator", Value: session.operatorName },
-      { Metric: "Shift", Value: session.shiftName },
-      { Metric: "Date", Value: session.shiftDate },
-      { Metric: "Start Time", Value: session.startTime ? format(new Date(session.startTime), "hh:mm:ss aa") : "N/A" },
-      { Metric: "End Time", Value: session.endTime ? format(new Date(session.endTime), "hh:mm:ss aa") : "N/A" },
-      { Metric: "Duration (min)", Value: summary.durationMinutes },
-      { Metric: "Total BOM Items", Value: summary.totalBomItems },
-      { Metric: "Completion %", Value: summary.completionPercent },
-      { Metric: "PASS", Value: summary.okCount },
-      { Metric: "FAIL", Value: summary.rejectCount },
-      { Metric: "Splices", Value: splices?.length ?? 0 },
+    const changeoverId = `CHG${String(session.id).padStart(8, "0")}`;
+    const startTimeStr = session.startTime ? format(new Date(session.startTime), "hh:mm:ss aa") : "N/A";
+    const endTimeStr = session.endTime ? format(new Date(session.endTime), "hh:mm:ss aa") : "N/A";
+    const totalBomItems = report.bomItems.length;
+    const passCount = [...bestScanMap.values()].filter((s) => s.status === "ok").length;
+    const failCount = [...bestScanMap.values()].filter((s) => s.status === "reject").length;
+    const passRate = totalBomItems > 0 ? `${((passCount / totalBomItems) * 100).toFixed(1)}%` : "0%";
+    const isComplete = passCount === totalBomItems;
+
+    // Build single sheet as array-of-arrays (10 columns = A..J)
+    const aoa: (string | number)[][] = [];
+    const merges: XLSX.Range[] = [];
+    const addMerge = (r1: number, c1: number, r2: number, c2: number) =>
+      merges.push({ s: { r: r1, c: c1 }, e: { r: r2, c: c2 } });
+
+    let row = 0;
+
+    // Row 0: Company name
+    aoa.push([session.companyName, "", "", "", "", "", "", "", "", ""]);
+    addMerge(row, 0, row, 9);
+    row++;
+
+    // Row 1: Report title
+    aoa.push(["SMT CHANGEOVER VERIFICATION REPORT", "", "", "", "", "", "", "", "", ""]);
+    addMerge(row, 0, row, 9);
+    row++;
+
+    // Row 2: blank
+    aoa.push(["", "", "", "", "", "", "", "", "", ""]);
+    row++;
+
+    // Row 3: Header details row 1
+    aoa.push([
+      "Changeover ID:", changeoverId,
+      "Panel ID:", session.panelName,
+      "Shift:", session.shiftName,
+      "Date:", session.shiftDate,
+      "Duration:", `${summary.durationMinutes || 0} min`,
     ]);
+    row++;
 
-    const detailData = report.bomItems.map((item) => {
+    // Row 4: Header details row 2
+    aoa.push([
+      "Customer:", session.customerName || "N/A",
+      "Machine:", "N/A",
+      "Operator:", session.operatorName,
+      "Start Time:", startTimeStr,
+      "BOM Version:", session.bomName || "N/A",
+    ]);
+    row++;
+
+    // Row 5: Header details row 3
+    aoa.push([
+      "PCB/:", session.panelName.split(" ")[0] || "N/A",
+      "Line:", "N/A",
+      "QA:", "N/A",
+      "End Time:", endTimeStr,
+      "Supervisor:", session.supervisorName,
+    ]);
+    row++;
+
+    // Row 6: blank
+    aoa.push(["", "", "", "", "", "", "", "", "", ""]);
+    row++;
+
+    // Row 7: Section title
+    aoa.push(["Component Verification Details", "", "", "", "", "", "", "", "", ""]);
+    addMerge(row, 0, row, 9);
+    row++;
+
+    // Row 8: Table headers
+    aoa.push(["Feeder No.", "Ref / Des", "Component", "Value", "Package Size", "Part Number", "Scanned Number", "Lot", "Status", "Time"]);
+    row++;
+
+    // Rows 9+: BOM verification data
+    const dataStartRow = row;
+    for (const item of report.bomItems) {
       const scan = bestScanMap.get(item.feederNumber.toLowerCase());
-      const row: Record<string, string> = {
-        "Feeder No.": item.feederNumber,
-        "Ref / Des": item.location || "N/A",
-        Component: item.description || item.partNumber,
-        Value: "N/A",
-        "Package Size": "N/A",
-        "Part Number": item.partNumber,
-        "Scanned Number": (scan as any)?.spoolBarcode || scan?.feederNumber || "-",
-        Lot: "N/A",
-        Status: scan?.status === "ok" ? "PASS" : scan?.status === "reject" ? "FAIL" : "MISSING",
-        Time: scan ? format(new Date(scan.scannedAt), "HH:mm:ss") : "-",
-      };
-      return row;
-    });
-    const detailSheet = XLSX.utils.json_to_sheet(detailData);
+      const status = scan?.status === "ok" ? "PASS" : scan?.status === "reject" ? "FAIL" : "MISSING";
+      aoa.push([
+        item.feederNumber,
+        item.location || "N/A",
+        item.description || item.partNumber || "",
+        "N/A",
+        "N/A",
+        item.partNumber,
+        (scan as any)?.spoolBarcode || scan?.feederNumber || "-",
+        "N/A",
+        status,
+        scan ? format(new Date(scan.scannedAt), "HH:mm:ss") : "-",
+      ]);
+      row++;
+    }
+    void dataStartRow;
 
-    const scansData = filteredScans.map((s) => {
-      const row: Record<string, string> = {
-        Time: format(new Date(s.scannedAt), "yyyy-MM-dd HH:mm:ss"),
-        "Feeder No.": s.feederNumber,
-        "Part Number": s.partNumber || "",
-        Status: s.status === "ok" ? "PASS" : "FAIL",
-      };
-      if (showSpoolBarcode) row["Spool Barcode"] = (s as any).spoolBarcode || "";
-      return row;
-    });
-    const scansSheet = XLSX.utils.json_to_sheet(scansData);
+    // Blank
+    aoa.push(["", "", "", "", "", "", "", "", "", ""]);
+    row++;
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
-    XLSX.utils.book_append_sheet(wb, detailSheet, "Verification Detail");
-    XLSX.utils.book_append_sheet(wb, scansSheet, "All Scans");
+    // Summary section
+    aoa.push(["Summary :", "", "", "", "", "", "", "", "", ""]);
+    addMerge(row, 0, row, 9);
+    row++;
 
-    if (showSplices && splices && splices.length > 0) {
-      const spliceSheet = XLSX.utils.json_to_sheet(
-        splices.map((sp) => ({
-          Time: format(new Date(sp.splicedAt), "yyyy-MM-dd HH:mm:ss"),
-          "Feeder No.": sp.feederNumber,
-          "Old Spool": sp.oldSpoolBarcode,
-          "New Spool": sp.newSpoolBarcode,
-          "Duration (s)": sp.durationSeconds ?? "",
-        }))
-      );
-      XLSX.utils.book_append_sheet(wb, spliceSheet, "Splices");
+    aoa.push(["Total Feeders Scanned", "PASS", "FAIL", "WARNING", "Pass Rate", "Status", "", "", "", ""]);
+    row++;
+
+    aoa.push([totalBomItems, passCount, failCount, 0, passRate, isComplete ? "COMPLETE" : "INCOMPLETE", "", "", "", ""]);
+    row++;
+
+    // All scans log
+    aoa.push(["", "", "", "", "", "", "", "", "", ""]);
+    row++;
+
+    aoa.push(["All Scan Records", "", "", "", "", "", "", "", "", ""]);
+    addMerge(row, 0, row, 9);
+    row++;
+
+    aoa.push(["Time", "Feeder No.", "Spool Barcode", "Part Number", "Status", "", "", "", "", ""]);
+    row++;
+
+    for (const s of filteredScans) {
+      aoa.push([
+        format(new Date(s.scannedAt), "HH:mm:ss"),
+        s.feederNumber,
+        (s as any).spoolBarcode || "-",
+        s.partNumber || "-",
+        s.status === "ok" ? "PASS" : "FAIL",
+        "", "", "", "", "",
+      ]);
+      row++;
     }
 
+    // Splice log
+    if (showSplices && splices && splices.length > 0) {
+      aoa.push(["", "", "", "", "", "", "", "", "", ""]);
+      row++;
+
+      aoa.push(["Splice Log", "", "", "", "", "", "", "", "", ""]);
+      addMerge(row, 0, row, 9);
+      row++;
+
+      aoa.push(["Time", "Feeder No.", "Old Spool Barcode", "New Spool Barcode", "Duration (s)", "", "", "", "", ""]);
+      row++;
+
+      for (const sp of splices) {
+        aoa.push([
+          format(new Date(sp.splicedAt), "HH:mm:ss"),
+          sp.feederNumber,
+          sp.oldSpoolBarcode,
+          sp.newSpoolBarcode,
+          sp.durationSeconds ?? "-",
+          "", "", "", "", "",
+        ]);
+        row++;
+      }
+    }
+
+    // Approvals
+    aoa.push(["", "", "", "", "", "", "", "", "", ""]);
+    row++;
+    aoa.push(["Approvals :", "", "", "", "", "", "", "", "", ""]);
+    addMerge(row, 0, row, 9);
+    row++;
+
+    aoa.push(["Supervisor", "", "", "OPERATOR", "", "", "QA", "", "", ""]);
+    addMerge(row, 0, row, 2);
+    addMerge(row, 3, row, 5);
+    addMerge(row, 6, row, 9);
+    row++;
+
+    aoa.push([session.supervisorName, "", "", session.operatorName, "", "", "N/A", "", "", ""]);
+    addMerge(row, 0, row, 2);
+    addMerge(row, 3, row, 5);
+    addMerge(row, 6, row, 9);
+    row++;
+
+    aoa.push(["Name & Date", "", "", "Name & Date", "", "", "Name & Date", "", "", ""]);
+    addMerge(row, 0, row, 2);
+    addMerge(row, 3, row, 5);
+    addMerge(row, 6, row, 9);
+    row++;
+
+    aoa.push(["____________________________", "", "", "____________________________", "", "", "____________________________", "", "", ""]);
+    addMerge(row, 0, row, 2);
+    addMerge(row, 3, row, 5);
+    addMerge(row, 6, row, 9);
+    row++;
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!merges"] = merges;
+
+    // Column widths (characters)
+    ws["!cols"] = [
+      { wch: 14 }, // Feeder No.
+      { wch: 14 }, // Ref/Des
+      { wch: 24 }, // Component
+      { wch: 10 }, // Value
+      { wch: 16 }, // Package Size
+      { wch: 28 }, // Part Number
+      { wch: 28 }, // Scanned Number
+      { wch: 10 }, // Lot
+      { wch: 14 }, // Status
+      { wch: 14 }, // Time
+    ];
+
+    // Row heights (points)
+    ws["!rows"] = [
+      { hpt: 22 }, // company
+      { hpt: 20 }, // title
+      { hpt: 8 },  // blank
+      { hpt: 16 }, // detail row 1
+      { hpt: 16 }, // detail row 2
+      { hpt: 16 }, // detail row 3
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "SMT Changeover Report");
     XLSX.writeFile(wb, `smt-changeover-report-${session.id}.xlsx`);
   };
 
