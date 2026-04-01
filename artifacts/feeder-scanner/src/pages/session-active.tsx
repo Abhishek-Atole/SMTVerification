@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Loader2, ScanLine, CheckCircle2, Circle, XCircle, Scissors, ArrowLeft } from "lucide-react";
+import { Loader2, ScanLine, CheckCircle2, Circle, XCircle, Scissors, ArrowLeft, RefreshCw } from "lucide-react";
 import { format, differenceInSeconds } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -476,20 +476,37 @@ export default function SessionActive() {
               {bomDetail?.items.map((item) => {
                 const status = feederStatusMap[item.feederNumber];
                 const hasSplice = splices?.some((sp) => sp.feederNumber === item.feederNumber);
+                const canRescan = session.status === "active" && (status === "reject" || status === "pending");
                 return (
                   <div key={item.id} className={`flex items-center justify-between p-3 rounded-lg border shadow-sm transition-colors ${
                     status === "ok" ? "bg-success/5 border-success/30" :
                     status === "reject" ? "bg-destructive/5 border-destructive/30" :
                     "bg-background border-border"
                   }`}>
-                    <div className="flex flex-col min-w-0">
+                    <div className="flex flex-col min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-bold font-mono text-sm truncate">{item.feederNumber}</span>
                         {hasSplice && <Scissors className="w-3 h-3 text-amber-500 shrink-0" />}
                       </div>
                       <span className="text-xs text-muted-foreground truncate font-medium mt-0.5">{item.partNumber}</span>
                     </div>
-                    <div className="shrink-0 ml-3">
+                    <div className="shrink-0 ml-2 flex items-center gap-2">
+                      {canRescan && (
+                        <button
+                          title="Re-scan this feeder (skip to spool scan)"
+                          onClick={() => {
+                            setMode("scan");
+                            setPendingFeeder(item.feederNumber);
+                            setFeederScanTime(Date.now());
+                            setScanStep("spool");
+                            setScanInput("");
+                            setTimeout(() => inputRef.current?.focus(), 50);
+                          }}
+                          className="text-primary hover:text-primary/70 transition-colors p-1 rounded"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </button>
+                      )}
                       {status === "ok" && <CheckCircle2 className="w-6 h-6 text-success" />}
                       {status === "reject" && <XCircle className="w-6 h-6 text-destructive" />}
                       {status === "pending" && <Circle className="w-6 h-6 text-muted-foreground/30" />}
