@@ -40,6 +40,9 @@ export default function Boms() {
     );
   }
 
+  // Defensive check: ensure boms is an array
+  const bomsArray = Array.isArray(boms) ? boms : [];
+
   return (
     <div className="p-8 max-w-6xl mx-auto w-full space-y-6">
       <div className="flex justify-between items-end border-b border-border pb-4">
@@ -100,14 +103,14 @@ export default function Boms() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {boms?.length === 0 ? (
+            {bomsArray.length === 0 ? (
               <TableRow className="border-border hover:bg-transparent">
                 <TableCell colSpan={5} className="text-center py-8 text-muted-foreground font-mono">
                   No BOMs configured.
                 </TableCell>
               </TableRow>
             ) : (
-              boms?.map(bom => (
+              bomsArray.map(bom => (
                 <TableRow key={bom.id} className="border-border hover:bg-secondary/50">
                   <TableCell className="font-mono font-medium">{bom.name}</TableCell>
                   <TableCell className="text-muted-foreground text-sm max-w-xs truncate">{bom.description}</TableCell>

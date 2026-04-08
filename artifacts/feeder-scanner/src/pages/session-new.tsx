@@ -121,6 +121,9 @@ export default function SessionNew() {
     );
   }
 
+  // Defensive check: ensure boms is an array
+  const bomsArray = Array.isArray(boms) ? boms : [];
+
   return (
     <div className="p-8 max-w-4xl mx-auto w-full">
       <div className="mb-8 border-b border-border pb-4">
@@ -200,7 +203,7 @@ export default function SessionNew() {
                   <SelectValue placeholder="Select a BOM..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {boms?.map((bom) => (
+                  {bomsArray.map((bom) => (
                     <SelectItem key={bom.id} value={bom.id.toString()}>
                       {bom.name} ({bom.itemCount} items)
                     </SelectItem>

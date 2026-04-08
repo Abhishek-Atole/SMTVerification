@@ -24,9 +24,13 @@ export default function Dashboard() {
     );
   }
 
-  const activeSessions = sessions?.filter(s => s.status === "active") || [];
-  const completedSessions = sessions?.filter(s => s.status === "completed") || [];
-  const totalBoms = boms?.length || 0;
+  // Defensive check: ensure sessions is an array
+  const sessionsArray = Array.isArray(sessions) ? sessions : [];
+  const bomsArray = Array.isArray(boms) ? boms : [];
+
+  const activeSessions = sessionsArray.filter(s => s.status === "active");
+  const completedSessions = sessionsArray.filter(s => s.status === "completed");
+  const totalBoms = bomsArray.length;
 
   // OPERATOR VIEW
   if (user?.role === "operator") {

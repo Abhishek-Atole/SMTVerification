@@ -15,11 +15,16 @@ export default function SessionHistory() {
     return <div className="flex-1 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-muted-foreground" /></div>;
   }
 
-  const filtered = sessions?.filter(s => 
-    s.panelName.toLowerCase().includes(search.toLowerCase()) ||
-    s.operatorName.toLowerCase().includes(search.toLowerCase()) ||
-    (s.bomName && s.bomName.toLowerCase().includes(search.toLowerCase()))
-  ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) || [];
+  // Defensive check: ensure sessions is an array
+  const sessionsArray = Array.isArray(sessions) ? sessions : [];
+  
+  const filtered = sessionsArray
+    .filter(s => 
+      s.panelName.toLowerCase().includes(search.toLowerCase()) ||
+      s.operatorName.toLowerCase().includes(search.toLowerCase()) ||
+      (s.bomName && s.bomName.toLowerCase().includes(search.toLowerCase()))
+    )
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   return (
     <div className="p-8 max-w-6xl mx-auto w-full space-y-6">

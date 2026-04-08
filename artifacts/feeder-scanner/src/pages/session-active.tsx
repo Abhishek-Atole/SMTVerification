@@ -9,7 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Loader2, ScanLine, CheckCircle2, Circle, XCircle, Scissors, ArrowLeft, RefreshCw } from "lucide-react";
+import { Loader2, ScanLine, CheckCircle2, Circle, XCircle, Scissors, ArrowLeft, RefreshCw, X } from "lucide-react";
 import { format, differenceInSeconds } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -233,6 +233,27 @@ export default function SessionActive() {
     }
   };
 
+  const handleCancelSession = () => {
+    if (
+      confirm(
+        "CANCEL this session? This will discard all scans and mark it as cancelled.\n\nThis action cannot be undone. Continue?"
+      )
+    ) {
+      updateSession.mutate(
+        { sessionId, data: { status: "cancelled", endTime: new Date().toISOString() } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+            setLocation("/sessions");
+          },
+          onError: (err: any) => {
+            alert(`Failed to cancel session: ${err?.message || "Unknown error"}`);
+          },
+        }
+      );
+    }
+  };
+
   if (sessionLoading || (session?.bomId && bomLoading) || !session) {
     return <div className="flex-1 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin" /></div>;
   }
@@ -279,7 +300,19 @@ export default function SessionActive() {
             <div className="text-2xl font-mono font-black tracking-widest">{formatElapsed(elapsed)}</div>
           </div>
           {session.status === "active" ? (
-            <Button variant="destructive" className="font-bold tracking-widest" onClick={handleEndSession}>END SESSION</Button>
+            <div className="flex gap-2">
+              <Button variant="destructive" className="font-bold tracking-widest" onClick={handleEndSession}>
+                END SESSION
+              </Button>
+              <Button
+                variant="outline"
+                className="font-bold tracking-widest border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                onClick={handleCancelSession}
+              >
+                <X className="w-4 h-4 mr-2" />
+                CANCEL
+              </Button>
+            </div>
           ) : (
             <Button asChild className="font-bold tracking-widest">
               <Link href={`/session/${session.id}/report`}>VIEW REPORT</Link>
