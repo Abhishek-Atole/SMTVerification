@@ -25,10 +25,95 @@ app.use(
     },
   }),
 );
-app.use(cors());
+
+// CORS configuration for development
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173", // Vite dev server
+      "http://localhost:3000", // API server (for frontend served from here)
+      "http://127.0.0.1:5173",
+      "http://127.0.0.1:3000",
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
+
+// Security headers (but allow Chrome DevTools probes in development)
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  // Allow resources in development: images, scripts, styles, connections
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; connect-src 'self' http: https: ws: wss:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self';"
+  );
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Root route - explains API structure
+app.get("/", (req, res) => {
+  res.json({
+    name: "SMT Verification API",
+    version: "1.0.0",
+    message: "Backend API for SMT Feeder Scanning & Verification System",
+    endpoints: {
+      bom: "/api/bom - Bill of Materials management",
+      sessions: "/api/sessions - Production session management",
+      analytics: "/api/analytics - System analytics",
+    },
+    frontend: "http://localhost:5173 (when running React dev server)",
+    docs: "Refer to backend routes for API documentation",
+  });
+});
+
+// Handle common browser requests silently (no 404 logs)
+app.use((req, res, next) => {
+  const url = req.url;
+  // Silently handle these common requests
+  if (
+    url === "/favicon.ico" ||
+    url === "/robots.txt" ||
+    url.startsWith("/.well-known/") ||
+    url.startsWith("/apple-touch-icon")
+  ) {
+    return res.status(204).end();
+  }
+  next();
+});
+
 app.use("/api", router);
+
+// 404 handler with proper CSP
+app.use((req, res) => {
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; connect-src 'self' http: https: ws: wss:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+  );
+  res.status(404).json({ error: "Not Found" });
+});
+
+// Error handler with proper CSP
+app.use(
+  (
+    err: any,
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => {
+    res.setHeader(
+      "Content-Security-Policy",
+      "default-src 'self'; connect-src 'self' http: https: ws: wss:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+    );
+    logger.error({ err }, "Unhandled error");
+    res.status(500).json({ error: "Internal Server Error" });
+  },
+);
 
 export default app;
