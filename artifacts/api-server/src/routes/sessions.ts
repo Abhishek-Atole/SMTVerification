@@ -29,7 +29,7 @@ router.post("/sessions", async (req, res) => {
   try {
     const {
       bomId, companyName, customerName, panelName, supervisorName,
-      operatorName, shiftName, shiftDate, logoUrl, productionCount,
+      operatorName, qaName, shiftName, shiftDate, logoUrl, productionCount,
     } = req.body;
 
     if (!bomId || !companyName || !panelName || !supervisorName || !operatorName || !shiftName || !shiftDate) {
@@ -41,7 +41,7 @@ router.post("/sessions", async (req, res) => {
       .insert(sessionsTable)
       .values({
         bomId, companyName, customerName, panelName, supervisorName,
-        operatorName, shiftName, shiftDate, logoUrl, productionCount: productionCount ?? 0,
+        operatorName, qaName, shiftName, shiftDate, logoUrl, productionCount: productionCount ?? 0,
         status: "active",
       })
       .returning();
@@ -103,7 +103,7 @@ router.patch("/sessions/:sessionId", async (req, res) => {
 router.post("/sessions/:sessionId/scans", async (req, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
-    const { feederNumber, spoolBarcode } = req.body;
+    const { feederNumber, spoolBarcode, selectedItemId } = req.body;
 
     if (!feederNumber) {
       res.status(400).json({ error: "feederNumber is required" });
@@ -117,11 +117,33 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
     }
 
     const bomItems = await db.select().from(bomItemsTable).where(eq(bomItemsTable.bomId, session.bomId));
-    const matched = bomItems.find(
-      (item) => item.feederNumber.trim().toLowerCase() === feederNumber.trim().toLowerCase()
+
+    // Find primary item and alternates
+    const primaryItems = bomItems.filter(
+      (item) =>
+        item.feederNumber.trim().toLowerCase() === feederNumber.trim().toLowerCase() &&
+        !item.isAlternate
     );
 
-    const scanStatus = matched ? "ok" : "reject";
+    const alternateItems = bomItems.filter(
+      (item) =>
+        item.feederNumber.trim().toLowerCase() === feederNumber.trim().toLowerCase() &&
+        item.isAlternate
+    );
+
+    // Determine which item was selected
+    let selectedItem = primaryItems[0];
+    let usedAlternate = false;
+
+    if (selectedItemId) {
+      const specified = bomItems.find((item) => item.id === selectedItemId);
+      if (specified && specified.feederNumber.trim().toLowerCase() === feederNumber.trim().toLowerCase()) {
+        selectedItem = specified;
+        usedAlternate = specified.isAlternate ?? false;
+      }
+    }
+
+    const scanStatus = selectedItem ? "ok" : "reject";
     const [scan] = await db
       .insert(scanRecordsTable)
       .values({
@@ -129,17 +151,46 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
         feederNumber: feederNumber.trim(),
         spoolBarcode: spoolBarcode?.trim() ?? null,
         status: scanStatus,
-        partNumber: matched?.partNumber ?? null,
-        description: matched?.description ?? null,
-        location: matched?.location ?? null,
+        partNumber: selectedItem?.partNumber ?? null,
+        description: selectedItem?.description ?? null,
+        location: selectedItem?.location ?? null,
       })
       .returning();
 
-    const message = matched
-      ? `Feeder ${feederNumber} verified OK — Part: ${matched.partNumber}`
+    const message = selectedItem
+      ? `Feeder ${feederNumber} verified OK — Part: ${selectedItem.partNumber}${usedAlternate ? " (ALTERNATE)" : ""}`
       : `Feeder ${feederNumber} NOT in BOM — REJECTED`;
 
-    res.json({ scan, status: scanStatus, message });
+    res.json({
+      scan,
+      status: scanStatus,
+      message,
+      availableOptions: {
+        primary: primaryItems.map((item) => ({
+          id: item.id,
+          mpn: item.mpn,
+          partNumber: item.partNumber,
+          manufacturer: item.manufacturer,
+          packageSize: item.packageSize,
+          cost: item.cost,
+          leadTime: item.leadTime,
+          description: item.description,
+        })),
+        alternates: alternateItems.map((item) => ({
+          id: item.id,
+          mpn: item.mpn,
+          partNumber: item.partNumber,
+          manufacturer: item.manufacturer,
+          packageSize: item.packageSize,
+          cost: item.cost,
+          leadTime: item.leadTime,
+          description: item.description,
+          isAlternate: true,
+        })),
+      },
+      selectedId: selectedItem?.id,
+      selectedIsAlternate: usedAlternate,
+    });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to scan feeder" });
