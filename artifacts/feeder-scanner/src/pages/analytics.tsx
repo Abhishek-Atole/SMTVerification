@@ -29,7 +29,10 @@ export default function Analytics() {
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-black tracking-tight">Analytics Dashboard</h1>
+        <div className="flex items-center gap-4">
+          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-14" />
+          <h1 className="text-3xl font-black tracking-tight">Analytics Dashboard</h1>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">

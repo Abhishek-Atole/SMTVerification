@@ -60,6 +60,26 @@ export const GetBomResponse = zod.object({
 });
 
 /**
+ * @summary Update a BOM
+ */
+export const UpdateBomParams = zod.object({
+  bomId: zod.coerce.number(),
+});
+
+export const UpdateBomBody = zod.object({
+  name: zod.string().optional(),
+  description: zod.string().optional(),
+});
+
+export const UpdateBomResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  description: zod.string().optional(),
+  itemCount: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
  * @summary Delete a BOM
  */
 export const DeleteBomParams = zod.object({
@@ -79,6 +99,40 @@ export const AddBomItemBody = zod.object({
   description: zod.string().optional(),
   location: zod.string().optional(),
   quantity: zod.number(),
+});
+
+/**
+ * @summary Update a BOM item
+ */
+export const UpdateBomItemParams = zod.object({
+  bomId: zod.coerce.number(),
+  itemId: zod.coerce.number(),
+});
+
+export const UpdateBomItemBody = zod.object({
+  feederNumber: zod.string().optional(),
+  partNumber: zod.string().optional(),
+  description: zod.string().optional(),
+  location: zod.string().optional(),
+  quantity: zod.number().optional(),
+});
+
+export const UpdateBomItemResponse = zod.object({
+  id: zod.number(),
+  bomId: zod.number(),
+  feederNumber: zod.string(),
+  partNumber: zod.string(),
+  description: zod.string().optional(),
+  location: zod.string().optional(),
+  quantity: zod.number(),
+});
+
+/**
+ * @summary Delete a BOM item
+ */
+export const DeleteBomItemParams = zod.object({
+  bomId: zod.coerce.number(),
+  itemId: zod.coerce.number(),
 });
 
 /**

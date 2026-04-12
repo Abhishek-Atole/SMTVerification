@@ -83,6 +83,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BomDetail"
+    patch:
+      operationId: updateBom
+      tags: [bom]
+      summary: Update a BOM
+      parameters:
+        - name: bomId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBomRequest"
+      responses:
+        "200":
+          description: Updated BOM
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bom"
     delete:
       operationId: deleteBom
       tags: [bom]
@@ -121,6 +144,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BomItem"
+
+  /bom/{bomId}/items/{itemId}:
+    patch:
+      operationId: updateBomItem
+      tags: [bom]
+      summary: Update a BOM item
+      parameters:
+        - name: bomId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBomItemRequest"
+      responses:
+        "200":
+          description: Item updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BomItem"
+    delete:
+      operationId: deleteBomItem
+      tags: [bom]
+      summary: Delete a BOM item
+      parameters:
+        - name: bomId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Item deleted
 
   /sessions:
     get:
@@ -421,6 +492,14 @@ components:
           type: string
       required: [name]
 
+    UpdateBomRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
     CreateBomItemRequest:
       type: object
       properties:
@@ -435,6 +514,20 @@ components:
         quantity:
           type: integer
       required: [feederNumber, partNumber, quantity]
+
+    UpdateBomItemRequest:
+      type: object
+      properties:
+        feederNumber:
+          type: string
+        partNumber:
+          type: string
+        description:
+          type: string
+        location:
+          type: string
+        quantity:
+          type: integer
 
     Session:
       type: object

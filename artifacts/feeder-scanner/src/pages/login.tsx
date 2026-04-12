@@ -40,7 +40,8 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <div className="mb-8 text-center">
-        <h1 className="text-4xl font-black tracking-tighter text-primary">UCAL ELECTRONICS</h1>
+        <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-32 mx-auto mb-4" />
+        <h1 className="text-3xl font-black tracking-tighter text-primary">UCAL ELECTRONICS</h1>
         <p className="text-lg font-bold text-foreground/80 mt-1">PVT. LTD.</p>
         <p className="text-muted-foreground mt-2">SMT Feeder Scanning & Verification System</p>
       </div>

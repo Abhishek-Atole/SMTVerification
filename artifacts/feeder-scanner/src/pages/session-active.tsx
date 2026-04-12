@@ -13,6 +13,7 @@ import { Loader2, ScanLine, CheckCircle2, Circle, XCircle, Scissors, ArrowLeft, 
 import { format, differenceInSeconds } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AlternateSelector } from "@/components/alternate-selector";
 
 type ScanStep = "feeder" | "spool";
 type SpliceStep = "feeder" | "oldSpool" | "newSpool";
@@ -68,6 +69,14 @@ export default function SessionActive() {
   const [pendingFeeder, setPendingFeeder] = useState("");
   const [feederScanTime, setFeederScanTime] = useState<number | null>(null);
   const [scanInput, setScanInput] = useState("");
+  
+  // Alternate selection state
+  const [pendingAvailableOptions, setPendingAvailableOptions] = useState<{
+    primary: any[];
+    alternates: any[];
+  } | null>(null);
+  const [selectedItemIdForScan, setSelectedItemIdForScan] = useState<number | null>(null);
+  const [needsAlternateSelection, setNeedsAlternateSelection] = useState(false);
 
   const [spliceStep, setSpliceStep] = useState<SpliceStep>("feeder");
   const [splicePendingFeeder, setSplicePendingFeeder] = useState("");
@@ -122,15 +131,46 @@ export default function SessionActive() {
     if (!val || session?.status !== "active") return;
 
     if (scanStep === "feeder") {
+      // After feeder scan, check if alternates exist
+      const bomItems = bomDetail?.items || [];
+      const matchingItems = bomItems.filter(
+        (item) =>
+          item.feederNumber.trim().toLowerCase() === val.trim().toLowerCase()
+      );
+
+      const primaryItems = matchingItems.filter((item) => !item.isAlternate);
+      const alternateItems = matchingItems.filter((item) => item.isAlternate);
+
       setPendingFeeder(val);
       setFeederScanTime(Date.now());
       setScanInput("");
+
+      if (alternateItems.length > 0) {
+        // Show selector for choosing alternates
+        setPendingAvailableOptions({
+          primary: primaryItems,
+          alternates: alternateItems,
+        });
+        setSelectedItemIdForScan(primaryItems[0]?.id || alternateItems[0]?.id || null);
+        setNeedsAlternateSelection(true);
+      } else {
+        // No alternates, skip to spool scan
+        setScanStep("spool");
+      }
+    } else if (needsAlternateSelection) {
+      // User pressed enter with alternate selector shown - treat as confirming selection
       setScanStep("spool");
+      setNeedsAlternateSelection(false);
     } else {
+      // Spool barcode scan
       const duration = feederScanTime ? Date.now() - feederScanTime : undefined;
       scanFeeder.mutate({
         sessionId,
-        data: { feederNumber: pendingFeeder, spoolBarcode: val },
+        data: {
+          feederNumber: pendingFeeder,
+          spoolBarcode: val,
+          selectedItemId: selectedItemIdForScan || undefined,
+        },
       }, {
         onSuccess: (res: any) => {
           setLastScanResult({
@@ -142,6 +182,8 @@ export default function SessionActive() {
           setPendingFeeder("");
           setFeederScanTime(null);
           setScanStep("feeder");
+          setPendingAvailableOptions(null);
+          setSelectedItemIdForScan(null);
           queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
           flashBg(res.status);
         },
@@ -151,6 +193,8 @@ export default function SessionActive() {
           setPendingFeeder("");
           setFeederScanTime(null);
           setScanStep("feeder");
+          setPendingAvailableOptions(null);
+          setSelectedItemIdForScan(null);
           flashBg("reject");
         },
       });
@@ -279,20 +323,28 @@ export default function SessionActive() {
     newSpool: `STEP 3 / 3 — Scan NEW SPOOL barcode (Feeder: ${splicePendingFeeder})`,
   };
 
-  const scanStepLabels: Record<ScanStep, string> = {
-    feeder: "STEP 1 / 2 — Scan FEEDER NUMBER",
-    spool: `STEP 2 / 2 — Scan SPOOL BARCODE / QR (Feeder: ${pendingFeeder})`,
+  const getScanStepLabel = () => {
+    if (needsAlternateSelection) {
+      return `SELECT COMPONENT for ${pendingFeeder} — Click primary or alternate, then press ENTER`;
+    }
+    if (scanStep === "feeder") {
+      return "STEP 1 / 2 — Scan FEEDER NUMBER";
+    }
+    return `STEP 2 / 2 — Scan SPOOL BARCODE / QR (Feeder: ${pendingFeeder})`;
   };
 
   return (
     <div id="scan-flash-bg" className="h-[100dvh] w-full flex flex-col transition-colors duration-1000 bg-background overflow-hidden">
       {/* Header */}
       <header className="bg-card border-b border-border p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0 shadow-sm z-10 relative">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-sm">
-          <div><span className="text-muted-foreground font-medium">PANEL:</span> <span className="font-bold text-primary ml-2">{session.panelName}</span></div>
-          <div><span className="text-muted-foreground font-medium">BOM:</span> <span className="font-bold ml-2">{session.bomName || session.bomId}</span></div>
-          <div><span className="text-muted-foreground font-medium">OPERATOR:</span> <span className="font-bold ml-2">{session.operatorName}</span></div>
-          <div><span className="text-muted-foreground font-medium">SHIFT:</span> <span className="font-bold ml-2">{session.shiftName}</span></div>
+        <div className="flex items-center gap-3 mb-2 md:mb-0">
+          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-10" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-sm">
+            <div><span className="text-muted-foreground font-medium">PANEL:</span> <span className="font-bold text-primary ml-2">{session.panelName}</span></div>
+            <div><span className="text-muted-foreground font-medium">BOM:</span> <span className="font-bold ml-2">{session.bomName || session.bomId}</span></div>
+            <div><span className="text-muted-foreground font-medium">OPERATOR:</span> <span className="font-bold ml-2">{session.operatorName}</span></div>
+            <div><span className="text-muted-foreground font-medium">SHIFT:</span> <span className="font-bold ml-2">{session.shiftName}</span></div>
+          </div>
         </div>
         <div className="flex items-center gap-6">
           <div className="text-right flex flex-col items-end">
@@ -351,11 +403,31 @@ export default function SessionActive() {
                   <form onSubmit={handleScanSubmit} className="flex flex-col items-center gap-6">
                     <Label className="text-xl tracking-widest text-primary flex items-center gap-2 font-black uppercase">
                       <ScanLine className="w-6 h-6" />
-                      {scanStepLabels[scanStep]}
+                      {getScanStepLabel()}
                     </Label>
+                    
+                    {/* Alternate Selector */}
+                    {needsAlternateSelection && pendingAvailableOptions && (
+                      <div className="w-full max-w-lg">
+                        <AlternateSelector
+                          feederNumber={pendingFeeder}
+                          primaryOptions={pendingAvailableOptions.primary}
+                          alternateOptions={pendingAvailableOptions.alternates}
+                          selectedId={selectedItemIdForScan || undefined}
+                          onSelect={setSelectedItemIdForScan}
+                          isLoading={scanFeeder.isPending}
+                        />
+                      </div>
+                    )}
+
                     <div className="w-full flex gap-2 items-center justify-center">
-                      {scanStep === "spool" && (
-                        <Button type="button" variant="ghost" size="icon" className="shrink-0 h-16 w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); }}>
+                      {scanStep === "spool" && !needsAlternateSelection && (
+                        <Button type="button" variant="ghost" size="icon" className="shrink-0 h-16 w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); }}>
+                          <ArrowLeft className="w-6 h-6" />
+                        </Button>
+                      )}
+                      {needsAlternateSelection && (
+                        <Button type="button" variant="ghost" size="icon" className="shrink-0 h-16 w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); }}>
                           <ArrowLeft className="w-6 h-6" />
                         </Button>
                       )}
@@ -364,12 +436,12 @@ export default function SessionActive() {
                         value={scanInput}
                         onChange={(e) => setScanInput(e.target.value)}
                         className="flex-1 text-center text-4xl h-24 font-mono tracking-[0.2em] bg-background border-2 border-border focus-visible:border-primary rounded-lg shadow-inner"
-                        placeholder={scanStep === "feeder" ? "SCAN FEEDER NO..." : "SCAN SPOOL BARCODE..."}
+                        placeholder={needsAlternateSelection ? "Press ENTER to continue..." : (scanStep === "feeder" ? "SCAN FEEDER NO..." : "SCAN SPOOL BARCODE...")}
                         autoFocus
                         autoComplete="off"
                       />
                     </div>
-                    {scanStep === "spool" && (
+                    {scanStep === "spool" && !needsAlternateSelection && (
                       <p className="text-sm text-muted-foreground">Feeder number <strong className="text-foreground font-mono">{pendingFeeder}</strong> scanned — now scan its spool barcode or QR code</p>
                     )}
                   </form>

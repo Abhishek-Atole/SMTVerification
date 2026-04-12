@@ -24,9 +24,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen w-full bg-background text-foreground">
       <aside className="w-64 border-r border-border bg-sidebar text-sidebar-foreground flex flex-col shrink-0 transition-colors">
         <div className="h-16 flex items-center justify-between px-6 border-b border-sidebar-border bg-sidebar">
-          <span className="font-mono font-bold tracking-tight text-lg text-sidebar-primary">
-            SMT_VERIFY
-          </span>
+          <div className="flex items-center gap-2 flex-1">
+            <img src="/ucal-logo.svg" alt="UCAL" className="h-10" />
+            <span className="font-mono font-bold tracking-tight text-sm text-sidebar-primary hidden sm:inline">
+              SMT_VERIFY
+            </span>
+          </div>
           <Button 
             variant="ghost" 
             size="icon" 

@@ -32,7 +32,7 @@ router.get("/analytics/overview", async (req, res) => {
           )
         : 0;
 
-    res.json({
+    return res.json({
       totalSessions,
       activeSessions,
       completedSessions,
@@ -45,7 +45,7 @@ router.get("/analytics/overview", async (req, res) => {
     });
   } catch (err) {
     req.log.error(err);
-    res.status(500).json({ error: "Failed to get analytics overview" });
+    return res.status(500).json({ error: "Failed to get analytics overview" });
   }
 });
 
@@ -65,7 +65,7 @@ router.get("/analytics/pareto", async (req, res) => {
     const totalRejects = rejectScans.length;
 
     if (totalRejects === 0) {
-      res.json({ items: [], totalRejects: 0 });
+      return res.json({ items: [], totalRejects: 0 });
       return;
     }
 
@@ -104,10 +104,10 @@ router.get("/analytics/pareto", async (req, res) => {
       };
     });
 
-    res.json({ items, totalRejects });
+    return res.json({ items, totalRejects });
   } catch (err) {
     req.log.error(err);
-    res.status(500).json({ error: "Failed to get Pareto data" });
+    return res.status(500).json({ error: "Failed to get Pareto data" });
   }
 });
 
@@ -154,10 +154,10 @@ router.get("/analytics/trends", async (req, res) => {
         okRate: data.totalScans > 0 ? Math.round((data.okCount / data.totalScans) * 100 * 10) / 10 : 0,
       }));
 
-    res.json(result);
+    return res.json(result);
   } catch (err) {
     req.log.error(err);
-    res.status(500).json({ error: "Failed to get trend data" });
+    return res.status(500).json({ error: "Failed to get trend data" });
   }
 });
 

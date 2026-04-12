@@ -31,5 +31,7 @@ export * from "./sessionStatus";
 export * from "./sessionSummary";
 export * from "./sessionTrend";
 export * from "./spliceRecord";
+export * from "./updateBomItemRequest";
+export * from "./updateBomRequest";
 export * from "./updateSessionRequest";
 export * from "./updateSessionRequestStatus";

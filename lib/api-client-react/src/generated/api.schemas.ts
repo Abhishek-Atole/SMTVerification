@@ -40,12 +40,25 @@ export interface CreateBomRequest {
   description?: string;
 }
 
+export interface UpdateBomRequest {
+  name?: string;
+  description?: string;
+}
+
 export interface CreateBomItemRequest {
   feederNumber: string;
   partNumber: string;
   description?: string;
   location?: string;
   quantity: number;
+}
+
+export interface UpdateBomItemRequest {
+  feederNumber?: string;
+  partNumber?: string;
+  description?: string;
+  location?: string;
+  quantity?: number;
 }
 
 export type SessionStatus = (typeof SessionStatus)[keyof typeof SessionStatus];

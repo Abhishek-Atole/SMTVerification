@@ -29,9 +29,12 @@ export default function SessionHistory() {
   return (
     <div className="p-8 max-w-6xl mx-auto w-full space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-border pb-4 gap-4">
-        <div>
-          <h1 className="text-3xl font-mono font-bold tracking-tight text-foreground">SESSION HISTORY</h1>
-          <p className="text-muted-foreground mt-2 font-mono">Past verification runs</p>
+        <div className="flex items-center gap-4">
+          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-14" />
+          <div>
+            <h1 className="text-3xl font-mono font-bold tracking-tight text-foreground">SESSION HISTORY</h1>
+            <p className="text-muted-foreground mt-2 font-mono">Past verification runs</p>
+          </div>
         </div>
         <div className="relative w-full md:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

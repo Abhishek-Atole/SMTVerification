@@ -9,14 +9,17 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { data: sessions, isLoading: sessionsLoading } = useListSessions();
   const { data: boms, isLoading: bomsLoading } = useListBoms();
-  const { data: overview, isLoading: overviewLoading } = useGetAnalyticsOverview({
+  const { data: overview, isLoading: overviewLoading, isError: overviewError } = useGetAnalyticsOverview({
     query: { 
       queryKey: getGetAnalyticsOverviewQueryKey(),
-      enabled: user?.role === "qa" || user?.role === "engineer" 
+      enabled: user?.role === "qa" || user?.role === "engineer",
+      retry: 1
     }
   });
 
-  if (sessionsLoading || bomsLoading || (overviewLoading && user?.role !== "operator")) {
+  // Show loading screen only if sessions or boms are loading
+  // For overview, if it errors, we'll just render without it
+  if (sessionsLoading || bomsLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -37,6 +40,7 @@ export default function Dashboard() {
     return (
       <div className="p-8 max-w-6xl mx-auto w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="flex flex-col items-center justify-center py-12 text-center space-y-6">
+          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-20 mb-2" />
           <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center mb-4">
             <ScanLine className="w-12 h-12 text-primary" />
           </div>
@@ -87,10 +91,13 @@ export default function Dashboard() {
   if (user?.role === "qa") {
     return (
       <div className="p-8 max-w-6xl mx-auto w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="flex justify-between items-end">
-          <div>
-            <h1 className="text-3xl font-black tracking-tight text-foreground">QA Dashboard</h1>
-            <p className="text-muted-foreground mt-2">Quality & Performance Overview</p>
+        <div className="flex justify-between items-end mb-4">
+          <div className="flex items-center gap-4">
+            <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-16" />
+            <div>
+              <h1 className="text-3xl font-black tracking-tight text-foreground">QA Dashboard</h1>
+              <p className="text-muted-foreground mt-2">Quality & Performance Overview</p>
+            </div>
           </div>
           <Button asChild variant="outline" className="font-bold gap-2">
             <Link href="/analytics">
@@ -154,10 +161,13 @@ export default function Dashboard() {
   // ENGINEER VIEW (Default)
   return (
     <div className="p-8 max-w-6xl mx-auto w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground">Engineer Dashboard</h1>
-          <p className="text-muted-foreground mt-2">System Status & Management</p>
+      <div className="flex justify-between items-end mb-4">
+        <div className="flex items-center gap-4">
+          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-16" />
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-foreground">Engineer Dashboard</h1>
+            <p className="text-muted-foreground mt-2">System Status & Management</p>
+          </div>
         </div>
         <div className="flex gap-3">
           <Button asChild variant="outline" className="font-bold gap-2">
