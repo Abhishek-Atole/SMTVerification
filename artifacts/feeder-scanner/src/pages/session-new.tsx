@@ -10,6 +10,7 @@ import { Loader2, Upload } from "lucide-react";
 
 const SUPERVISOR_NAMES = ["Umesh Nagile", "Dhupchand Bhardwaj", "Maruti Birader"];
 const OPERATOR_NAMES = ["Aarti", "Aniket", "Suraj"];
+const QA_NAMES = ["Ravi Patel", "Priya Singh", "Amit Kumar"];
 
 function NameSelect({
   label,
@@ -73,19 +74,11 @@ export default function SessionNew() {
   const [panelName, setPanelName] = useState("");
   const [supervisorName, setSupervisorName] = useState("");
   const [operatorName, setOperatorName] = useState("");
+  const [qaName, setQaName] = useState("");
   const [shiftName, setShiftName] = useState("Morning");
   const [shiftDate, setShiftDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [productionCount, setProductionCount] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
-
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setLogoUrl(reader.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
+  const defaultLogoUrl = "/ucal-logo.svg";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,10 +96,11 @@ export default function SessionNew() {
         panelName,
         supervisorName: resolvedSupervisor,
         operatorName: resolvedOperator,
+        qaName: qaName || undefined,
         shiftName,
         shiftDate,
         productionCount: productionCount ? Number(productionCount) : undefined,
-        logoUrl: logoUrl || undefined,
+        logoUrl: defaultLogoUrl,
       },
     }, {
       onSuccess: (session) => setLocation(`/session/${session.id}`),
@@ -126,9 +120,12 @@ export default function SessionNew() {
 
   return (
     <div className="p-8 max-w-4xl mx-auto w-full">
-      <div className="mb-8 border-b border-border pb-4">
-        <h1 className="text-3xl font-mono font-bold tracking-tight text-foreground">NEW SESSION SETUP</h1>
-        <p className="text-muted-foreground mt-2 font-mono">Initialize a new verification run</p>
+      <div className="mb-8 border-b border-border pb-4 flex items-center gap-4">
+        <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-14" />
+        <div>
+          <h1 className="text-3xl font-mono font-bold tracking-tight text-foreground">NEW SESSION SETUP</h1>
+          <p className="text-muted-foreground mt-2 font-mono">Initialize a new verification run</p>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-card p-8 border border-border rounded-sm space-y-8 font-mono">
@@ -176,6 +173,13 @@ export default function SessionNew() {
               required
             />
 
+            <NameSelect
+              label="QA Name"
+              names={QA_NAMES}
+              value={qaName}
+              onChange={setQaName}
+            />
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Shift</Label>
@@ -214,15 +218,7 @@ export default function SessionNew() {
           </div>
         </div>
 
-        <div className="space-y-4 pt-4 border-t border-border">
-          <Label>Company Logo (Optional, for Reports)</Label>
-          <div className="flex items-center gap-4">
-            <div className="h-16 w-32 border border-dashed border-border bg-background rounded-sm flex items-center justify-center overflow-hidden">
-              {logoUrl ? <img src={logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" /> : <span className="text-xs text-muted-foreground">No logo</span>}
-            </div>
-            <Input type="file" accept="image/*" onChange={handleLogoUpload} className="max-w-xs text-sm file:text-foreground file:bg-secondary file:border-0 file:rounded-sm file:px-2 file:py-1 rounded-sm cursor-pointer" />
-          </div>
-        </div>
+
 
         <div className="pt-8 flex justify-end">
           <Button type="submit" size="lg" disabled={createSession.isPending || !bomId} className="w-full md:w-auto font-mono text-lg tracking-wider rounded-sm px-12" data-testid="btn-start-run">
