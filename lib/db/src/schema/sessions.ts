@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { bomsTable } from "./bom";
@@ -11,6 +11,7 @@ export const sessionsTable = pgTable("sessions", {
   panelName: text("panel_name").notNull(),
   supervisorName: text("supervisor_name").notNull(),
   operatorName: text("operator_name").notNull(),
+  qaName: text("qa_name"), // QA personnel name
   shiftName: text("shift_name").notNull(),
   shiftDate: text("shift_date").notNull(),
   logoUrl: text("logo_url"),
@@ -21,21 +22,41 @@ export const sessionsTable = pgTable("sessions", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const scanRecordsTable = pgTable("scan_records", {
-  id: serial("id").primaryKey(),
-  sessionId: integer("session_id").notNull().references(() => sessionsTable.id, { onDelete: "cascade" }),
-  feederNumber: text("feeder_number").notNull(),
-  spoolBarcode: text("spool_barcode"),
-  status: text("status").notNull(),
-  partNumber: text("part_number"),
-  description: text("description"),
-  location: text("location"),
-  scannedAt: timestamp("scanned_at").defaultNow().notNull(),
-});
+export const scanRecordsTable = pgTable(
+  "scan_records",
+  {
+    id: serial("id").primaryKey(),
+    sessionId: integer("session_id")
+      .notNull()
+      .references(() => sessionsTable.id, { onDelete: "cascade" }),
+    feederNumber: text("feeder_number").notNull(), // Legacy
+    feederId: integer("feeder_id"), // New: Reference to feeders table
+    spoolBarcode: text("spool_barcode"),
+    status: text("status").notNull(),
+    partNumber: text("part_number"),
+    componentId: integer("component_id"), // New: Reference to components table
+    scannedMpn: text("scanned_mpn"), // New: Actual MPN scanned
+    lotNumber: text("lot_number"), // New: Component lot
+    dateCode: text("date_code"), // New: Manufacturing date code
+    reelId: text("reel_id"), // New: Physical reel ID
+    alternateUsed: boolean("alternate_used").default(false), // New: Was this an alternate?
+    validationResult: text("validation_result"), // 'pass', 'alternate_pass', 'mismatch', 'alternate_not_found'
+    description: text("description"),
+    location: text("location"),
+    scannedAt: timestamp("scanned_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    sessionIdIdx: index("scan_records_session_id_idx").on(table.sessionId),
+    feederIdIdx: index("scan_records_feeder_id_idx").on(table.feederId),
+    scannedMpnIdx: index("scan_records_scanned_mpn_idx").on(table.scannedMpn),
+  })
+);
 
 export const spliceRecordsTable = pgTable("splice_records", {
   id: serial("id").primaryKey(),
-  sessionId: integer("session_id").notNull().references(() => sessionsTable.id, { onDelete: "cascade" }),
+  sessionId: integer("session_id")
+    .notNull()
+    .references(() => sessionsTable.id, { onDelete: "cascade" }),
   feederNumber: text("feeder_number").notNull(),
   oldSpoolBarcode: text("old_spool_barcode").notNull(),
   newSpoolBarcode: text("new_spool_barcode").notNull(),
