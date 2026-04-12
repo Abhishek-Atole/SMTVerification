@@ -36,6 +36,7 @@ export default function SessionReport() {
   const [showReject, setShowReject] = useState(true);
   const [showSpoolBarcode, setShowSpoolBarcode] = useState(true);
   const [showSplices, setShowSplices] = useState(true);
+  const [showAlternates, setShowAlternates] = useState(true);
   const [latestOnly, setLatestOnly] = useState(false);
   const [showCustomize, setShowCustomize] = useState(false);
 
@@ -60,7 +61,53 @@ export default function SessionReport() {
     return true;
   });
 
-  const exportPDF = () => {
+  // Helper function to load logo from URL as data URL
+  const loadLogoAsDataUrl = async (logoUrl: string): Promise<string> => {
+    try {
+      let imageResponse: Response;
+      
+      // Try to load the logo from public folder first
+      if (logoUrl.endsWith(".svg")) {
+        imageResponse = await fetch(logoUrl);
+        const svgText = await imageResponse.text();
+        const canvas = document.createElement("canvas");
+        canvas.width = 200;
+        canvas.height = 200;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return "";
+
+        const img = new Image();
+        const blob = new Blob([svgText], { type: "image/svg+xml" });
+        const url = URL.createObjectURL(blob);
+        return new Promise((resolve) => {
+          img.onload = () => {
+            ctx.drawImage(img, 0, 0, 200, 200);
+            URL.revokeObjectURL(url);
+            resolve(canvas.toDataURL("image/png"));
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve("");
+          };
+          img.src = url;
+        });
+      } else {
+        // For PNG/JPEG, fetch and convert to data URL directly
+        imageResponse = await fetch(logoUrl);
+        const blob = await imageResponse.blob();
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.onerror = () => resolve("");
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch {
+      return "";
+    }
+  };
+
+  const exportPDF = async () => {
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const pageW = doc.internal.pageSize.getWidth(); // 297mm
     const pageH = doc.internal.pageSize.getHeight(); // 210mm
@@ -75,44 +122,74 @@ export default function SessionReport() {
     doc.setLineWidth(1.0);
     doc.rect(M, M, pageW - 2 * M, pageH - 2 * M);
 
-    // ── Logo + Title ─────────────────────────────────────────────────
-    let y = M + 5;
-    const logoSize = 24;
-    const logoX = M + 4;
+    // ── Professional Compact Header ─────────────────────────────────
+    let y = M + 3;
+    const logoSize = 18;
+    const logoX = M + 2;
+    const headerX = pageW / 2;
 
+    // ── Company Logo (Left Side) ──────────────────────────────────
+    let logoDataUrl = "";
+    
+    // Try to load logo: first from session, then from public folder (UCAL logo)
     if (session.logoUrl) {
-      try {
-        const fmt = session.logoUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
-        doc.addImage(session.logoUrl, fmt, logoX, y, logoSize, logoSize);
-      } catch (_) {
-        doc.setFontSize(7);
-        doc.setTextColor(100, 100, 100);
-        doc.text("LOGO", logoX + 8, y + 13, { align: "center" });
+      logoDataUrl = session.logoUrl;
+      if (session.logoUrl.endsWith(".svg")) {
+        logoDataUrl = await loadLogoAsDataUrl(session.logoUrl);
       }
     } else {
-      // Company name in logo box
-      doc.setDrawColor(200, 210, 230);
-      doc.setLineWidth(0.3);
-      doc.rect(logoX, y, logoSize, logoSize);
-      doc.setFontSize(5.5);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-      const co = session.companyName.split(" ");
-      co.forEach((word, i) => doc.text(word, logoX + logoSize / 2, y + 5 + i * 4.5, { align: "center" }));
+      // Load default UCAL logo from public folder
+      try {
+        logoDataUrl = await loadLogoAsDataUrl("/ucal-logo.png");
+      } catch {
+        logoDataUrl = "";
+      }
     }
 
-    doc.setFontSize(16);
+    if (logoDataUrl && !logoDataUrl.endsWith(".svg")) {
+      try {
+        const fmt = logoDataUrl.startsWith("data:image/png") ? "PNG" : "JPEG";
+        doc.addImage(logoDataUrl, fmt, logoX, y, logoSize, logoSize);
+      } catch (_) {
+        // Fallback: Navy box with UCAL text
+        doc.setDrawColor(10, 10, 60);
+        doc.setLineWidth(0.4);
+        doc.setFillColor(10, 10, 60);
+        doc.rect(logoX, y, logoSize, logoSize, "F");
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(255, 255, 255);
+        doc.text("UCAL", logoX + logoSize / 2, y + logoSize / 2 + 0.5, { align: "center" });
+      }
+    } else {
+      // Fallback: Navy box with UCAL text
+      doc.setDrawColor(10, 10, 60);
+      doc.setLineWidth(0.4);
+      doc.setFillColor(10, 10, 60);
+      doc.rect(logoX, y, logoSize, logoSize, "F");
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(255, 255, 255);
+      doc.text("UCAL", logoX + logoSize / 2, y + logoSize / 2 + 0.5, { align: "center" });
+    }
+
+    // ── Title & Company (Centered)
+    doc.setFontSize(15);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-    doc.text("SMT CHANGEOVER VERIFICATION REPORT", pageW / 2 + 10, y + 14, { align: "center" });
+    doc.text("SMT CHANGEOVER VERIFICATION REPORT", headerX, y + 7, { align: "center" });
 
-    y += logoSize + 4;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text(session.companyName, headerX, y + 12, { align: "center" });
 
-    // ── Header separator line ─────────────────────────────────────────
+    // ── Horizontal Separator Line (Professional)
+    y = y + logoSize + 3;
     doc.setDrawColor(NAVY[0], NAVY[1], NAVY[2]);
-    doc.setLineWidth(0.4);
-    doc.line(M + 2, y, pageW - M - 2, y);
-    y += 4;
+    doc.setLineWidth(0.5);
+    doc.line(M, y, pageW - M, y);
+    y += 5;
 
     // ── Details grid (3 rows × 5 cols) ───────────────────────────────
     const printKV = (label: string, value: string, x: number, yp: number) => {
@@ -146,7 +223,7 @@ export default function SessionReport() {
 
     printKV("PCB/:", session.panelName.split(" ")[0] || "N/A", colX(0), y);
     printKV("Line:", "N/A", colX(1), y);
-    printKV("QA:", "N/A", colX(2), y);
+    printKV("QA:", session.qaName || "N/A", colX(2), y);
     printKV("End Time:", endTimeStr, colX(3), y);
     printKV("Supervisor:", session.supervisorName, colX(4), y);
     y += 6;
@@ -380,7 +457,7 @@ export default function SessionReport() {
     aoa.push([
       "PCB/:", session.panelName.split(" ")[0] || "N/A",
       "Line:", "N/A",
-      "QA:", "N/A",
+      "QA:", session.qaName || "N/A",
       "End Time:", endTimeStr,
       "Supervisor:", session.supervisorName,
     ]);
@@ -554,17 +631,23 @@ export default function SessionReport() {
     <div className="p-6 max-w-6xl mx-auto w-full space-y-6">
       {/* Header */}
       <div className="flex justify-between items-end border-b border-border pb-4">
-        <div>
-          <h1 className="text-2xl font-mono font-bold tracking-tight">SMT CHANGEOVER VERIFICATION REPORT</h1>
-          <p className="text-muted-foreground mt-1 font-mono text-sm">
-            CHG{String(session.id).padStart(8, "0")} | {session.companyName} | {format(new Date(session.startTime), "PPpp")}
-          </p>
+        <div className="flex items-start gap-6">
+          {(session.logoUrl || "/ucal-logo.svg") && (
+            <img src={session.logoUrl || "/ucal-logo.svg"} alt="UCAL Electronics" className="h-16 w-auto object-contain flex-shrink-0" />
+          )}
+          <div>
+            <h1 className="text-3xl font-mono font-bold tracking-tight">SMT CHANGEOVER</h1>
+            <h2 className="text-2xl font-mono font-bold tracking-tight text-primary">VERIFICATION REPORT</h2>
+            <p className="text-muted-foreground mt-1 font-mono text-sm">
+              CHG{String(session.id).padStart(8, "0")} | {session.companyName} | {format(new Date(session.startTime), "PPpp")}
+            </p>
+          </div>
         </div>
         <div className="flex gap-3 flex-wrap justify-end">
           <Button onClick={() => setShowCustomize(!showCustomize)} variant="outline" className="font-mono rounded-sm">
             <Settings2 className="w-4 h-4 mr-2" /> Customize
           </Button>
-          <Button onClick={exportPDF} variant="secondary" className="font-mono rounded-sm" data-testid="btn-export-pdf">
+          <Button onClick={() => exportPDF()} variant="secondary" className="font-mono rounded-sm" data-testid="btn-export-pdf">
             <FileText className="w-4 h-4 mr-2" /> PDF
           </Button>
           <Button onClick={exportExcel} variant="secondary" className="font-mono rounded-sm" data-testid="btn-export-excel">
@@ -577,7 +660,7 @@ export default function SessionReport() {
       {showCustomize && (
         <div className="bg-card border border-border p-5 rounded-sm font-mono">
           <h3 className="font-bold text-xs tracking-wider text-muted-foreground mb-4">REPORT CUSTOMIZATION</h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             <div className="flex items-center gap-2">
               <Checkbox id="chk-ok" checked={showOk} onCheckedChange={(v) => setShowOk(Boolean(v))} />
               <Label htmlFor="chk-ok" className="cursor-pointer text-success font-bold text-sm">PASS Scans</Label>
@@ -595,8 +678,12 @@ export default function SessionReport() {
               <Label htmlFor="chk-splice" className="cursor-pointer text-amber-600 font-bold text-sm">Splice Log</Label>
             </div>
             <div className="flex items-center gap-2">
+              <Checkbox id="chk-alternates" checked={showAlternates} onCheckedChange={(v) => setShowAlternates(Boolean(v))} />
+              <Label htmlFor="chk-alternates" className="cursor-pointer text-orange-600 font-bold text-sm">Alternates</Label>
+            </div>
+            <div className="flex items-center gap-2">
               <Checkbox id="chk-latest" checked={latestOnly} onCheckedChange={(v) => setLatestOnly(Boolean(v))} />
-              <Label htmlFor="chk-latest" className="cursor-pointer text-sm">Latest scan only</Label>
+              <Label htmlFor="chk-latest" className="cursor-pointer text-sm">Latest only</Label>
             </div>
           </div>
           <p className="text-xs text-muted-foreground mt-3">
@@ -628,7 +715,7 @@ export default function SessionReport() {
           <div><span className="font-bold text-muted-foreground">Start Time:</span> {session.startTime ? format(new Date(session.startTime), "hh:mm:ss aa") : "N/A"}</div>
           <div><span className="font-bold text-muted-foreground">End Time:</span> {session.endTime ? format(new Date(session.endTime), "hh:mm:ss aa") : "N/A"}</div>
           <div><span className="font-bold text-muted-foreground">Duration:</span> {summary.durationMinutes || 0} min</div>
-          <div><span className="font-bold text-muted-foreground">QA:</span> N/A</div>
+          <div><span className="font-bold text-muted-foreground">QA:</span> {session.qaName || "N/A"}</div>
         </div>
       </div>
 
@@ -689,6 +776,202 @@ export default function SessionReport() {
           </Table>
         </div>
       </div>
+
+      {/* Alternate Usage Analytics */}
+      {showAlternates && (() => {
+        // Collect alternates data from scans and BOM items
+        const alternatesMap = new Map<string, any>();
+        const bomItemsMap = new Map<number, any>();
+        
+        report.bomItems.forEach((item) => {
+          bomItemsMap.set(item.id, item);
+          if (item.isAlternate && item.parentItemId) {
+            if (!alternatesMap.has(item.feederNumber)) {
+              alternatesMap.set(item.feederNumber, []);
+            }
+            alternatesMap.get(item.feederNumber)?.push(item);
+          }
+        });
+
+        // Track alternate usage from scans
+        const alternateUsageData: any[] = [];
+        let totalAlternatesUsed = 0;
+        let totalCostSavings = 0;
+        let totalLeadTimeImproved = 0;
+
+        report.bomItems.forEach((primaryItem) => {
+          if (primaryItem.isAlternate) return;
+          
+          const alternates = report.bomItems.filter(
+            (item) =>
+              item.isAlternate &&
+              item.parentItemId === primaryItem.id &&
+              item.feederNumber === primaryItem.feederNumber
+          );
+
+          if (alternates.length === 0) return;
+
+          const primaryCost = parseFloat(primaryItem.cost || "0");
+          const primaryLeadTime = primaryItem.leadTime || 0;
+
+          alternates.forEach((alt) => {
+            const altCost = parseFloat(alt.cost || "0");
+            const altLeadTime = alt.leadTime || 0;
+            const costDiff = primaryCost - altCost;
+            const leadTimeDiff = primaryLeadTime - altLeadTime;
+
+            const scansForItem = session.scans.filter(
+              (s) =>
+                s.feederNumber === alt.feederNumber &&
+                s.status === "ok"
+            );
+            
+            const alternateScans = scansForItem.length;
+            if (alternateScans > 0) {
+              totalAlternatesUsed += alternateScans;
+              if (costDiff > 0) totalCostSavings += costDiff * alternateScans;
+              if (leadTimeDiff > 0) totalLeadTimeImproved += leadTimeDiff * alternateScans;
+            }
+
+            alternateUsageData.push({
+              feederNumber: alt.feederNumber,
+              primaryPart: primaryItem.partNumber,
+              alternatePart: alt.partNumber,
+              primaryMpn: primaryItem.mpn,
+              alternateMpn: alt.mpn,
+              primaryCost,
+              alternateCost: altCost,
+              costSavings: costDiff,
+              primaryLeadTime,
+              altLeadTime,
+              leadTimeImproved: leadTimeDiff,
+              usageCount: alternateScans,
+              manufacturer: alt.manufacturer,
+            });
+          });
+        });
+
+        if (alternateUsageData.length > 0) {
+          return (
+            <div className="space-y-4">
+              {/* Analytics Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  {
+                    label: "ALTERNATES USED",
+                    value: totalAlternatesUsed,
+                    color: "text-orange-600",
+                    icon: "⚡",
+                  },
+                  {
+                    label: "COST SAVED",
+                    value: `$${totalCostSavings.toFixed(2)}`,
+                    color: "text-green-600",
+                    icon: "💰",
+                  },
+                  {
+                    label: "LEAD TIME IMPROVED",
+                    value: `${totalLeadTimeImproved} days`,
+                    color: "text-blue-600",
+                    icon: "⏱️",
+                  },
+                  {
+                    label: "UNIQUE ALTERNATES",
+                    value: alternateUsageData.length,
+                    color: "text-purple-600",
+                    icon: "🔄",
+                  },
+                ].map(({ label, value, color, icon }) => (
+                  <div
+                    key={label}
+                    className="bg-card border border-border p-4 rounded-sm"
+                  >
+                    <div className="text-muted-foreground font-mono text-[10px] mb-2">
+                      {icon} {label}
+                    </div>
+                    <div className={`text-2xl font-mono font-black ${color}`}>
+                      {value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Alternate Usage Details Table */}
+              <div className="bg-card border border-orange-200 dark:border-orange-800 rounded-sm overflow-hidden">
+                <div className="bg-orange-50/70 dark:bg-orange-950/30 p-3 border-b border-orange-200 dark:border-orange-800 font-mono font-bold text-sm flex items-center gap-2">
+                  <span className="text-orange-700 dark:text-orange-400">
+                    ALTERNATE COMPONENT USAGE ANALYSIS
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-orange-50 dark:bg-orange-950/20">
+                        <TableHead className="font-mono text-orange-900 dark:text-orange-300">
+                          FEEDER
+                        </TableHead>
+                        <TableHead className="font-mono text-orange-900 dark:text-orange-300">
+                          PRIMARY
+                        </TableHead>
+                        <TableHead className="font-mono text-orange-900 dark:text-orange-300">
+                          ALTERNATE
+                        </TableHead>
+                        <TableHead className="font-mono text-orange-900 dark:text-orange-300">
+                          USED
+                        </TableHead>
+                        <TableHead className="font-mono text-orange-900 dark:text-orange-300">
+                          COST SAVING
+                        </TableHead>
+                        <TableHead className="font-mono text-orange-900 dark:text-orange-300">
+                          LEAD TIME
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {alternateUsageData.map((row, idx) => (
+                        <TableRow
+                          key={idx}
+                          className="border-orange-100 dark:border-orange-900"
+                        >
+                          <TableCell className="font-mono font-bold text-orange-600 dark:text-orange-400">
+                            {row.feederNumber}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            <div className="font-bold">{row.primaryPart}</div>
+                            <div className="text-muted-foreground text-xs">
+                              {row.primaryMpn}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            <div className="font-bold">{row.alternatePart}</div>
+                            <div className="text-muted-foreground text-xs">
+                              {row.alternateMpn || row.manufacturer}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono font-bold text-center">
+                            {row.usageCount}x
+                          </TableCell>
+                          <TableCell className="font-mono text-green-600 dark:text-green-400 font-bold">
+                            {row.costSavings > 0
+                              ? `${(row.costSavings * row.usageCount).toFixed(2)}`
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="font-mono text-blue-600 dark:text-blue-400 font-bold">
+                            {row.leadTimeImproved > 0
+                              ? `−${row.leadTimeImproved}d`
+                              : "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* Full Scan Log */}
       <div className="bg-card border border-border rounded-sm overflow-hidden">
@@ -769,7 +1052,7 @@ export default function SessionReport() {
           {[
             { title: "Supervisor", name: session.supervisorName },
             { title: "OPERATOR", name: session.operatorName },
-            { title: "QA", name: "N/A" },
+            { title: "QA", name: session.qaName || "N/A" },
           ].map(({ title, name }) => (
             <div key={title} className="flex flex-col items-center gap-2">
               <span className={`font-bold text-sm ${title === "OPERATOR" ? "text-foreground uppercase" : "text-muted-foreground"}`}>{title}</span>
