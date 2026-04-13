@@ -266,6 +266,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Session"
+    delete:
+      operationId: deleteSession
+      tags: [sessions]
+      summary: Delete a session and all related records
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Session deleted successfully
+        "404":
+          description: Session not found
 
   /sessions/{sessionId}/scans:
     post:
@@ -420,6 +435,44 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/SessionTrend"
+
+  /sessions/trash/all:
+    get:
+      operationId: listDeletedSessions
+      tags: [sessions]
+      summary: Get all deleted sessions from trash bin
+      responses:
+        "200":
+          description: List of deleted sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+
+  /sessions/{sessionId}/recover:
+    patch:
+      operationId: recoverSession
+      tags: [sessions]
+      summary: Recover a deleted session from trash
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Session recovered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          description: Session not found
+        "400":
+          description: Session is not deleted
 
 components:
   schemas:
@@ -696,7 +749,7 @@ components:
           type: string
         productionCount:
           type: integer
-      required: [bomId, companyName, panelName, supervisorName, operatorName, shiftName, shiftDate]
+      required: [companyName, panelName, supervisorName, operatorName, shiftName, shiftDate]
 
     UpdateSessionRequest:
       type: object

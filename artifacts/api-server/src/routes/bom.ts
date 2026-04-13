@@ -1,16 +1,21 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { bomsTable, bomItemsTable } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, isNull } from "drizzle-orm";
 
 const router: IRouter = Router();
 
 router.get("/bom", async (req, res) => {
   try {
-    const boms = await db.select().from(bomsTable).orderBy(bomsTable.createdAt);
+    const boms = await db
+      .select()
+      .from(bomsTable)
+      .where(isNull(bomsTable.deletedAt))
+      .orderBy(bomsTable.createdAt);
     const counts = await db
       .select({ bomId: bomItemsTable.bomId, count: sql<number>`count(*)::int` })
       .from(bomItemsTable)
+      .where(isNull(bomItemsTable.deletedAt))
       .groupBy(bomItemsTable.bomId);
 
     const countMap = new Map(counts.map((c) => [c.bomId, c.count]));
@@ -54,12 +59,20 @@ router.post("/bom", async (req, res) => {
 router.get("/bom/:bomId", async (req, res) => {
   try {
     const bomId = Number(req.params.bomId);
-    const [bom] = await db.select().from(bomsTable).where(eq(bomsTable.id, bomId));
+    const [bom] = await db
+      .select()
+      .from(bomsTable)
+      .where(eq(bomsTable.id, bomId))
+      .then((results) => results.filter((b) => !b.deletedAt));
     if (!bom) {
       return res.status(404).json({ error: "BOM not found" });
       return;
     }
-    const items = await db.select().from(bomItemsTable).where(eq(bomItemsTable.bomId, bomId));
+    const items = await db
+      .select()
+      .from(bomItemsTable)
+      .where(eq(bomItemsTable.bomId, bomId))
+      .then((results) => results.filter((i) => !i.deletedAt));
     return res.json({ ...bom, items });
   } catch (err) {
     req.log.error(err);
@@ -103,11 +116,23 @@ router.patch("/bom/:bomId", async (req, res) => {
   }
 });
 
-router.delete("/bom/:bomId", async (req, res) => {
+router.delete("/bom/:bomId", async (req: any, res) => {
   try {
     const bomId = Number(req.params.bomId);
-    await db.delete(bomsTable).where(eq(bomsTable.id, bomId));
-    return res.status(204).send();
+    const userId = req.user?.username || "unknown";
+    
+    // Soft delete: set deletedAt and deletedBy instead of actually deleting
+    const [deletedBom] = await db
+      .update(bomsTable)
+      .set({ deletedAt: new Date(), deletedBy: userId })
+      .where(eq(bomsTable.id, bomId))
+      .returning();
+
+    if (!deletedBom) {
+      return res.status(404).json({ error: "BOM not found" });
+    }
+
+    return res.json({ success: true, message: "BOM moved to trash" });
   } catch (err) {
     req.log.error(err);
     return res.status(500).json({ error: "Failed to delete BOM" });
@@ -229,10 +254,11 @@ router.patch("/bom/:bomId/items/:itemId", async (req, res) => {
   }
 });
 
-router.delete("/bom/:bomId/items/:itemId", async (req, res) => {
+router.delete("/bom/:bomId/items/:itemId", async (req: any, res) => {
   try {
     const itemId = Number(req.params.itemId);
     const bomId = Number(req.params.bomId);
+    const userId = req.user?.username || "unknown";
     
     const [item] = await db.select().from(bomItemsTable).where(eq(bomItemsTable.id, itemId));
     if (!item || item.bomId !== bomId) {
@@ -240,7 +266,12 @@ router.delete("/bom/:bomId/items/:itemId", async (req, res) => {
       return;
     }
     
-    await db.delete(bomItemsTable).where(eq(bomItemsTable.id, itemId));
+    // Soft delete: set deletedAt and deletedBy instead of hard deleting
+    await db
+      .update(bomItemsTable)
+      .set({ deletedAt: new Date(), deletedBy: userId })
+      .where(eq(bomItemsTable.id, itemId));
+    
     return res.status(204).send();
   } catch (err) {
     req.log.error(err);

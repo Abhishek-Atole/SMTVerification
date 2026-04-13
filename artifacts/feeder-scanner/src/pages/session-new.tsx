@@ -11,6 +11,8 @@ import { Loader2, Upload } from "lucide-react";
 const SUPERVISOR_NAMES = ["Umesh Nagile", "Dhupchand Bhardwaj", "Maruti Birader"];
 const OPERATOR_NAMES = ["Aarti", "Aniket", "Suraj"];
 const QA_NAMES = ["Ravi Patel", "Priya Singh", "Amit Kumar"];
+const MACHINES = ["YSM20R (YAMAHA)", "M20", "M10", "YSM20R+M20"];
+const LINES = ["LINE-01", "LINE-02", "LINE-03", "LINE-04"];
 
 function NameSelect({
   label,
@@ -69,6 +71,7 @@ export default function SessionNew() {
   const createSession = useCreateSession();
 
   const [bomId, setBomId] = useState("");
+  const [freeScanMode, setFreeScanMode] = useState(false);
   const [companyName, setCompanyName] = useState("UCAL ELECTRONICS PVT. LTD.");
   const [customerName, setCustomerName] = useState("");
   const [panelName, setPanelName] = useState("");
@@ -78,11 +81,13 @@ export default function SessionNew() {
   const [shiftName, setShiftName] = useState("Morning");
   const [shiftDate, setShiftDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [productionCount, setProductionCount] = useState("");
+  const [machineType, setMachineType] = useState("");
+  const [lineNumber, setLineNumber] = useState("");
   const defaultLogoUrl = "/ucal-logo.svg";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bomId) return alert("Please select a BOM");
+    if (!freeScanMode && !bomId) return alert("Please select a BOM or enable Free Scan Mode");
     const resolvedSupervisor = supervisorName === "__other__" ? "" : supervisorName;
     const resolvedOperator = operatorName === "__other__" ? "" : operatorName;
     if (!resolvedSupervisor) return alert("Please enter supervisor name");
@@ -90,7 +95,7 @@ export default function SessionNew() {
 
     createSession.mutate({
       data: {
-        bomId: Number(bomId),
+        bomId: freeScanMode ? 0 : Number(bomId),
         companyName,
         customerName,
         panelName,
@@ -99,6 +104,8 @@ export default function SessionNew() {
         qaName: qaName || undefined,
         shiftName,
         shiftDate,
+        machineType: machineType || undefined,
+        lineNumber: lineNumber || undefined,
         productionCount: productionCount ? Number(productionCount) : undefined,
         logoUrl: defaultLogoUrl,
       },
@@ -119,43 +126,47 @@ export default function SessionNew() {
   const bomsArray = Array.isArray(boms) ? boms : [];
 
   return (
-    <div className="p-8 max-w-4xl mx-auto w-full">
-      <div className="mb-8 border-b border-border pb-4 flex items-center gap-4">
-        <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-14" />
+    <div className="w-full space-y-4 sm:space-y-6 lg:space-y-8 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 max-w-4xl mx-auto">
+      {/* Header - Responsive */}
+      <div className="border-b border-border pb-3 sm:pb-4 lg:pb-4 flex items-center gap-2 sm:gap-3 lg:gap-4">
+        <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-10 sm:h-12 lg:h-14" />
         <div>
-          <h1 className="text-3xl font-mono font-bold tracking-tight text-foreground">NEW SESSION SETUP</h1>
-          <p className="text-muted-foreground mt-2 font-mono">Initialize a new verification run</p>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-mono font-bold tracking-tight text-foreground">NEW SESSION</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1 font-mono">Initialize verification run</p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-card p-8 border border-border rounded-sm space-y-8 font-mono">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="space-y-6">
-            <h2 className="text-lg font-bold text-primary border-b border-border pb-2">JOB DETAILS</h2>
+      <form onSubmit={handleSubmit} className="bg-card p-4 sm:p-6 lg:p-8 border border-border rounded-sm space-y-6 sm:space-y-8 lg:space-y-8 font-mono">
+        {/* Form Grid - Responsive */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-8">
+          {/* Left Column: Job Details */}
+          <div className="space-y-4 sm:space-y-6 lg:space-y-6">
+            <h2 className="text-base sm:text-lg lg:text-lg font-bold text-primary border-b border-border pb-2 tracking-wide">JOB DETAILS</h2>
 
             <div className="space-y-2">
-              <Label>Company Name *</Label>
-              <Input required value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="bg-background rounded-sm font-bold" />
+              <Label className="text-sm font-medium">Company Name *</Label>
+              <Input required value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="bg-background rounded-sm font-bold text-sm" />
             </div>
 
             <div className="space-y-2">
-              <Label>Customer Name</Label>
-              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="bg-background rounded-sm" />
+              <Label className="text-sm font-medium">Customer Name</Label>
+              <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="bg-background rounded-sm text-sm" />
             </div>
 
             <div className="space-y-2">
-              <Label>Panel / Assembly Name *</Label>
-              <Input required value={panelName} onChange={(e) => setPanelName(e.target.value)} className="bg-background rounded-sm" />
+              <Label className="text-sm font-medium">Panel / Assembly Name *</Label>
+              <Input required value={panelName} onChange={(e) => setPanelName(e.target.value)} className="bg-background rounded-sm text-sm" />
             </div>
 
             <div className="space-y-2">
-              <Label>Target Production Count</Label>
-              <Input type="number" min="1" value={productionCount} onChange={(e) => setProductionCount(e.target.value)} className="bg-background rounded-sm" placeholder="Optional" />
+              <Label className="text-sm font-medium">Production Count</Label>
+              <Input type="number" min="1" value={productionCount} onChange={(e) => setProductionCount(e.target.value)} className="bg-background rounded-sm text-sm" placeholder="Optional" />
             </div>
           </div>
 
-          <div className="space-y-6">
-            <h2 className="text-lg font-bold text-primary border-b border-border pb-2">SHIFT & OPERATOR</h2>
+          {/* Right Column: Shift & Operator */}
+          <div className="space-y-4 sm:space-y-6 lg:space-y-6">
+            <h2 className="text-base sm:text-lg lg:text-lg font-bold text-primary border-b border-border pb-2 tracking-wide">SHIFT & OPERATOR</h2>
 
             <NameSelect
               label="Supervisor Name"
@@ -180,11 +191,42 @@ export default function SessionNew() {
               onChange={setQaName}
             />
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* Machine & Line Selection */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div className="space-y-2">
-                <Label>Shift</Label>
+                <Label className="text-sm font-medium">Machine</Label>
+                <Select value={machineType} onValueChange={setMachineType}>
+                  <SelectTrigger className="bg-background rounded-sm text-sm h-10 sm:h-10">
+                    <SelectValue placeholder="Select machine..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MACHINES.map((m) => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Line</Label>
+                <Select value={lineNumber} onValueChange={setLineNumber}>
+                  <SelectTrigger className="bg-background rounded-sm text-sm h-10 sm:h-10">
+                    <SelectValue placeholder="Select line..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LINES.map((l) => (
+                      <SelectItem key={l} value={l}>{l}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Shift Details - Responsive Grid */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Shift</Label>
                 <Select value={shiftName} onValueChange={setShiftName}>
-                  <SelectTrigger className="bg-background rounded-sm">
+                  <SelectTrigger className="bg-background rounded-sm text-sm h-10 sm:h-10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -195,35 +237,67 @@ export default function SessionNew() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>Date</Label>
-                <Input type="date" required value={shiftDate} onChange={(e) => setShiftDate(e.target.value)} className="bg-background rounded-sm" />
+                <Label className="text-sm font-medium">Date</Label>
+                <Input type="date" required value={shiftDate} onChange={(e) => setShiftDate(e.target.value)} className="bg-background rounded-sm text-sm h-10 sm:h-10" />
               </div>
             </div>
 
+            {/* BOM Selection */}
             <div className="space-y-2">
-              <Label>Bill of Materials (BOM) *</Label>
-              <Select value={bomId} onValueChange={setBomId} required>
-                <SelectTrigger className="bg-background rounded-sm border-primary">
-                  <SelectValue placeholder="Select a BOM..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {bomsArray.map((bom) => (
-                    <SelectItem key={bom.id} value={bom.id.toString()}>
-                      {bom.name} ({bom.itemCount} items)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  id="free-scan" 
+                  checked={freeScanMode} 
+                  onChange={(e) => {
+                    setFreeScanMode(e.target.checked);
+                    if (e.target.checked) setBomId("");
+                  }}
+                  className="w-4 h-4 rounded cursor-pointer"
+                />
+                <Label htmlFor="free-scan" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                  Free Scan Mode 
+                  <span className="text-xs text-muted-foreground font-normal">(scan without BOM validation)</span>
+                </Label>
+              </div>
+              {!freeScanMode && (
+                <div>
+                  <Label className="text-sm font-medium">Bill of Materials (BOM) *</Label>
+                  <Select value={bomId} onValueChange={setBomId} required>
+                    <SelectTrigger className="bg-background rounded-sm border-primary text-sm h-10 sm:h-10">
+                      <SelectValue placeholder="Select a BOM..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {bomsArray.map((bom) => (
+                        <SelectItem key={bom.id} value={bom.id.toString()}>
+                          {bom.name} ({bom.itemCount} items)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {freeScanMode && (
+                <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3 rounded-md text-sm text-amber-700 dark:text-amber-400">
+                  <p className="font-bold mb-1">Free Scan Mode Active</p>
+                  <p>You can scan any feeder numbers and spools without BOM validation. No component verification will be performed.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-
-
-        <div className="pt-8 flex justify-end">
-          <Button type="submit" size="lg" disabled={createSession.isPending || !bomId} className="w-full md:w-auto font-mono text-lg tracking-wider rounded-sm px-12" data-testid="btn-start-run">
-            {createSession.isPending ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Upload className="w-5 h-5 mr-2" />}
-            START VERIFICATION RUN
+        {/* Submit Button - Responsive */}
+        <div className="pt-6 sm:pt-8 lg:pt-8 flex justify-center lg:justify-end">
+          <Button 
+            type="submit" 
+            disabled={createSession.isPending || (!freeScanMode && !bomId)} 
+            className="w-full sm:w-auto font-mono text-sm sm:text-base tracking-wider rounded-sm px-6 sm:px-10 lg:px-12 py-2 sm:py-2 h-10 sm:h-auto"
+            data-testid="btn-start-run"
+          >
+            {createSession.isPending ? <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin mr-2" /> : <Upload className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />}
+            <span className="hidden sm:inline">START VERIFICATION RUN</span>
+            <span className="sm:hidden">START RUN</span>
           </Button>
         </div>
       </form>

@@ -5,7 +5,7 @@ import { bomsTable } from "./bom";
 
 export const sessionsTable = pgTable("sessions", {
   id: serial("id").primaryKey(),
-  bomId: integer("bom_id").notNull().references(() => bomsTable.id),
+  bomId: integer("bom_id").references(() => bomsTable.id),
   companyName: text("company_name").notNull(),
   customerName: text("customer_name"),
   panelName: text("panel_name").notNull(),
@@ -20,6 +20,8 @@ export const sessionsTable = pgTable("sessions", {
   startTime: timestamp("start_time").defaultNow().notNull(),
   endTime: timestamp("end_time"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"), // Soft delete timestamp
+  deletedBy: text("deleted_by"), // User who deleted
 });
 
 export const scanRecordsTable = pgTable(

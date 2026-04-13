@@ -162,7 +162,7 @@ export const ListSessionsResponse = zod.array(ListSessionsResponseItem);
  * @summary Create a new production session
  */
 export const CreateSessionBody = zod.object({
-  bomId: zod.number(),
+  bomId: zod.number().optional(),
   companyName: zod.string(),
   customerName: zod.string().optional(),
   panelName: zod.string(),
@@ -244,6 +244,13 @@ export const UpdateSessionResponse = zod.object({
   startTime: zod.coerce.date(),
   endTime: zod.coerce.date().optional(),
   createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a session and all related records
+ */
+export const DeleteSessionParams = zod.object({
+  sessionId: zod.coerce.number(),
 });
 
 /**
@@ -435,3 +442,54 @@ export const GetAnalyticsTrendsResponseItem = zod.object({
 export const GetAnalyticsTrendsResponse = zod.array(
   GetAnalyticsTrendsResponseItem,
 );
+
+/**
+ * @summary Get all deleted sessions from trash bin
+ */
+export const ListDeletedSessionsResponseItem = zod.object({
+  id: zod.number(),
+  bomId: zod.number(),
+  bomName: zod.string().optional(),
+  companyName: zod.string(),
+  customerName: zod.string().optional(),
+  panelName: zod.string(),
+  supervisorName: zod.string(),
+  operatorName: zod.string(),
+  shiftName: zod.string(),
+  shiftDate: zod.string(),
+  logoUrl: zod.string().optional(),
+  productionCount: zod.number().optional(),
+  status: zod.enum(["active", "completed"]),
+  startTime: zod.coerce.date(),
+  endTime: zod.coerce.date().optional(),
+  createdAt: zod.coerce.date(),
+});
+export const ListDeletedSessionsResponse = zod.array(
+  ListDeletedSessionsResponseItem,
+);
+
+/**
+ * @summary Recover a deleted session from trash
+ */
+export const RecoverSessionParams = zod.object({
+  sessionId: zod.coerce.number(),
+});
+
+export const RecoverSessionResponse = zod.object({
+  id: zod.number(),
+  bomId: zod.number(),
+  bomName: zod.string().optional(),
+  companyName: zod.string(),
+  customerName: zod.string().optional(),
+  panelName: zod.string(),
+  supervisorName: zod.string(),
+  operatorName: zod.string(),
+  shiftName: zod.string(),
+  shiftDate: zod.string(),
+  logoUrl: zod.string().optional(),
+  productionCount: zod.number().optional(),
+  status: zod.enum(["active", "completed"]),
+  startTime: zod.coerce.date(),
+  endTime: zod.coerce.date().optional(),
+  createdAt: zod.coerce.date(),
+});

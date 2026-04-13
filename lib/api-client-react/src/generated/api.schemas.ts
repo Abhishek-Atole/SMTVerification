@@ -153,7 +153,7 @@ export interface CreateSpliceRequest {
 }
 
 export interface CreateSessionRequest {
-  bomId: number;
+  bomId?: number;
   companyName: string;
   customerName?: string;
   panelName: string;

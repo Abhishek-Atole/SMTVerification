@@ -1118,6 +1118,90 @@ export const useUpdateSession = <
 };
 
 /**
+ * @summary Delete a session and all related records
+ */
+export const getDeleteSessionUrl = (sessionId: number) => {
+  return `/api/sessions/${sessionId}`;
+};
+
+export const deleteSession = async (
+  sessionId: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteSessionUrl(sessionId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteSessionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSession>>,
+    TError,
+    { sessionId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteSession>>,
+  TError,
+  { sessionId: number },
+  TContext
+> => {
+  const mutationKey = ["deleteSession"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteSession>>,
+    { sessionId: number }
+  > = (props) => {
+    const { sessionId } = props ?? {};
+
+    return deleteSession(sessionId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteSessionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteSession>>
+>;
+
+export type DeleteSessionMutationError = ErrorType<void>;
+
+/**
+ * @summary Delete a session and all related records
+ */
+export const useDeleteSession = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSession>>,
+    TError,
+    { sessionId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteSession>>,
+  TError,
+  { sessionId: number },
+  TContext
+> => {
+  return useMutation(getDeleteSessionMutationOptions(options));
+};
+
+/**
  * @summary Scan a feeder (with optional spool barcode) and verify against BOM
  */
 export const getScanFeederUrl = (sessionId: number) => {
@@ -1802,3 +1886,162 @@ export function useGetAnalyticsTrends<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get all deleted sessions from trash bin
+ */
+export const getListDeletedSessionsUrl = () => {
+  return `/api/sessions/trash/all`;
+};
+
+export const listDeletedSessions = async (
+  options?: RequestInit,
+): Promise<Session[]> => {
+  return customFetch<Session[]>(getListDeletedSessionsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListDeletedSessionsQueryKey = () => {
+  return [`/api/sessions/trash/all`] as const;
+};
+
+export const getListDeletedSessionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listDeletedSessions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDeletedSessions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListDeletedSessionsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listDeletedSessions>>
+  > = ({ signal }) => listDeletedSessions({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listDeletedSessions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListDeletedSessionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listDeletedSessions>>
+>;
+export type ListDeletedSessionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get all deleted sessions from trash bin
+ */
+
+export function useListDeletedSessions<
+  TData = Awaited<ReturnType<typeof listDeletedSessions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listDeletedSessions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListDeletedSessionsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Recover a deleted session from trash
+ */
+export const getRecoverSessionUrl = (sessionId: number) => {
+  return `/api/sessions/${sessionId}/recover`;
+};
+
+export const recoverSession = async (
+  sessionId: number,
+  options?: RequestInit,
+): Promise<Session> => {
+  return customFetch<Session>(getRecoverSessionUrl(sessionId), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getRecoverSessionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recoverSession>>,
+    TError,
+    { sessionId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recoverSession>>,
+  TError,
+  { sessionId: number },
+  TContext
+> => {
+  const mutationKey = ["recoverSession"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recoverSession>>,
+    { sessionId: number }
+  > = (props) => {
+    const { sessionId } = props ?? {};
+
+    return recoverSession(sessionId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecoverSessionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recoverSession>>
+>;
+
+export type RecoverSessionMutationError = ErrorType<void>;
+
+/**
+ * @summary Recover a deleted session from trash
+ */
+export const useRecoverSession = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recoverSession>>,
+    TError,
+    { sessionId: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recoverSession>>,
+  TError,
+  { sessionId: number },
+  TContext
+> => {
+  return useMutation(getRecoverSessionMutationOptions(options));
+};

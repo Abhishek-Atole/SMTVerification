@@ -15,6 +15,7 @@ import SessionReport from "@/pages/session-report";
 import SessionHistory from "@/pages/session-history";
 import Login from "@/pages/login";
 import Analytics from "@/pages/analytics";
+import TrashBin from "@/pages/trash-bin";
 import { AuthProvider, useAuth } from "@/context/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -67,6 +68,9 @@ function Router() {
               <Route path="/sessions" component={SessionHistory} />
               <Route path="/analytics">
                 {() => <ProtectedRoute component={Analytics} allowedRoles={["engineer", "qa"]} />}
+              </Route>
+              <Route path="/trash">
+                {() => <ProtectedRoute component={TrashBin} allowedRoles={["engineer"]} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

@@ -50,6 +50,18 @@ export class ValidationService {
       const session = sessionResult[0];
       const bomId = session.bomId;
 
+      // Check if this is Free Scan Mode (bomId is NULL)
+      if (bomId === null) {
+        // Free Scan Mode: Accept any component without verification
+        return {
+          status: "pass",
+          message: `✓ Component scanned (Free Scan Mode — no BOM validation): ${scannedMpn}`,
+          scannedMpn,
+          alternateUsed: false,
+          validationResult: "pass_free_scan",
+        };
+      }
+
       // Get feeder to validate it exists
       const feeder = await FeederService.getFeederByFeederId(feederId);
       if (!feeder) {

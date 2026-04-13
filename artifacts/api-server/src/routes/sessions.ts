@@ -1,13 +1,20 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { sessionsTable, scanRecordsTable, spliceRecordsTable, bomItemsTable, bomsTable } from "@workspace/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull, isNotNull } from "drizzle-orm";
 
 const router: IRouter = Router();
 
+// Static routes
 router.get("/sessions", async (req, res) => {
   try {
-    const sessions = await db.select().from(sessionsTable).orderBy(sessionsTable.createdAt);
+    // Only show non-deleted sessions (where deletedAt is null)
+    const sessions = await db
+      .select()
+      .from(sessionsTable)
+      .where(isNull(sessionsTable.deletedAt))
+      .orderBy(sessionsTable.createdAt);
+    
     const bomIds = [...new Set(sessions.map((s) => s.bomId))];
     let bomMap = new Map<number, string>();
     if (bomIds.length > 0) {
@@ -20,8 +27,14 @@ router.get("/sessions", async (req, res) => {
     }));
     res.json(result);
   } catch (err) {
-    req.log.error(err);
-    res.status(500).json({ error: "Failed to list sessions" });
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    req.log.error({ error: err, message: errorMessage });
+    res.status(500).json({ 
+      error: "Failed to list sessions",
+      details: errorMessage,
+      type: err instanceof Error ? err.constructor.name : typeof err,
+      isDrizzle: errorMessage.includes("Failed query")
+    });
   }
 });
 
@@ -32,28 +45,96 @@ router.post("/sessions", async (req, res) => {
       operatorName, qaName, shiftName, shiftDate, logoUrl, productionCount,
     } = req.body;
 
-    if (!bomId || !companyName || !panelName || !supervisorName || !operatorName || !shiftName || !shiftDate) {
+    // Allow bomId to be 0 (free scan) or a valid BOM ID, but not null/undefined
+    if (bomId == null || !companyName || !panelName || !supervisorName || !operatorName || !shiftName || !shiftDate) {
       res.status(400).json({ error: "Missing required fields" });
       return;
     }
 
+    // Convert bomId = 0 (free scan mode) to null for database storage
+    const finalBomId = bomId === 0 ? null : bomId;
+
     const [session] = await db
       .insert(sessionsTable)
       .values({
-        bomId, companyName, customerName, panelName, supervisorName,
-        operatorName, qaName, shiftName, shiftDate, logoUrl, productionCount: productionCount ?? 0,
+        bomId: finalBomId, companyName, customerName, panelName, supervisorName,
+        operatorName, qaName, shiftName, shiftDate, logoUrl,
+        productionCount: productionCount ?? 0,
         status: "active",
       })
       .returning();
 
-    const [bom] = await db.select().from(bomsTable).where(eq(bomsTable.id, bomId));
-    res.status(201).json({ ...session, bomName: bom?.name ?? "" });
+    let bomName = "";
+    if (finalBomId !== null) {
+      const [bom] = await db.select().from(bomsTable).where(eq(bomsTable.id, finalBomId));
+      bomName = bom?.name ?? "";
+    }
+    res.status(201).json({ ...session, bomName });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to create session" });
   }
 });
 
+// Trash bin routes (must be before parametric routes to avoid :sessionId shadowing)
+router.get("/sessions/trash/all", async (req, res) => {
+  try {
+    const deletedSessions = await db
+      .select()
+      .from(sessionsTable)
+      .where((sess) => sql`${sess.deletedAt} IS NOT NULL`)
+      .orderBy(sessionsTable.deletedAt);
+
+    const bomIds = [...new Set(deletedSessions.map((s) => s.bomId).filter(Boolean))];
+    let bomMap = new Map<number, string>();
+    if (bomIds.length > 0) {
+      const boms = await db.select().from(bomsTable);
+      bomMap = new Map(boms.map((b) => [b.id, b.name]));
+    }
+
+    const result = deletedSessions.map((s) => ({
+      ...s,
+      bomName: bomMap.get(s.bomId ?? 0) ?? "",
+    }));
+    res.json(result);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to list deleted sessions" });
+  }
+});
+
+router.patch("/sessions/:sessionId/recover", async (req, res) => {
+  try {
+    const sessionId = Number(req.params.sessionId);
+
+    // Check if session exists and is deleted
+    const [session] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    if (!session.deletedAt) {
+      res.status(400).json({ error: "Session is not deleted" });
+      return;
+    }
+
+    // Restore: set deletedAt to null
+    const [restored] = await db
+      .update(sessionsTable)
+      .set({ deletedAt: null })
+      .where(eq(sessionsTable.id, sessionId))
+      .returning();
+
+    const [bom] = await db.select().from(bomsTable).where(eq(bomsTable.id, restored.bomId));
+    res.json({ ...restored, bomName: bom?.name ?? "" });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to recover session" });
+  }
+});
+
+// Parametric routes
 router.get("/sessions/:sessionId", async (req, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
@@ -63,8 +144,15 @@ router.get("/sessions/:sessionId", async (req, res) => {
       return;
     }
     const scans = await db.select().from(scanRecordsTable).where(eq(scanRecordsTable.sessionId, sessionId)).orderBy(scanRecordsTable.scannedAt);
-    const [bom] = await db.select().from(bomsTable).where(eq(bomsTable.id, session.bomId));
-    res.json({ ...session, bomName: bom?.name ?? "", scans });
+    
+    // Only query BOM if not in free scan mode (bomId is not NULL)
+    let bomName = "";
+    if (session.bomId !== null) {
+      const [bom] = await db.select().from(bomsTable).where(eq(bomsTable.id, session.bomId));
+      bomName = bom?.name ?? "";
+    }
+    
+    res.json({ ...session, bomName, scans });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to get session" });
@@ -116,34 +204,54 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
       return;
     }
 
-    const bomItems = await db.select().from(bomItemsTable).where(eq(bomItemsTable.bomId, session.bomId));
+    // Check if this is Free Scan Mode (bomId is NULL)
+    const isFreeScanMode = session.bomId === null;
 
-    // Find primary item and alternates
-    const primaryItems = bomItems.filter(
-      (item) =>
-        item.feederNumber.trim().toLowerCase() === feederNumber.trim().toLowerCase() &&
-        !item.isAlternate
-    );
+    let scanStatus = "ok";
+    let selectedItem = null;
+    let primaryItems: any[] = [];
+    let alternateItems: any[] = [];
+    let message = "";
 
-    const alternateItems = bomItems.filter(
-      (item) =>
-        item.feederNumber.trim().toLowerCase() === feederNumber.trim().toLowerCase() &&
-        item.isAlternate
-    );
+    if (isFreeScanMode) {
+      // Free Scan Mode: Accept any feeder, no BOM validation
+      scanStatus = "ok";
+      message = `Feeder ${feederNumber} scanned (Free Scan Mode — no BOM validation)`;
+    } else {
+      // BOM Validation Mode: Check against BOM
+      const bomItems = await db.select().from(bomItemsTable).where(eq(bomItemsTable.bomId, session.bomId));
 
-    // Determine which item was selected
-    let selectedItem = primaryItems[0];
-    let usedAlternate = false;
+      // Find primary item and alternates
+      primaryItems = bomItems.filter(
+        (item) =>
+          item.feederNumber.trim().toLowerCase() === feederNumber.trim().toLowerCase() &&
+          !item.isAlternate
+      );
 
-    if (selectedItemId) {
-      const specified = bomItems.find((item) => item.id === selectedItemId);
-      if (specified && specified.feederNumber.trim().toLowerCase() === feederNumber.trim().toLowerCase()) {
-        selectedItem = specified;
-        usedAlternate = specified.isAlternate ?? false;
+      alternateItems = bomItems.filter(
+        (item) =>
+          item.feederNumber.trim().toLowerCase() === feederNumber.trim().toLowerCase() &&
+          item.isAlternate
+      );
+
+      // Determine which item was selected
+      selectedItem = primaryItems[0];
+      let usedAlternate = false;
+
+      if (selectedItemId) {
+        const specified = bomItems.find((item) => item.id === selectedItemId);
+        if (specified && specified.feederNumber.trim().toLowerCase() === feederNumber.trim().toLowerCase()) {
+          selectedItem = specified;
+          usedAlternate = specified.isAlternate ?? false;
+        }
       }
+
+      scanStatus = selectedItem ? "ok" : "reject";
+      message = selectedItem
+        ? `Feeder ${feederNumber} verified OK — Part: ${selectedItem.partNumber}${usedAlternate ? " (ALTERNATE)" : ""}`
+        : `Feeder ${feederNumber} NOT in BOM — REJECTED`;
     }
 
-    const scanStatus = selectedItem ? "ok" : "reject";
     const [scan] = await db
       .insert(scanRecordsTable)
       .values({
@@ -156,10 +264,6 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
         location: selectedItem?.location ?? null,
       })
       .returning();
-
-    const message = selectedItem
-      ? `Feeder ${feederNumber} verified OK — Part: ${selectedItem.partNumber}${usedAlternate ? " (ALTERNATE)" : ""}`
-      : `Feeder ${feederNumber} NOT in BOM — REJECTED`;
 
     res.json({
       scan,
@@ -189,7 +293,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
         })),
       },
       selectedId: selectedItem?.id,
-      selectedIsAlternate: usedAlternate,
+      selectedIsAlternate: selectedItem?.isAlternate ?? false,
     });
   } catch (err) {
     req.log.error(err);
@@ -333,6 +437,31 @@ router.get("/sessions/:sessionId/report", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to get session report" });
+  }
+});
+
+router.delete("/sessions/:sessionId", async (req: any, res) => {
+  try {
+    const sessionId = Number(req.params.sessionId);
+    const userId = req.user?.username || "unknown";
+
+    // Check if session exists
+    const [session] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    // Soft delete: set deletedAt timestamp and deletedBy instead of hard deleting
+    await db
+      .update(sessionsTable)
+      .set({ deletedAt: new Date(), deletedBy: userId })
+      .where(eq(sessionsTable.id, sessionId));
+
+    res.status(204).send();
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to delete session" });
   }
 });
 

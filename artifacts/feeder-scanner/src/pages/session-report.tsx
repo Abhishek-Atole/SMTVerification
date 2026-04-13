@@ -215,14 +215,14 @@ export default function SessionReport() {
     y += 5.5;
 
     printKV("Customer:", session.customerName || "N/A", colX(0), y);
-    printKV("Machine:", "N/A", colX(1), y);
+    printKV("Machine:", isFreeScanMode ? "N/A" : "N/A", colX(1), y);
     printKV("Operator:", session.operatorName, colX(2), y);
     printKV("Start Time:", startTimeStr, colX(3), y);
-    printKV("BOM Version:", session.bomName || "N/A", colX(4), y);
+    printKV("BOM Version:", session.bomName || (isFreeScanMode ? "FREE SCAN" : "N/A"), colX(4), y);
     y += 5.5;
 
     printKV("PCB/:", session.panelName.split(" ")[0] || "N/A", colX(0), y);
-    printKV("Line:", "N/A", colX(1), y);
+    printKV("Line:", isFreeScanMode ? "N/A" : "N/A", colX(1), y);
     printKV("QA:", session.qaName || "N/A", colX(2), y);
     printKV("End Time:", endTimeStr, colX(3), y);
     printKV("Supervisor:", session.supervisorName, colX(4), y);
@@ -232,7 +232,7 @@ export default function SessionReport() {
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(NAVY[0], NAVY[1], NAVY[2]);
-    doc.text("Component Verification Details", pageW / 2, y, { align: "center" });
+    doc.text(isFreeScanMode ? "All Scan Records" : "Component Verification Details", pageW / 2, y, { align: "center" });
     y += 5;
 
     // ── Main Verification Table ───────────────────────────────────────
@@ -240,44 +240,93 @@ export default function SessionReport() {
     const tblR = pageW - M - 2;
     const tblW = tblR - tblL; // 277mm
 
-    // Column proportions summing to 1.0
-    const props = [0.083, 0.075, 0.135, 0.062, 0.085, 0.16, 0.16, 0.053, 0.083, 0.084];
-    const cw = props.map((p) => p * tblW);
-    const colStyles: Record<number, any> = {};
-    cw.forEach((w, i) => { colStyles[i] = { cellWidth: w }; });
+    if (isFreeScanMode) {
+      // Free Scan Mode: Show all scan records
+      const scanTableRows = session.scans.map((scan) => [
+        format(new Date(scan.scannedAt), "HH:mm:ss"),
+        scan.feederNumber,
+        (scan as any)?.spoolBarcode || "-",
+        scan.partNumber || "-",
+        scan.status === "ok" ? "PASS" : "FAIL",
+      ]);
 
-    const tableRows = report.bomItems.map((item) => {
-      const scan = bestScanMap.get(item.feederNumber.toLowerCase());
-      const status = scan?.status === "ok" ? "PASS" : scan?.status === "reject" ? "FAIL" : "MISSING";
-      return [
-        item.feederNumber,
-        item.location || "N/A",
-        item.description || item.partNumber || "",
-        "N/A",
-        "N/A",
-        item.partNumber,
-        (scan as any)?.spoolBarcode || scan?.feederNumber || "-",
-        "N/A",
-        status,
-        scan ? format(new Date(scan.scannedAt), "HH:mm:ss") : "-",
-      ];
-    });
+      const scanProps = [0.2, 0.2, 0.25, 0.2, 0.15];
+      const scanCw = scanProps.map((p) => p * tblW);
+      const scanColStyles: Record<number, any> = {};
+      scanCw.forEach((w, i) => { scanColStyles[i] = { cellWidth: w }; });
 
-    autoTable(doc, {
-      startY: y,
-      head: [["Feeder No.", "Ref / Des", "Component", "Value", "Package\nSize", "Part Number", "Scanned Number", "Lot", "Status", "Time"]],
-      body: tableRows,
-      theme: "grid",
-      tableWidth: tblW,
-      margin: { left: tblL, right: M + 2 },
-      headStyles: {
-        fillColor: NAVY,
-        textColor: WHITE,
-        fontStyle: "bold",
-        fontSize: 7.5,
-        halign: "center",
-        valign: "middle",
-        cellPadding: 2,
+      autoTable(doc, {
+        startY: y,
+        head: [["Time", "Feeder No.", "Spool Barcode", "Part Number", "Status"]],
+        body: scanTableRows,
+        theme: "grid",
+        tableWidth: tblW,
+        margin: { left: tblL, right: M + 2 },
+        headStyles: {
+          fillColor: NAVY,
+          textColor: WHITE,
+          fontStyle: "bold",
+          fontSize: 8,
+          halign: "center",
+          valign: "middle",
+          cellPadding: 2,
+          minCellHeight: 9,
+        },
+        bodyStyles: {
+          fontSize: 8,
+          halign: "center",
+          valign: "middle",
+          cellPadding: 1.5,
+          minCellHeight: 7,
+        },
+        alternateRowStyles: { fillColor: LIGHT_ROW },
+        columnStyles: scanColStyles,
+        didParseCell: (data: any) => {
+          if (data.section === "body" && data.column.index === 4) {
+            if (data.cell.raw === "PASS") { data.cell.styles.textColor = [0, 140, 0]; data.cell.styles.fontStyle = "bold"; }
+            else if (data.cell.raw === "FAIL") { data.cell.styles.textColor = [190, 0, 0]; data.cell.styles.fontStyle = "bold"; }
+          }
+        },
+      });
+    } else {
+      // BOM Mode: Show component verification details with BOM items
+      const props = [0.083, 0.075, 0.135, 0.062, 0.085, 0.16, 0.16, 0.053, 0.083, 0.084];
+      const cw = props.map((p) => p * tblW);
+      const colStyles: Record<number, any> = {};
+      cw.forEach((w, i) => { colStyles[i] = { cellWidth: w }; });
+
+      const tableRows = report.bomItems.map((item) => {
+        const scan = bestScanMap.get(item.feederNumber.toLowerCase());
+        const status = scan?.status === "ok" ? "PASS" : scan?.status === "reject" ? "FAIL" : "MISSING";
+        return [
+          item.feederNumber,
+          item.location || "N/A",
+          item.description || item.partNumber || "",
+          "N/A",
+          "N/A",
+          item.partNumber,
+          (scan as any)?.spoolBarcode || scan?.feederNumber || "-",
+          "N/A",
+          status,
+          scan ? format(new Date(scan.scannedAt), "HH:mm:ss") : "-",
+        ];
+      });
+
+      autoTable(doc, {
+        startY: y,
+        head: [["Feeder No.", "Ref / Des", "Component", "Value", "Package\nSize", "Part Number", "Scanned Number", "Lot", "Status", "Time"]],
+        body: tableRows,
+        theme: "grid",
+        tableWidth: tblW,
+        margin: { left: tblL, right: M + 2 },
+        headStyles: {
+          fillColor: NAVY,
+          textColor: WHITE,
+          fontStyle: "bold",
+          fontSize: 7.5,
+          halign: "center",
+          valign: "middle",
+          cellPadding: 2,
         minCellHeight: 9,
       },
       bodyStyles: {
@@ -296,7 +345,8 @@ export default function SessionReport() {
           else if (data.cell.raw === "MISSING") { data.cell.styles.textColor = [160, 90, 0]; }
         }
       },
-    });
+      });
+    }
 
     y = (doc as any).lastAutoTable.finalY + 7;
 
@@ -446,17 +496,17 @@ export default function SessionReport() {
     // Row 4: Header details row 2
     aoa.push([
       "Customer:", session.customerName || "N/A",
-      "Machine:", "N/A",
+      "Machine:", isFreeScanMode ? "N/A" : "N/A",
       "Operator:", session.operatorName,
       "Start Time:", startTimeStr,
-      "BOM Version:", session.bomName || "N/A",
+      "BOM Version:", session.bomName || (isFreeScanMode ? "FREE SCAN" : "N/A"),
     ]);
     row++;
 
     // Row 5: Header details row 3
     aoa.push([
       "PCB/:", session.panelName.split(" ")[0] || "N/A",
-      "Line:", "N/A",
+      "Line:", isFreeScanMode ? "N/A" : "N/A",
       "QA:", session.qaName || "N/A",
       "End Time:", endTimeStr,
       "Supervisor:", session.supervisorName,
@@ -468,32 +518,52 @@ export default function SessionReport() {
     row++;
 
     // Row 7: Section title
-    aoa.push(["Component Verification Details", "", "", "", "", "", "", "", "", ""]);
+    aoa.push([isFreeScanMode ? "All Scan Records" : "Component Verification Details", "", "", "", "", "", "", "", "", ""]);
     addMerge(row, 0, row, 9);
     row++;
 
     // Row 8: Table headers
-    aoa.push(["Feeder No.", "Ref / Des", "Component", "Value", "Package Size", "Part Number", "Scanned Number", "Lot", "Status", "Time"]);
+    if (isFreeScanMode) {
+      aoa.push(["Time", "Feeder No.", "Spool Barcode", "Part Number", "Status", "", "", "", "", ""]);
+    } else {
+      aoa.push(["Feeder No.", "Ref / Des", "Component", "Value", "Package Size", "Part Number", "Scanned Number", "Lot", "Status", "Time"]);
+    }
     row++;
 
-    // Rows 9+: BOM verification data
+    // Rows 9+: Data (BOM verification or all scans based on mode)
     const dataStartRow = row;
-    for (const item of report.bomItems) {
-      const scan = bestScanMap.get(item.feederNumber.toLowerCase());
-      const status = scan?.status === "ok" ? "PASS" : scan?.status === "reject" ? "FAIL" : "MISSING";
-      aoa.push([
-        item.feederNumber,
-        item.location || "N/A",
-        item.description || item.partNumber || "",
-        "N/A",
-        "N/A",
-        item.partNumber,
-        (scan as any)?.spoolBarcode || scan?.feederNumber || "-",
-        "N/A",
-        status,
-        scan ? format(new Date(scan.scannedAt), "HH:mm:ss") : "-",
-      ]);
-      row++;
+    if (isFreeScanMode) {
+      // Free Scan Mode: Show all scans
+      for (const scan of session.scans) {
+        aoa.push([
+          format(new Date(scan.scannedAt), "HH:mm:ss"),
+          scan.feederNumber,
+          (scan as any)?.spoolBarcode || "-",
+          scan.partNumber || "-",
+          scan.status === "ok" ? "PASS" : "FAIL",
+          "", "", "", "", "",
+        ]);
+        row++;
+      }
+    } else {
+      // BOM Mode: Show BOM verification
+      for (const item of report.bomItems) {
+        const scan = bestScanMap.get(item.feederNumber.toLowerCase());
+        const status = scan?.status === "ok" ? "PASS" : scan?.status === "reject" ? "FAIL" : "MISSING";
+        aoa.push([
+          item.feederNumber,
+          item.location || "N/A",
+          item.description || item.partNumber || "",
+          "N/A",
+          "N/A",
+          item.partNumber,
+          (scan as any)?.spoolBarcode || scan?.feederNumber || "-",
+          "N/A",
+          status,
+          scan ? format(new Date(scan.scannedAt), "HH:mm:ss") : "-",
+        ]);
+        row++;
+      }
     }
     void dataStartRow;
 
@@ -626,151 +696,184 @@ export default function SessionReport() {
   const passCount = [...bestScanMap.values()].filter((s) => s.status === "ok").length;
   const failCount = [...bestScanMap.values()].filter((s) => s.status === "reject").length;
   const isComplete = passCount === report.bomItems.length;
+  
+  // Detect Free Scan Mode
+  const isFreeScanMode = session.bomId === null || session.bomId === undefined;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto w-full space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-end border-b border-border pb-4">
-        <div className="flex items-start gap-6">
+    <div className="w-full space-y-4 sm:space-y-6 px-3 sm:px-6 py-3 sm:py-6 max-w-6xl mx-auto">
+      {/* Header - Responsive */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3 sm:gap-4 border-b border-border pb-3 sm:pb-4">
+        <div className="flex flex-col sm:flex-row items-start gap-2 sm:gap-4 min-w-0">
           {(session.logoUrl || "/ucal-logo.svg") && (
-            <img src={session.logoUrl || "/ucal-logo.svg"} alt="UCAL Electronics" className="h-16 w-auto object-contain flex-shrink-0" />
+            <img src={session.logoUrl || "/ucal-logo.svg"} alt="UCAL Electronics" className="h-10 sm:h-14 lg:h-16 w-auto object-contain flex-shrink-0" />
           )}
-          <div>
-            <h1 className="text-3xl font-mono font-bold tracking-tight">SMT CHANGEOVER</h1>
-            <h2 className="text-2xl font-mono font-bold tracking-tight text-primary">VERIFICATION REPORT</h2>
-            <p className="text-muted-foreground mt-1 font-mono text-sm">
-              CHG{String(session.id).padStart(8, "0")} | {session.companyName} | {format(new Date(session.startTime), "PPpp")}
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-mono font-bold tracking-tight">SMT CHANGEOVER</h1>
+            <h2 className="text-lg sm:text-xl lg:text-2xl font-mono font-bold tracking-tight text-primary">REPORT</h2>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1 font-mono truncate">
+              CHG{String(session.id).padStart(8, "0")} | {session.companyName}
             </p>
           </div>
         </div>
-        <div className="flex gap-3 flex-wrap justify-end">
-          <Button onClick={() => setShowCustomize(!showCustomize)} variant="outline" className="font-mono rounded-sm">
-            <Settings2 className="w-4 h-4 mr-2" /> Customize
+        <div className="flex gap-2 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
+          <Button onClick={() => setShowCustomize(!showCustomize)} variant="outline" className="font-mono rounded-sm text-xs sm:text-sm py-1 sm:py-2 px-2 sm:px-3 h-auto">
+            <Settings2 className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" /> <span className="hidden sm:inline">Customize</span><span className="sm:hidden">Customize</span>
           </Button>
-          <Button onClick={() => exportPDF()} variant="secondary" className="font-mono rounded-sm" data-testid="btn-export-pdf">
-            <FileText className="w-4 h-4 mr-2" /> PDF
+          <Button onClick={() => exportPDF()} variant="secondary" className="font-mono rounded-sm text-xs sm:text-sm py-1 sm:py-2 px-2 sm:px-3 h-auto" data-testid="btn-export-pdf">
+            <FileText className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" /> <span className="hidden sm:inline">PDF</span>
           </Button>
-          <Button onClick={exportExcel} variant="secondary" className="font-mono rounded-sm" data-testid="btn-export-excel">
-            <Download className="w-4 h-4 mr-2" /> EXCEL
+          <Button onClick={exportExcel} variant="secondary" className="font-mono rounded-sm text-xs sm:text-sm py-1 sm:py-2 px-2 sm:px-3 h-auto" data-testid="btn-export-excel">
+            <Download className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" /> <span className="hidden sm:inline">EXCEL</span>
           </Button>
         </div>
       </div>
 
-      {/* Customize Panel */}
+      {/* Customize Panel - Responsive Grid */}
       {showCustomize && (
-        <div className="bg-card border border-border p-5 rounded-sm font-mono">
-          <h3 className="font-bold text-xs tracking-wider text-muted-foreground mb-4">REPORT CUSTOMIZATION</h3>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <div className="bg-card border border-border p-3 sm:p-5 rounded-sm font-mono">
+          <h3 className="font-bold text-xs tracking-wider text-muted-foreground mb-3 sm:mb-4">CUSTOMIZATION</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 lg:gap-4">
             <div className="flex items-center gap-2">
               <Checkbox id="chk-ok" checked={showOk} onCheckedChange={(v) => setShowOk(Boolean(v))} />
-              <Label htmlFor="chk-ok" className="cursor-pointer text-success font-bold text-sm">PASS Scans</Label>
+              <Label htmlFor="chk-ok" className="cursor-pointer text-success font-bold text-xs sm:text-sm">PASS</Label>
             </div>
             <div className="flex items-center gap-2">
               <Checkbox id="chk-rej" checked={showReject} onCheckedChange={(v) => setShowReject(Boolean(v))} />
-              <Label htmlFor="chk-rej" className="cursor-pointer text-destructive font-bold text-sm">FAIL Scans</Label>
+              <Label htmlFor="chk-rej" className="cursor-pointer text-destructive font-bold text-xs sm:text-sm">FAIL</Label>
             </div>
             <div className="flex items-center gap-2">
               <Checkbox id="chk-spool" checked={showSpoolBarcode} onCheckedChange={(v) => setShowSpoolBarcode(Boolean(v))} />
-              <Label htmlFor="chk-spool" className="cursor-pointer text-sm">Spool Barcode</Label>
+              <Label htmlFor="chk-spool" className="cursor-pointer text-xs sm:text-sm">Spool</Label>
             </div>
             <div className="flex items-center gap-2">
               <Checkbox id="chk-splice" checked={showSplices} onCheckedChange={(v) => setShowSplices(Boolean(v))} />
-              <Label htmlFor="chk-splice" className="cursor-pointer text-amber-600 font-bold text-sm">Splice Log</Label>
+              <Label htmlFor="chk-splice" className="cursor-pointer text-amber-600 font-bold text-xs sm:text-sm">Splices</Label>
             </div>
             <div className="flex items-center gap-2">
               <Checkbox id="chk-alternates" checked={showAlternates} onCheckedChange={(v) => setShowAlternates(Boolean(v))} />
-              <Label htmlFor="chk-alternates" className="cursor-pointer text-orange-600 font-bold text-sm">Alternates</Label>
+              <Label htmlFor="chk-alternates" className="cursor-pointer text-orange-600 font-bold text-xs sm:text-sm">Alts</Label>
             </div>
             <div className="flex items-center gap-2">
               <Checkbox id="chk-latest" checked={latestOnly} onCheckedChange={(v) => setLatestOnly(Boolean(v))} />
-              <Label htmlFor="chk-latest" className="cursor-pointer text-sm">Latest only</Label>
+              <Label htmlFor="chk-latest" className="cursor-pointer text-xs sm:text-sm">Latest</Label>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-3">
-            Showing <strong>{filteredScans.length}</strong> of {session.scans.length} scan records.
+          <p className="text-xs text-muted-foreground mt-2 sm:mt-3">
+            Showing <strong>{filteredScans.length}</strong> / {session.scans.length} records
           </p>
         </div>
       )}
 
-      {/* Session Info Grid */}
-      <div className="bg-card border border-border p-6 rounded-sm font-mono text-sm">
-        <div className="flex items-start justify-between mb-4">
+      {/* Session Info Grid - Responsive */}
+      <div className="bg-card border border-border p-3 sm:p-6 rounded-sm font-mono text-xs sm:text-sm">
+        <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between mb-3 sm:mb-4 gap-3">
           <div>
-            {session.logoUrl && <img src={session.logoUrl} alt="Logo" className="h-12 object-contain mb-2" />}
-            <div className="text-xl font-black text-foreground">{session.companyName}</div>
+            {session.logoUrl && <img src={session.logoUrl} alt="Logo" className="h-8 sm:h-12 object-contain mb-2" />}
+            <div className="text-lg sm:text-xl font-black text-foreground truncate">{session.companyName}</div>
           </div>
-          <div className={`px-4 py-2 border-2 uppercase font-bold tracking-widest text-base ${session.status === "completed" ? "border-success text-success" : "border-primary text-primary"}`}>
+          <div className={`px-2 sm:px-4 py-1 sm:py-2 border-2 uppercase font-bold tracking-widest text-xs sm:text-base whitespace-nowrap ${session.status === "completed" ? "border-success text-success" : "border-primary text-primary"}`}>
             {session.status}
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-2 text-xs">
-          <div><span className="font-bold text-muted-foreground">Changeover ID:</span> CHG{String(session.id).padStart(8, "0")}</div>
-          <div><span className="font-bold text-muted-foreground">Panel ID:</span> {session.panelName}</div>
-          <div><span className="font-bold text-muted-foreground">Shift:</span> {session.shiftName}</div>
-          <div><span className="font-bold text-muted-foreground">Date:</span> {session.shiftDate}</div>
-          <div><span className="font-bold text-muted-foreground">Customer:</span> {session.customerName || "N/A"}</div>
-          <div><span className="font-bold text-muted-foreground">Operator:</span> {session.operatorName}</div>
-          <div><span className="font-bold text-muted-foreground">Supervisor:</span> {session.supervisorName}</div>
-          <div><span className="font-bold text-muted-foreground">BOM Version:</span> {session.bomName || "N/A"}</div>
-          <div><span className="font-bold text-muted-foreground">Start Time:</span> {session.startTime ? format(new Date(session.startTime), "hh:mm:ss aa") : "N/A"}</div>
-          <div><span className="font-bold text-muted-foreground">End Time:</span> {session.endTime ? format(new Date(session.endTime), "hh:mm:ss aa") : "N/A"}</div>
-          <div><span className="font-bold text-muted-foreground">Duration:</span> {summary.durationMinutes || 0} min</div>
-          <div><span className="font-bold text-muted-foreground">QA:</span> {session.qaName || "N/A"}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-2 sm:gap-x-4 lg:gap-x-8 gap-y-2 sm:gap-y-3 text-xs">
+          <div><span className="font-bold text-muted-foreground">ID:</span> <span className="truncate">CHG{String(session.id).padStart(8, "0")}</span></div>
+          <div><span className="font-bold text-muted-foreground">Panel:</span> <span className="truncate">{session.panelName}</span></div>
+          <div><span className="font-bold text-muted-foreground">Shift:</span> <span className="truncate">{session.shiftName}</span></div>
+          <div><span className="font-bold text-muted-foreground">Date:</span> <span className="truncate">{session.shiftDate}</span></div>
+          <div><span className="font-bold text-muted-foreground">Machine:</span> <span className="truncate">ML-001</span></div>
+          <div><span className="font-bold text-muted-foreground">Line:</span> <span className="truncate">PRIMARY</span></div>
+          <div><span className="font-bold text-muted-foreground">Cust:</span> <span className="truncate">{session.customerName || "N/A"}</span></div>
+          <div><span className="font-bold text-muted-foreground">Op:</span> <span className="truncate">{session.operatorName}</span></div>
+          <div><span className="font-bold text-muted-foreground">Sup:</span> <span className="truncate">{session.supervisorName}</span></div>
+          <div><span className="font-bold text-muted-foreground">BOM:</span> <span className={`truncate ${isFreeScanMode ? "text-amber-600 font-bold" : ""}`}>{session.bomName || (isFreeScanMode ? "FREE SCAN" : "N/A")}</span></div>
+          <div><span className="font-bold text-muted-foreground">Start:</span> <span className="truncate">{session.startTime ? format(new Date(session.startTime), "HH:mm:ss") : "N/A"}</span></div>
+          <div><span className="font-bold text-muted-foreground">End:</span> <span className="truncate">{session.endTime ? format(new Date(session.endTime), "HH:mm:ss") : "N/A"}</span></div>
+          <div><span className="font-bold text-muted-foreground">Dur:</span> <span className="truncate">{summary.durationMinutes || 0}m</span></div>
+          <div><span className="font-bold text-muted-foreground">QA:</span> <span className="truncate">{session.qaName || "N/A"}</span></div>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+      {/* KPI Cards - Responsive Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         {[
-          { label: "TOTAL FEEDERS", value: summary.totalBomItems, color: "text-foreground" },
+          { label: "FEEDERS", value: summary.totalBomItems, color: "text-foreground" },
           { label: "PASS", value: passCount, color: "text-success" },
           { label: "FAIL", value: failCount, color: "text-destructive" },
-          { label: "WARNING", value: 0, color: "text-amber-500" },
-          { label: "PASS RATE", value: `${summary.completionPercent}%`, color: "text-primary" },
-          { label: "STATUS", value: isComplete ? "COMPLETE" : "INCOMPLETE", color: isComplete ? "text-success" : "text-destructive" },
+          { label: "WARN", value: 0, color: "text-amber-500" },
+          { label: "RATE", value: `${summary.completionPercent}%`, color: "text-primary" },
+          { label: "STATUS", value: isComplete ? "OK" : "INCOMPLETE", color: isComplete ? "text-success" : "text-destructive" },
         ].map(({ label, value, color }) => (
-          <div key={label} className="bg-card border border-border p-3 rounded-sm text-center">
-            <div className="text-muted-foreground font-mono text-[10px] mb-1">{label}</div>
-            <div className={`text-xl font-mono font-black ${color}`}>{value}</div>
+          <div key={label} className="bg-card border border-border p-2 sm:p-3 rounded-sm text-center">
+            <div className="text-muted-foreground font-mono text-[10px] sm:text-xs mb-1 truncate">{label}</div>
+            <div className={`text-base sm:text-lg lg:text-xl font-mono font-black ${color} truncate`}>{value}</div>
           </div>
         ))}
       </div>
 
-      {/* Component Verification Details Table */}
+      {/* Component Verification Details Table - Responsive */}
       <div className="bg-card border border-border rounded-sm overflow-hidden">
-        <div className="p-3 border-b border-border font-mono font-bold text-sm flex items-center gap-2" style={{ backgroundColor: "rgb(0,51,102)", color: "white" }}>
-          Component Verification Details
+        <div className="p-2 sm:p-3 border-b border-border font-mono font-bold text-xs sm:text-sm flex items-center gap-2" style={{ backgroundColor: "rgb(0,51,102)", color: "white" }}>
+          {isFreeScanMode ? "All Scan Records" : "Component Verification Details"}
         </div>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow style={{ backgroundColor: "rgb(0,51,102)" }} className="hover:bg-transparent border-0">
-                {["Feeder No.", "Ref / Des", "Component", "Part Number", showSpoolBarcode ? "Scanned Number" : null, "Lot", "Status", "Time"]
-                  .filter(Boolean).map((h) => (
-                  <TableHead key={h} className="font-mono font-bold text-white text-center border-r border-blue-800 last:border-0">{h}</TableHead>
-                ))}
+                {isFreeScanMode ? (
+                  <>
+                    <TableHead className="font-mono font-bold text-white text-center border-r border-blue-800 text-xs sm:text-sm p-2 sm:p-3">Time</TableHead>
+                    <TableHead className="font-mono font-bold text-white text-center border-r border-blue-800 text-xs sm:text-sm p-2 sm:p-3">Feeder No.</TableHead>
+                    {showSpoolBarcode && <TableHead className="font-mono font-bold text-white text-center border-r border-blue-800 text-xs sm:text-sm p-2 sm:p-3">Spool Barcode</TableHead>}
+                    <TableHead className="font-mono font-bold text-white text-center border-r border-blue-800 text-xs sm:text-sm p-2 sm:p-3">Part Number</TableHead>
+                    <TableHead className="font-mono font-bold text-white text-center border-r border-blue-800 text-xs sm:text-sm p-2 sm:p-3">Status</TableHead>
+                  </>
+                ) : (
+                  <>
+                    {["Feeder No.", "Ref / Des", "Component", "Part Number", showSpoolBarcode ? "Scanned Number" : null, "Lot", "Status", "Time"]
+                      .filter(Boolean).map((h) => (
+                      <TableHead key={h} className="font-mono font-bold text-white text-center border-r border-blue-800 last:border-0 text-xs sm:text-sm p-2 sm:p-3">{h}</TableHead>
+                    ))}
+                  </>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {report.bomItems.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No BOM items</TableCell></TableRow>
-              ) : (
-                report.bomItems.map((item, idx) => {
-                  const scan = bestScanMap.get(item.feederNumber.toLowerCase());
-                  const status = scan?.status === "ok" ? "PASS" : scan?.status === "reject" ? "FAIL" : "MISSING";
-                  return (
-                    <TableRow key={item.id} className={idx % 2 === 1 ? "bg-blue-50 dark:bg-blue-950/20" : ""}>
-                      <TableCell className="font-mono font-bold text-center">{item.feederNumber}</TableCell>
-                      <TableCell className="font-mono text-center text-muted-foreground text-sm">{item.location || "N/A"}</TableCell>
-                      <TableCell className="font-mono text-center text-sm">{item.description || item.partNumber}</TableCell>
-                      <TableCell className="font-mono text-center text-sm">{item.partNumber}</TableCell>
-                      {showSpoolBarcode && <TableCell className="font-mono text-center text-sm text-muted-foreground">{(scan as any)?.spoolBarcode || scan?.feederNumber || "-"}</TableCell>}
-                      <TableCell className="font-mono text-center text-muted-foreground text-sm">N/A</TableCell>
-                      <TableCell className={`font-mono font-black text-center ${status === "PASS" ? "text-success" : status === "FAIL" ? "text-destructive" : "text-amber-600"}`}>{status}</TableCell>
-                      <TableCell className="font-mono text-center text-muted-foreground text-sm">{scan ? format(new Date(scan.scannedAt), "HH:mm:ss") : "-"}</TableCell>
+              {isFreeScanMode ? (
+                session.scans.length === 0 ? (
+                  <TableRow><TableCell colSpan={showSpoolBarcode ? 5 : 4} className="text-center py-6 sm:py-8 text-muted-foreground text-xs sm:text-sm">No scans recorded</TableCell></TableRow>
+                ) : (
+                  session.scans.map((scan, idx) => (
+                    <TableRow key={scan.id} className={idx % 2 === 1 ? "bg-blue-50 dark:bg-blue-950/20" : ""}>
+                      <TableCell className="font-mono text-center text-muted-foreground text-xs p-2 sm:p-3">{format(new Date(scan.scannedAt), "HH:mm:ss")}</TableCell>
+                      <TableCell className="font-mono font-bold text-center text-xs sm:text-sm p-2 sm:p-3">{scan.feederNumber}</TableCell>
+                      {showSpoolBarcode && <TableCell className="font-mono text-center text-muted-foreground text-xs p-2 sm:p-3">{(scan as any)?.spoolBarcode || "-"}</TableCell>}
+                      <TableCell className="font-mono text-center text-muted-foreground text-xs p-2 sm:p-3">{scan.partNumber || "-"}</TableCell>
+                      <TableCell className={`font-mono font-black text-center text-xs sm:text-sm p-2 sm:p-3 ${scan.status === "ok" ? "text-success" : "text-destructive"}`}>{scan.status === "ok" ? "PASS" : "FAIL"}</TableCell>
                     </TableRow>
-                  );
-                })
+                  ))
+                )
+              ) : (
+                report.bomItems.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="text-center py-6 sm:py-8 text-muted-foreground text-xs sm:text-sm">No BOM items</TableCell></TableRow>
+                ) : (
+                  report.bomItems.map((item, idx) => {
+                    const scan = bestScanMap.get(item.feederNumber.toLowerCase());
+                    const status = scan?.status === "ok" ? "PASS" : scan?.status === "reject" ? "FAIL" : "MISSING";
+                    return (
+                      <TableRow key={item.id} className={idx % 2 === 1 ? "bg-blue-50 dark:bg-blue-950/20" : ""}>
+                        <TableCell className="font-mono font-bold text-center text-xs sm:text-sm p-2 sm:p-3">{item.feederNumber}</TableCell>
+                        <TableCell className="font-mono text-center text-muted-foreground text-xs p-2 sm:p-3">{item.location || "N/A"}</TableCell>
+                        <TableCell className="font-mono text-center text-xs sm:text-sm p-2 sm:p-3">{item.description || item.partNumber}</TableCell>
+                        <TableCell className="font-mono text-center text-xs sm:text-sm p-2 sm:p-3 truncate">{item.partNumber}</TableCell>
+                        {showSpoolBarcode && <TableCell className="font-mono text-center text-xs text-muted-foreground p-2 sm:p-3 truncate">{(scan as any)?.spoolBarcode || scan?.feederNumber || "-"}</TableCell>}
+                        <TableCell className="font-mono text-center text-muted-foreground text-xs p-2 sm:p-3">N/A</TableCell>
+                        <TableCell className={`font-mono font-black text-center text-xs sm:text-sm p-2 sm:p-3 ${status === "PASS" ? "text-success" : status === "FAIL" ? "text-destructive" : "text-amber-600"}`}>{status}</TableCell>
+                        <TableCell className="font-mono text-center text-muted-foreground text-xs p-2 sm:p-3">{scan ? format(new Date(scan.scannedAt), "HH:mm:ss") : "-"}</TableCell>
+                      </TableRow>
+                    );
+                  })
+                )
               )}
             </TableBody>
           </Table>

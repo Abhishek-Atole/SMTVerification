@@ -3,6 +3,8 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 
 const app: Express = express();
 
@@ -26,20 +28,8 @@ app.use(
   }),
 );
 
-// CORS configuration for development
-app.use(
-  cors({
-    origin: [
-      "http://localhost:5173", // Vite dev server
-      "http://localhost:3000", // API server (for frontend served from here)
-      "http://127.0.0.1:5173",
-      "http://127.0.0.1:3000",
-    ],
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  }),
-);
+// CORS configuration - allow all origins for now
+app.use(cors());
 
 // Security headers (but allow Chrome DevTools probes in development)
 app.use((req, res, next) => {
@@ -71,6 +61,21 @@ app.get("/", (req, res) => {
     frontend: "http://localhost:5173 (when running React dev server)",
     docs: "Refer to backend routes for API documentation",
   });
+});
+
+// Diagnostic endpoint
+app.get("/api/test-db", async (req, res) => {
+  try {
+    const dbUrl = process.env.DATABASE_URL || "NOT SET";
+    const maskedUrl = dbUrl.replace(/:[^@]+@/, ":***@");
+    const result = await db.execute(sql`SELECT 1 as test`);
+    res.json({ status: "Database connection OK", databaseUrl: maskedUrl, result });
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    const dbUrl = process.env.DATABASE_URL || "NOT SET";
+    const maskedUrl = dbUrl.replace(/:[^@]+@/, ":***@");
+    res.status(500).json({ status: "Database connection FAILED", databaseUrl: maskedUrl, error: errorMessage });
+  }
 });
 
 // Handle common browser requests silently (no 404 logs)
