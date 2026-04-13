@@ -9,6 +9,7 @@ import traceabilityRouter from "./traceability";
 import auditRouter from "./audit";
 import testRouter from "./test";
 import trashRouter from "./trash";
+import dashboardRouter from "./dashboard";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(traceabilityRouter);
 router.use(auditRouter);
 router.use(testRouter);
 router.use(trashRouter);
+router.use(dashboardRouter);
 
 export default router;

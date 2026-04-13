@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Boxes, History, PlusSquare, BarChart3, LogOut, Sun, Moon, Menu, X, Trash2 } from "lucide-react";
+import { LayoutDashboard, Boxes, History, PlusSquare, BarChart3, LogOut, Sun, Moon, Menu, X, Trash2, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
 import { useTheme } from "@/components/theme-provider";
@@ -17,6 +17,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/session/new", label: "New Session", icon: PlusSquare, roles: ["engineer", "operator"] },
     { href: "/bom", label: "BOM Manager", icon: Boxes, roles: ["engineer"] },
     { href: "/analytics", label: "Analytics", icon: BarChart3, roles: ["engineer", "qa"] },
+    { href: "/real-time-dashboard", label: "Real-Time Dashboard", icon: TrendingUp, roles: ["engineer", "qa"] },
     { href: "/sessions", label: "Session History", icon: History, roles: ["engineer", "qa", "operator"] },
     { href: "/trash", label: "Trash Bin", icon: Trash2, roles: ["engineer"] },
   ];
