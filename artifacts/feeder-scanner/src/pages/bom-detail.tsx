@@ -6,7 +6,6 @@ import { getGetBomQueryKey, getListBomsQueryKey } from "@workspace/api-client-re
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader2, Trash2, Upload, Edit2, ChevronDown } from "lucide-react";
 import Papa from "papaparse";
 import { useLocation } from "wouter";
@@ -73,7 +72,6 @@ export default function BomDetail() {
       skipEmptyLines: true,
       complete: async (results) => {
         const rows = results.data as any[];
-        // We do sequential additions to avoid overloading the API if it's large, though parallel is faster
         for (const row of rows) {
           try {
             await addItem.mutateAsync({
@@ -98,32 +96,8 @@ export default function BomDetail() {
         queryClient.invalidateQueries({ queryKey: getGetBomQueryKey(bomId) });
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
-      },
-      error: () => {
-        setIsUploading(false);
       }
     });
-  };
-
-  const handleDeleteBom = () => {
-    if (confirm("Are you sure you want to delete this BOM? This action cannot be undone.")) {
-      deleteBom.mutate({ bomId }, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListBomsQueryKey() });
-          setLocation("/bom");
-        }
-      });
-    }
-  };
-
-  const handleDeleteItem = (itemId: number) => {
-    if (confirm("Are you sure you want to delete this item?")) {
-      deleteItem.mutate({ bomId, itemId }, {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetBomQueryKey(bomId) });
-        }
-      });
-    }
   };
 
   const handleOpenEdit = (item: any) => {
@@ -131,36 +105,25 @@ export default function BomDetail() {
     setIsEditDialogOpen(true);
   };
 
-  const handleEditItem = (data: ItemFormData) => {
-    if (!editingItem) return;
-
-    updateItem.mutate({
-      bomId,
-      itemId: editingItem.id,
-      data: {
-        feederNumber: data.feederNumber,
-        partNumber: data.partNumber,
-        description: data.description,
-        location: data.location,
-        quantity: data.quantity,
-        mpn: data.mpn,
-        manufacturer: data.manufacturer,
-        packageSize: data.packageSize,
-        leadTime: data.leadTime,
-        cost: data.cost,
-        isAlternate: data.isAlternate,
-        parentItemId: data.parentItemId,
-      }
-    }, {
-      onSuccess: () => {
-        setIsEditDialogOpen(false);
-        setEditingItem(null);
-        queryClient.invalidateQueries({ queryKey: getGetBomQueryKey(bomId) });
-      }
-    });
+  const handleDeleteItem = (id: number) => {
+    if (confirm("Are you sure you want to delete this item?")) {
+      deleteItem.mutate({ bomId, itemId: id }, {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetBomQueryKey(bomId) });
+        }
+      });
+    }
   };
 
-  if (isLoading || !bom) {
+  const handleDeleteBom = () => {
+    if (confirm("Delete this BOM and ALL its items? This cannot be undone.")) {
+      deleteBom.mutate({ bomId }, {
+        onSuccess: () => setLocation("/boms")
+      });
+    }
+  };
+
+  if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
@@ -168,222 +131,238 @@ export default function BomDetail() {
     );
   }
 
+  if (!bom) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-muted-foreground font-mono">BOM not found</p>
+        <Button onClick={() => setLocation("/boms")} className="mt-4 rounded-sm font-mono">Back to BOMs</Button>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-8 max-w-6xl mx-auto w-full space-y-8">
-      <div className="flex justify-between items-start border-b border-border pb-4">
-        <div className="flex items-start gap-4">
-          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-16" />
-          <div>
-            <h1 className="text-3xl font-mono font-bold tracking-tight text-foreground uppercase">{bom.name}</h1>
-            <p className="text-muted-foreground mt-2 font-mono">{bom.description}</p>
-          </div>
-        </div>
-        <Button variant="destructive" size="sm" onClick={handleDeleteBom} className="rounded-sm font-mono" data-testid="btn-delete-bom">
-          <Trash2 className="w-4 h-4 mr-2" />
-          DELETE BOM
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-card p-6 border border-border rounded-sm">
-            <h2 className="font-mono font-bold mb-4 border-b border-border pb-2 text-lg">ADD ITEM MANUALLY</h2>
-            <div className="space-y-4 font-mono text-sm">
-              <Button 
-                onClick={() => setIsAddDialogOpen(true)}
-                className="w-full rounded-sm font-bold"
-                data-testid="btn-add-item"
-              >
-                + ADD COMPONENT
-              </Button>
-              <p className="text-xs text-muted-foreground">
-                Click to add a new BOM component with complete manufacturer details
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-card p-6 border border-border rounded-sm">
-            <h2 className="font-mono font-bold mb-4 border-b border-border pb-2 text-lg">UPLOAD CSV</h2>
-            <p className="text-xs text-muted-foreground mb-4 font-mono">
-              Columns: feederNumber, partNumber, description, location, quantity, mpn, manufacturer, packageSize, leadTime, cost
+    <div className="flex-1 flex flex-col">
+      <div className="p-8 pb-4 border-b border-border bg-card/50">
+        <div className="flex justify-between items-start max-w-full">
+          <div className="flex-1">
+            <h1 className="text-3xl font-mono font-bold text-foreground">{bom.name}</h1>
+            {bom.description && (
+              <p className="text-muted-foreground mt-2 font-mono">{bom.description}</p>
+            )}
+            <p className="text-sm text-muted-foreground mt-3 font-mono flex gap-6">
+              <span>Total Items: <span className="font-bold text-foreground">{bom.items.length}</span></span>
             </p>
-            <div className="flex items-center gap-4">
-              <Input 
-                type="file" 
-                accept=".csv" 
-                ref={fileInputRef} 
-                onChange={handleFileUpload}
-                disabled={isUploading}
-                className="bg-background text-sm file:text-foreground file:bg-secondary file:border-0 file:rounded-sm file:px-2 file:py-1 rounded-sm cursor-pointer"
-              />
-              {isUploading && <Loader2 className="w-5 h-5 animate-spin text-primary" />}
-            </div>
+          </div>
+          <div className="flex gap-2 flex-wrap justify-end">
+            <Button 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              variant="outline"
+              className="rounded-sm font-mono"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              {isUploading ? "UPLOADING..." : "IMPORT CSV"}
+            </Button>
+            <ItemFormModal
+              bomId={bomId}
+              onSubmit={handleAddItem}
+              trigger={
+                <Button className="rounded-sm font-mono">
+                  + ADD ITEM
+                </Button>
+              }
+            />
+            <Button 
+              onClick={handleDeleteBom}
+              disabled={deleteBom.isPending}
+              variant="destructive"
+              size="sm"
+              className="rounded-sm font-mono"
+            >
+              DELETE BOM
+            </Button>
           </div>
         </div>
-
-        <div className="lg:col-span-2">
-          <div className="bg-card border border-border rounded-sm overflow-hidden flex flex-col h-[600px]">
-            <div className="bg-secondary/50 p-3 border-b border-border flex justify-between items-center font-mono">
-              <span className="font-bold">BOM ITEMS</span>
-              <span className="text-muted-foreground text-sm">TOTAL: {bom.items.length}</span>
-            </div>
-            <div className="flex-1 overflow-auto">
-              <Table>
-                <TableHeader className="sticky top-0 bg-card border-b border-border z-10">
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="font-mono w-8"></TableHead>
-                    <TableHead className="font-mono">FEEDER#</TableHead>
-                    <TableHead className="font-mono">PART#</TableHead>
-                    <TableHead className="font-mono">MPN</TableHead>
-                    <TableHead className="font-mono">MANUFACTURER</TableHead>
-                    <TableHead className="font-mono text-right">QTY</TableHead>
-                    <TableHead className="font-mono text-right">ACTIONS</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {bom.items.length === 0 ? (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground font-mono">
-                        No items added yet.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    bom.items.map(item => {
-                      const isAlternate = item.isAlternate;
-                      const expanded = expandedItemId === item.id;
-                      return (
-                        <tbody key={`group-${item.id}`}>
-                          <TableRow className={`border-border ${isAlternate ? 'bg-secondary/20 hover:bg-secondary/30' : 'hover:bg-secondary/30'}`}>
-                            <TableCell className="text-center p-2">
-                              {(item.mpn || item.manufacturer || item.cost) && (
-                                <button
-                                  onClick={() => setExpandedItemId(expanded ? null : item.id)}
-                                  className="text-muted-foreground hover:text-foreground transition-colors"
-                                >
-                                  <ChevronDown 
-                                    className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`}
-                                  />
-                                </button>
-                              )}
-                            </TableCell>
-                            <TableCell className={`font-mono font-bold ${isAlternate ? 'text-orange-500' : 'text-primary'}`}>
-                              {item.feederNumber}
-                            </TableCell>
-                            <TableCell className="font-mono">{item.partNumber}</TableCell>
-                            <TableCell className="font-mono text-sm text-muted-foreground">{item.mpn || '—'}</TableCell>
-                            <TableCell className="font-mono text-sm text-muted-foreground max-w-[120px] truncate">{item.manufacturer || '—'}</TableCell>
-                            <TableCell className="font-mono text-right">{item.quantity}</TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex gap-2 justify-end">
-                                <Button 
-                                  onClick={() => handleOpenEdit(item)}
-                                  variant="outline" 
-                                  size="sm" 
-                                  className="rounded-sm text-secondary-foreground hover:bg-secondary/70"
-                                  data-testid={`btn-edit-item-${item.id}`}
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </Button>
-                                <Button 
-                                  onClick={() => handleDeleteItem(item.id)}
-                                  disabled={deleteItem.isPending}
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="rounded-sm text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  data-testid={`btn-delete-item-${item.id}`}
-                                >
-                                  {deleteItem.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                          {expanded && (item.mpn || item.manufacturer || item.cost || item.leadTime) && (
-                            <TableRow className={`border-border ${isAlternate ? 'bg-secondary/20' : 'bg-muted/30'}`}>
-                              <TableCell colSpan={7} className="p-4">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono">
-                                  {item.mpn && (
-                                    <div>
-                                      <div className="text-muted-foreground">MPN</div>
-                                      <div className="font-bold text-foreground">{item.mpn}</div>
-                                    </div>
-                                  )}
-                                  {item.manufacturer && (
-                                    <div>
-                                      <div className="text-muted-foreground">MANUFACTURER</div>
-                                      <div className="font-bold text-foreground">{item.manufacturer}</div>
-                                    </div>
-                                  )}
-                                  {item.packageSize && (
-                                    <div>
-                                      <div className="text-muted-foreground">PACKAGE</div>
-                                      <div className="font-bold text-foreground">{item.packageSize}</div>
-                                    </div>
-                                  )}
-                                  {item.cost && (
-                                    <div>
-                                      <div className="text-muted-foreground">COST</div>
-                                      <div className="font-bold text-foreground">${item.cost}</div>
-                                    </div>
-                                  )}
-                                  {item.leadTime && (
-                                    <div>
-                                      <div className="text-muted-foreground">LEAD TIME</div>
-                                      <div className="font-bold text-foreground">{item.leadTime}d</div>
-                                    </div>
-                                  )}
-                                  {item.description && (
-                                    <div className="md:col-span-2">
-                                      <div className="text-muted-foreground">DESCRIPTION</div>
-                                      <div className="font-bold text-foreground">{item.description}</div>
-                                    </div>
-                                  )}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          )}
-                        </tbody>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        </div>
-
-      <ItemFormModal
-        open={isAddDialogOpen}
-        onOpenChange={setIsAddDialogOpen}
-        onSubmit={handleAddItem}
-        isLoading={addItem.isPending}
-        isEditing={false}
-        bomItems={bom.items.filter(item => !item.isAlternate)}
-      />
-
-      <ItemFormModal
-        open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
-        onSubmit={handleEditItem}
-        initialData={editingItem ? {
-          feederNumber: editingItem.feederNumber,
-          partNumber: editingItem.partNumber,
-          description: editingItem.description,
-          location: editingItem.location,
-          quantity: editingItem.quantity,
-          mpn: editingItem.mpn,
-          manufacturer: editingItem.manufacturer,
-          packageSize: editingItem.packageSize,
-          leadTime: editingItem.leadTime,
-          cost: editingItem.cost,
-          isAlternate: editingItem.isAlternate,
-          parentItemId: editingItem.parentItemId,
-          id: editingItem.id,
-        } : undefined}
-        isLoading={updateItem.isPending}
-        isEditing={true}
-        bomItems={bom.items.filter(item => !item.isAlternate)}
-      />
+        <input 
+          type="file" 
+          accept=".csv" 
+          ref={fileInputRef} 
+          onChange={handleFileUpload} 
+          style={{ display: 'none' }}
+        />
       </div>
+
+      <div className="flex-1 overflow-auto p-8">
+        {bom.items.length === 0 ? (
+          <div className="flex items-center justify-center h-96 border-2 border-dashed border-border rounded-lg">
+            <div className="text-center">
+              <p className="text-muted-foreground font-mono mb-4">No items added yet</p>
+              <ItemFormModal
+                bomId={bomId}
+                onSubmit={handleAddItem}
+                trigger={
+                  <Button className="rounded-sm font-mono">
+                    + ADD FIRST ITEM
+                  </Button>
+                }
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max">
+            {bom.items.map((item) => (
+              <div
+                key={item.id}
+                className={`p-5 rounded-lg border-2 transition-all hover:shadow-md ${
+                  item.isAlternate
+                    ? "bg-orange-50/50 dark:bg-orange-950/20 border-orange-300/50 dark:border-orange-700/50"
+                    : "bg-card border-border hover:border-primary/50"
+                }`}
+              >
+                {/* Header with Feeder and Part */}
+                <div className="mb-4 pb-4 border-b border-border/50">
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex-1">
+                      <p className="text-xs text-muted-foreground font-mono">FEEDER #</p>
+                      <p className={`text-lg font-bold font-mono ${item.isAlternate ? "text-orange-600 dark:text-orange-400" : "text-primary"}`}>
+                        {item.feederNumber}
+                      </p>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button
+                        onClick={() => handleOpenEdit(item)}
+                        size="sm"
+                        variant="outline"
+                        className="rounded-sm h-8 w-8 p-0"
+                      >
+                        <Edit2 className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        onClick={() => handleDeleteItem(item.id)}
+                        size="sm"
+                        variant="ghost"
+                        className="rounded-sm h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
+                      >
+                        {deleteItem.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-mono">PART #</p>
+                    <p className="font-bold font-mono text-foreground truncate">{item.partNumber}</p>
+                  </div>
+                </div>
+
+                {/* Main Details */}
+                <div className="space-y-3 mb-4">
+                  {item.description && (
+                    <div>
+                      <p className="text-xs text-muted-foreground font-mono mb-1">DESCRIPTION</p>
+                      <p className="text-sm font-mono text-foreground line-clamp-2">{item.description}</p>
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-xs text-muted-foreground font-mono mb-1">QUANTITY</p>
+                      <p className="font-bold font-mono text-lg text-primary">{item.quantity}</p>
+                    </div>
+                    {item.location && (
+                      <div>
+                        <p className="text-xs text-muted-foreground font-mono mb-1">LOCATION</p>
+                        <p className="font-mono text-sm text-foreground">{item.location}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Details Grid - Only show if data exists */}
+                {(item.mpn || item.manufacturer || item.packageSize || item.cost || item.leadTime) && (
+                  <div className="border-t border-border/50 pt-3">
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      {item.mpn && (
+                        <div className="bg-secondary/30 rounded p-2">
+                          <p className="text-muted-foreground font-mono mb-1">MPN</p>
+                          <p className="font-bold font-mono text-foreground truncate">{item.mpn}</p>
+                        </div>
+                      )}
+                      {item.manufacturer && (
+                        <div className="bg-secondary/30 rounded p-2">
+                          <p className="text-muted-foreground font-mono mb-1">MFG</p>
+                          <p className="font-bold font-mono text-foreground truncate">{item.manufacturer}</p>
+                        </div>
+                      )}
+                      {item.packageSize && (
+                        <div className="bg-secondary/30 rounded p-2">
+                          <p className="text-muted-foreground font-mono mb-1">PACKAGE</p>
+                          <p className="font-bold font-mono text-foreground">{item.packageSize}</p>
+                        </div>
+                      )}
+                      {item.cost && (
+                        <div className="bg-secondary/30 rounded p-2">
+                          <p className="text-muted-foreground font-mono mb-1">COST</p>
+                          <p className="font-bold font-mono text-primary">${item.cost}</p>
+                        </div>
+                      )}
+                      {item.leadTime && (
+                        <div className="bg-secondary/30 rounded p-2">
+                          <p className="text-muted-foreground font-mono mb-1">LEAD TIME</p>
+                          <p className="font-bold font-mono">{item.leadTime}d</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Alternate Badge */}
+                {item.isAlternate && (
+                  <div className="mt-3 text-xs font-bold text-orange-600 dark:text-orange-400 font-mono bg-orange-100/30 dark:bg-orange-900/30 rounded px-2 py-1 text-center">
+                    ALTERNATE PART
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {isEditDialogOpen && editingItem && (
+        <ItemFormModal
+          bomId={bomId}
+          item={editingItem}
+          onSubmit={(data) => {
+            updateItem.mutate(
+              {
+                bomId,
+                itemId: editingItem.id,
+                data: {
+                  feederNumber: data.feederNumber,
+                  partNumber: data.partNumber,
+                  description: data.description,
+                  location: data.location,
+                  quantity: data.quantity,
+                  mpn: data.mpn,
+                  manufacturer: data.manufacturer,
+                  packageSize: data.packageSize,
+                  leadTime: data.leadTime,
+                  cost: data.cost,
+                  isAlternate: data.isAlternate,
+                }
+              },
+              {
+                onSuccess: () => {
+                  setIsEditDialogOpen(false);
+                  setEditingItem(null);
+                  queryClient.invalidateQueries({ queryKey: getGetBomQueryKey(bomId) });
+                }
+              }
+            );
+          }}
+          open={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          trigger={<div />}
+        />
+      )}
     </div>
   );
 }
