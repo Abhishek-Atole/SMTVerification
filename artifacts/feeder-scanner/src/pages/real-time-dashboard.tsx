@@ -166,12 +166,12 @@ export default function RealTimeDashboard() {
           <h1 className="text-3xl font-black tracking-tight">Real-Time Dashboard</h1>
         </div>
         <div className="w-[250px]">
-          <Select value={sessionId || ""} onValueChange={setSessionId}>
+          <Select value={sessionId || "all"} onValueChange={(val) => setSessionId(val === "all" ? null : val)}>
             <SelectTrigger>
               <SelectValue placeholder="Select Session" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Sessions</SelectItem>
+              <SelectItem value="all">All Sessions</SelectItem>
               {sessions.map((s) => (
                 <SelectItem key={s.id} value={String(s.id)}>
                   {s.bomName} ({s.status})

@@ -10,3 +10,5 @@ Port 5173 is in use, trying another one...
 11:29:34 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
 11:29:36 PM [vite] (client) ✨ new dependencies optimized: @radix-ui/react-tabs
 11:29:36 PM [vite] (client) ✨ optimized dependencies changed. reloading
+11:38:09 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+11:40:46 PM [vite] (client) hmr update /src/index.css, /src/pages/real-time-dashboard.tsx

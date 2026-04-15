@@ -5,22 +5,6 @@ import { eq, sql, and, gte, between } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-// Security middleware - only allow QA and Engineer roles
-router.use((req: any, res, next) => {
-  const user = (req as any).user; // Assumes auth middleware sets this
-  
-  if (!user) {
-    return res.status(401).json({ error: "Unauthorized - please login" });
-  }
-  
-  if (!['qa', 'engineer'].includes(user.role)) {
-    req.log.warn({ userId: user.id, role: user.role }, "Unauthorized dashboard access attempt");
-    return res.status(403).json({ error: "Forbidden - access denied for your role" });
-  }
-  
-  next();
-});
-
 // Dashboard KPI endpoint
 router.get("/dashboard/kpi", async (req, res) => {
   try {
