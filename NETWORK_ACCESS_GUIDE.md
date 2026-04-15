@@ -2,10 +2,11 @@
 
 ## System Information
 
-- **Machine IP Address:** `10.83.113.10`
+- **Primary Network IP:** `192.168.0.110`
 - **Dashboard Port:** `5173` (Frontend)
 - **API Port:** `3000` (Backend)
 - **Database:** PostgreSQL (localhost:5432)
+- **Network:** 192.168.0.0/24 (Wi-Fi network)
 
 ---
 
@@ -19,17 +20,17 @@ Frontend: http://localhost:5173
 API:      http://localhost:3000
 ```
 
-### 2. **Local Network Access (LAN - Other PCs on Same Network)**
-Access from other computers connected to the same network.
+### 2. **Local Network Access (LAN - Mobile & Other PCs on Same Wi-Fi)**
+Access from other devices connected to **192.168.0.0** network.
 
 ```
-Frontend: http://10.83.113.10:5173
-API:      http://10.83.113.10:3000
+Frontend: http://192.168.0.110:5173
+API:      http://192.168.0.110:3000
 ```
 
 **Requirements:**
-- Other PC must be on the same network (Wi-Fi or LAN)
-- Ports 5173 and 3000 must not be blocked by firewall
+- Device must be connected to the **SAME Wi-Fi network** (critical!)
+- Ports 5173 and 3000 must not be blocked
 - Modern web browser (Chrome, Firefox, Safari, Edge)
 
 ### 3. **Remote Access (Internet - ngrok Tunnel)**
@@ -38,8 +39,6 @@ Access from anywhere on the internet via ngrok.
 ```
 Frontend: https://nonangling-unspruced-taren.ngrok-free.dev
 ```
-
-**Note:** API is not exposed via ngrok. Frontend handles requests to local API automatically.
 
 ---
 
@@ -55,31 +54,39 @@ All access methods require credentials:
 
 ---
 
-## 🚀 How to Access from Another PC (Step-by-Step)
+## 📱 Mobile Phone Access (Step-by-Step)
 
-### On Another PC Connected to Same Network:
+### On Your Mobile Phone:
 
-1. Open a web browser (Chrome, Firefox, Safari, etc.)
-2. In the address bar, type:
+1. **Connect to the SAME Wi-Fi network** as your computer
+   - Network name should match your computer's Wi-Fi SSID
+   
+2. **Open any web browser** (Chrome, Safari, Firefox, Edge, etc.)
+
+3. **In the address bar, type:**
    ```
-   http://10.83.113.10:5173
+   http://192.168.0.110:5173
    ```
-3. Press Enter
-4. You should see the SMT Dashboard login page
-5. Enter your QA or Engineer credentials
-6. Dashboard will load with real-time data
 
-### Via Command Line:
+4. **Press Enter/Go**
 
-**Mac/Linux/WSL:**
-```bash
-curl http://10.83.113.10:5173
-```
+5. **You should see the login page**
 
-**Windows (PowerShell):**
-```powershell
-Invoke-WebRequest http://10.83.113.10:5173
-```
+6. **Enter QA or Engineer credentials**
+
+7. **Dashboard loads with real-time data!** ✅
+
+### Important Notes:
+- ⚠️ Make sure you're on **Wi-Fi**, not mobile data (4G/5G)
+- ⚠️ Must be same network as computer (192.168.0.x)
+- ⚠️ Include the port number **:5173** (don't forget!)
+- ⚠️ Use **http://** not https:// (ngrok uses https)
+
+---
+
+## 🖥️ Other PCs on Same Network
+
+Same instructions as mobile - use `http://192.168.0.110:5173`
 
 ---
 
@@ -87,11 +94,11 @@ Invoke-WebRequest http://10.83.113.10:5173
 
 - [x] Frontend server running on port 5173
 - [x] API server running on port 3000
-- [x] Listening on network interface (0.0.0.0)
-- [x] ngrok tunnel active
+- [x] Listening on all network interfaces (0.0.0.0)
+- [x] Network IP correctly identified: 192.168.0.110
+- [x] ngrok tunnel active for internet access
 - [x] Database connectivity verified
 - [x] Security middleware enforcing role-based access
-- [x] All 9 dashboard endpoints responding
 - [x] Real-time polling configured (2-second intervals)
 
 ---
@@ -99,6 +106,10 @@ Invoke-WebRequest http://10.83.113.10:5173
 ## 🔧 Troubleshooting
 
 ### Issue: "Connection Refused" / "Server Not Responding"
+
+**Don't use 10.83.113.10 - that's a Docker/virtual interface!**
+
+**Use the correct IP: 192.168.0.110**
 
 **Check if servers are running:**
 ```bash
@@ -110,33 +121,68 @@ ps aux | grep -E "node|vite" | grep -v grep
 bash start-servers.sh
 ```
 
+### Issue: "Connection Timed Out" on Mobile
+
+**Cause: Phone is not on the same Wi-Fi network**
+
+**Solution:**
+1. Go to phone settings
+2. Check Wi-Fi connection
+3. Make sure it's the same SSID/network name as your computer
+4. Disconnect from mobile data (4G/5G)
+5. Try again: `http://192.168.0.110:5173`
+
+### Issue: Can't find the right Wi-Fi network
+
+**Run on your computer:**
+```bash
+iwconfig 2>/dev/null | grep SSID
+# or
+nmcli device wifi list
+# or check in your OS network settings
+```
+
+Then connect your phone to the same network.
+
 ### Issue: "Unauthorized - please login"
 
-**This is normal!** The API requires authentication. The frontend handles login automatically.
+**This is normal!** The API requires authentication. 
+- The frontend handles login automatically
+- Make sure you're accessing via **port 5173** (not port 3000)
+- Log in with QA or Engineer credentials
 
-### Issue: "Connection Timed Out"
+### Issue: Page loads but empty/no data
 
-**Possible causes:**
-1. Firewall blocking ports 5173 or 3000
-   - Whitelist ports: 5173, 3000
-
-2. PC not on same network
-   - Both PCs must be on same Wi-Fi or LAN
-
-3. IP address changed
-   - Run `hostname -I` to verify current IP
+**Check:**
+1. Are you logged in with QA or Engineer role?
+2. Is the database connected? Check API at: `http://192.168.0.110:3000/api/health`
+3. Restart servers: `bash start-servers.sh`
 
 ---
 
-## 📊 Features Available
+## 📊 Network Configuration
 
-After logging in with QA or Engineer credentials:
+Your system is on **192.168.0.0/24** network:
 
-- **Real-Time KPIs:** 7 key performance indicators
-- **Interactive Charts:** 4 visualizations (Pie, Bar, Line, Component)
-- **Session Tabs:** Switch between different scan sessions
-- **Real-time updates:** Every 2 seconds
-- **Performance Metrics:** Verification rates, defect rates, efficiency
+| Device | IP | Notes |
+|--------|-----|-------|
+| Your Computer | 192.168.0.110 | Primary - use this for all access |
+| Router/Gateway | 192.168.0.1 | Network gateway |
+| Your Mobile | 192.168.x.x | Must be same 192.168.0.x range |
+| Docker Bridge | 192.168.122.1 | Internal only |
+| Docker Network | 172.17.0.1 | Internal only |
+
+---
+
+## 🌍 Access URLs Summary
+
+| Endpoint | URL | From | Status |
+|----------|-----|------|--------|
+| **Frontend** | http://localhost:5173 | Your Computer | ✅ |
+| **Frontend** | http://192.168.0.110:5173 | Same Wi-Fi Network | ✅ |
+| **Frontend (ngrok)** | https://nonangling-unspruced-taren.ngrok-free.dev | Internet | ✅ |
+| **API** | http://localhost:3000 | Your Computer | ✅ |
+| **API** | http://192.168.0.110:3000 | Same Wi-Fi Network | ✅ |
 
 ---
 
@@ -144,4 +190,18 @@ After logging in with QA or Engineer credentials:
 
 - **Date:** April 15, 2026
 - **System:** SMT Verification Dashboard
+- **Network IP:** 192.168.0.110 (CORRECTED)
 - **Status:** ✅ All access methods verified and working
+
+---
+
+## 📞 Quick Troubleshooting Command
+
+Run this on your computer to get all access URLs:
+
+```bash
+echo "=== Your Dashboard Access URLs ===" && \
+echo "Localhost: http://localhost:5173" && \
+echo "Network:   http://192.168.0.110:5173" && \
+echo "Internet:  https://nonangling-unspruced-taren.ngrok-free.dev"
+```
