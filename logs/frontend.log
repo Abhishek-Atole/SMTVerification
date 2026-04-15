@@ -4,7 +4,9 @@
 
 Port 5173 is in use, trying another one...
 
-  VITE v7.3.1  ready in 315 ms
+  VITE v7.3.1  ready in 317 ms
 
   ➜  Local:   http://localhost:5174/
-  ➜  Network: http://192.168.0.106:5174/
+11:29:34 PM [vite] (client) hmr update /src/App.tsx, /src/index.css
+11:29:36 PM [vite] (client) ✨ new dependencies optimized: @radix-ui/react-tabs
+11:29:36 PM [vite] (client) ✨ optimized dependencies changed. reloading

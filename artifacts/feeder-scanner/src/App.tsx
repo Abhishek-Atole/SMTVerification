@@ -16,6 +16,7 @@ import SessionHistory from "@/pages/session-history";
 import Login from "@/pages/login";
 import Analytics from "@/pages/analytics";
 import TrashBin from "@/pages/trash-bin";
+import RealTimeDashboard from "@/pages/real-time-dashboard";
 import { AuthProvider, useAuth } from "@/context/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -71,6 +72,9 @@ function Router() {
               </Route>
               <Route path="/trash">
                 {() => <ProtectedRoute component={TrashBin} allowedRoles={["engineer"]} />}
+              </Route>
+              <Route path="/real-time-dashboard">
+                {() => <ProtectedRoute component={RealTimeDashboard} allowedRoles={["engineer", "qa"]} />}
               </Route>
               <Route component={NotFound} />
             </Switch>
