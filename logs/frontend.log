@@ -3,10 +3,8 @@
 > vite --config vite.config.ts --host 0.0.0.0
 
 Port 5173 is in use, trying another one...
-Port 5174 is in use, trying another one...
-Port 5175 is in use, trying another one...
 
-  VITE v7.3.1  ready in 490 ms
+  VITE v7.3.1  ready in 315 ms
 
-  ➜  Local:   http://localhost:5176/
-  ➜  Network: http://10.83.113.10:5176/
+  ➜  Local:   http://localhost:5174/
+  ➜  Network: http://192.168.0.106:5174/

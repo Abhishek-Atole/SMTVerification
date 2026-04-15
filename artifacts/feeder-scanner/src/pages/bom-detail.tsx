@@ -105,6 +105,11 @@ export default function BomDetail() {
     setIsEditDialogOpen(true);
   };
 
+  const handleCloseEditDialog = () => {
+    setIsEditDialogOpen(false);
+    setEditingItem(null);
+  };
+
   const handleDeleteItem = (id: number) => {
     if (confirm("Are you sure you want to delete this item?")) {
       deleteItem.mutate({ bomId, itemId: id }, {
@@ -143,45 +148,43 @@ export default function BomDetail() {
   return (
     <div className="flex-1 flex flex-col">
       <div className="p-8 pb-4 border-b border-border bg-card/50">
-        <div className="flex justify-between items-start max-w-full">
+        <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex-1">
             <h1 className="text-3xl font-mono font-bold text-foreground">{bom.name}</h1>
             {bom.description && (
               <p className="text-muted-foreground mt-2 font-mono">{bom.description}</p>
             )}
-            <p className="text-sm text-muted-foreground mt-3 font-mono flex gap-6">
-              <span>Total Items: <span className="font-bold text-foreground">{bom.items.length}</span></span>
+            <p className="text-sm text-muted-foreground mt-3 font-mono">
+              Total Items: <span className="font-bold text-foreground">{bom.items.length}</span>
             </p>
           </div>
-          <div className="flex gap-2 flex-wrap justify-end">
-            <Button 
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              variant="outline"
-              className="rounded-sm font-mono"
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              {isUploading ? "UPLOADING..." : "IMPORT CSV"}
-            </Button>
-            <ItemFormModal
-              bomId={bomId}
-              onSubmit={handleAddItem}
-              trigger={
-                <Button className="rounded-sm font-mono">
-                  + ADD ITEM
-                </Button>
-              }
-            />
-            <Button 
-              onClick={handleDeleteBom}
-              disabled={deleteBom.isPending}
-              variant="destructive"
-              size="sm"
-              className="rounded-sm font-mono"
-            >
-              DELETE BOM
-            </Button>
-          </div>
+          <Button 
+            onClick={() => setIsAddDialogOpen(true)}
+            size="lg" 
+            className="rounded-sm font-mono font-bold text-base bg-green-600 hover:bg-green-700 text-white"
+          >
+            ➕ ADD ITEM
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            variant="outline"
+            className="rounded-sm font-mono"
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            {isUploading ? "UPLOADING..." : "IMPORT CSV"}
+          </Button>
+          <Button 
+            onClick={handleDeleteBom}
+            disabled={deleteBom.isPending}
+            variant="destructive"
+            size="sm"
+            className="rounded-sm font-mono"
+          >
+            DELETE BOM
+          </Button>
         </div>
         <input 
           type="file" 
@@ -197,15 +200,12 @@ export default function BomDetail() {
           <div className="flex items-center justify-center h-96 border-2 border-dashed border-border rounded-lg">
             <div className="text-center">
               <p className="text-muted-foreground font-mono mb-4">No items added yet</p>
-              <ItemFormModal
-                bomId={bomId}
-                onSubmit={handleAddItem}
-                trigger={
-                  <Button className="rounded-sm font-mono">
-                    + ADD FIRST ITEM
-                  </Button>
-                }
-              />
+              <Button 
+                onClick={() => setIsAddDialogOpen(true)}
+                className="rounded-sm font-mono"
+              >
+                + ADD FIRST ITEM
+              </Button>
             </div>
           </div>
         ) : (
@@ -328,8 +328,8 @@ export default function BomDetail() {
 
       {isEditDialogOpen && editingItem && (
         <ItemFormModal
-          bomId={bomId}
-          item={editingItem}
+          open={isEditDialogOpen}
+          onOpenChange={handleCloseEditDialog}
           onSubmit={(data) => {
             updateItem.mutate(
               {
@@ -358,11 +358,43 @@ export default function BomDetail() {
               }
             );
           }}
-          open={isEditDialogOpen}
-          onOpenChange={setIsEditDialogOpen}
-          trigger={<div />}
+          isEditing={true}
+          initialData={editingItem}
+          bomItems={bom.items}
+          isLoading={updateItem.isPending}
         />
       )}
+
+      <ItemFormModal
+        open={isAddDialogOpen}
+        onOpenChange={setIsAddDialogOpen}
+        onSubmit={(data) => {
+          addItem.mutate({ 
+            bomId, 
+            data: {
+              feederNumber: data.feederNumber,
+              partNumber: data.partNumber,
+              description: data.description,
+              location: data.location,
+              quantity: data.quantity,
+              mpn: data.mpn,
+              manufacturer: data.manufacturer,
+              packageSize: data.packageSize,
+              leadTime: data.leadTime,
+              cost: data.cost,
+              isAlternate: data.isAlternate,
+              parentItemId: data.parentItemId,
+            }
+          }, {
+            onSuccess: () => {
+              setIsAddDialogOpen(false);
+              queryClient.invalidateQueries({ queryKey: getGetBomQueryKey(bomId) });
+            }
+          });
+        }}
+        bomItems={bom.items}
+        isLoading={addItem.isPending}
+      />
     </div>
   );
 }

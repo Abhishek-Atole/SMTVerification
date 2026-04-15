@@ -25,8 +25,10 @@ if (!basePath) {
   );
 }
 
-// API_TARGET defaults to localhost:3000 but can be set to use full IP for mobile access
-const apiTarget = process.env.API_TARGET || "http://localhost:3000";
+// API_TARGET: Use localhost for dev, can override for mobile/network access
+const apiTarget = process.env.NODE_ENV === "production" 
+  ? (process.env.API_TARGET || "http://localhost:3000")
+  : "http://localhost:3000";
 
 export default defineConfig({
   base: basePath,
