@@ -25,6 +25,9 @@ if (!basePath) {
   );
 }
 
+// API_TARGET defaults to localhost:3000 but can be set to use full IP for mobile access
+const apiTarget = process.env.API_TARGET || "http://localhost:3000";
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -53,7 +56,7 @@ export default defineConfig({
     },
     proxy: {
       "/api": {
-        target: "http://localhost:3000",
+        target: apiTarget,
         changeOrigin: true,
       },
     },
