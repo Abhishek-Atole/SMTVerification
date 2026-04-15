@@ -1,2 +1,2 @@
-{"level":30,"time":1776262894409,"pid":116527,"hostname":"Infizent-Technologies","port":3000,"msg":"Server listening"}
-{"level":30,"time":1776262900327,"pid":116527,"hostname":"Infizent-Technologies","req":{"id":1,"method":"GET","url":"/api/bom"},"res":{"statusCode":200},"responseTime":88,"msg":"request completed"}
+{"level":30,"time":1776267400245,"pid":194191,"hostname":"Infizent-Technologies","port":3000,"msg":"Server listening"}
+{"level":30,"time":1776267406087,"pid":194191,"hostname":"Infizent-Technologies","req":{"id":1,"method":"GET","url":"/api/bom"},"res":{"statusCode":200},"responseTime":75,"msg":"request completed"}

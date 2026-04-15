@@ -69,7 +69,7 @@ fi
 
 echo ""
 echo -e "${BLUE}=== Access the application ===${NC}"
-echo "Frontend: http://localhost:5173"
-echo "Network: http://192.168.0.110:5173"
-echo "Internet: https://nonangling-unspruced-taren.ngrok-free.dev"
+echo "Frontend (localhost): http://localhost:5173"
+echo "Frontend (network):   http://10.83.113.10:5173"
+echo "Internet (ngrok):     https://nonangling-unspruced-taren.ngrok-free.dev"
 echo ""
