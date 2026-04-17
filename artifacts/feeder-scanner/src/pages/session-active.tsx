@@ -15,6 +15,7 @@ import { format, differenceInSeconds } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlternateSelector } from "@/components/alternate-selector";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction } from "@/components/ui/alert-dialog";
 
 type ScanStep = "feeder" | "spool";
 type SpliceStep = "feeder" | "oldSpool" | "newSpool";
@@ -77,6 +78,11 @@ export default function SessionActive() {
   const [caseConverted, setCaseConverted] = useState(false);
   const [isDuplicate, setIsDuplicate] = useState(false);
   
+  // Notification dialog state
+  const [showNotification, setShowNotification] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationType, setNotificationType] = useState<"error" | "duplicate" | "warning">("error");
+  
   // Alternate selection state
   const [pendingAvailableOptions, setPendingAvailableOptions] = useState<{
     primary: any[];
@@ -135,6 +141,22 @@ export default function SessionActive() {
       return () => clearInterval(timer);
     }
   }, [session?.startTime, session?.endTime]);
+
+  // Show notification for errors and duplicates
+  useEffect(() => {
+    if (lastScanResult && lastScanResult.status === "reject") {
+      const msgLower = lastScanResult.msg.toLowerCase();
+      if (msgLower.includes("duplicate") || msgLower.includes("already") || msgLower.includes("violation")) {
+        setNotificationType("duplicate");
+        setNotificationMessage(lastScanResult.msg);
+        setShowNotification(true);
+      } else if (msgLower.includes("error") || msgLower.includes("failed")) {
+        setNotificationType("error");
+        setNotificationMessage(lastScanResult.msg);
+        setShowNotification(true);
+      }
+    }
+  }, [lastScanResult]);
 
   const flashBg = (status: "ok" | "reject" | "splice") => {
     const bg = document.getElementById("scan-flash-bg");
@@ -524,43 +546,43 @@ export default function SessionActive() {
           {session.status === "active" && (
             <>
               {/* Mode Tabs - Responsive */}
-              <div className="flex gap-2 sm:gap-3">
+              <div className="flex gap-1.5 sm:gap-2 lg:gap-3">
                 <Button
                   variant={mode === "scan" ? "default" : "outline"}
-                  className="flex-1 h-10 sm:h-12 font-bold tracking-wider text-xs sm:text-sm"
+                  className="flex-1 h-8 sm:h-10 lg:h-12 font-bold tracking-wider text-xs sm:text-sm lg:text-base"
                   onClick={() => { setMode("scan"); setScanStep("feeder"); setScanInput(""); }}
                 >
-                  <ScanLine className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" /> SCAN
+                  <ScanLine className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 mr-0.5 sm:mr-1 lg:mr-2" /> <span className="hidden sm:inline">SCAN</span><span className="sm:hidden">S</span>
                 </Button>
                 <Button
                   variant={mode === "splice" ? "default" : "outline"}
-                  className={`flex-1 h-10 sm:h-12 font-bold tracking-wider text-xs sm:text-sm ${mode === "splice" ? "bg-amber-500 hover:bg-amber-600 border-amber-500" : "border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950"}`}
+                  className={`flex-1 h-8 sm:h-10 lg:h-12 font-bold tracking-wider text-xs sm:text-sm lg:text-base ${mode === "splice" ? "bg-amber-500 hover:bg-amber-600 border-amber-500" : "border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950"}`}
                   onClick={() => { setMode("splice"); setSpliceStep("feeder"); setSpliceInput(""); }}
                 >
-                  <Scissors className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" /> SPLICE
+                  <Scissors className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 mr-0.5 sm:mr-1 lg:mr-2" /> <span className="hidden sm:inline">SPLICE</span><span className="sm:hidden">SP</span>
                 </Button>
               </div>
 
               {/* Verification Mode Toggle */}
               {mode === "scan" && (
-                <div className="flex gap-2 sm:gap-3 bg-slate-100 dark:bg-slate-900 p-2 rounded-lg">
+                <div className="flex gap-1.5 sm:gap-2 lg:gap-3 bg-slate-100 dark:bg-slate-900 p-1.5 sm:p-2 lg:p-3 rounded-lg">
                   <Button
                     type="button"
                     variant={verificationMode === "manual" ? "default" : "outline"}
-                    className="flex-1 h-9 sm:h-10 font-semibold text-xs sm:text-sm"
+                    className="flex-1 h-7 sm:h-9 lg:h-10 font-semibold text-xs sm:text-sm lg:text-base"
                     onClick={() => setVerificationMode("manual")}
                     disabled={verificationInProgress}
                   >
-                    ⬜ MANUAL (Click to Verify)
+                    <span className="hidden sm:inline">⬜ MANUAL</span><span className="sm:hidden">⬜ Man</span>
                   </Button>
                   <Button
                     type="button"
                     variant={verificationMode === "auto" ? "default" : "outline"}
-                    className="flex-1 h-9 sm:h-10 font-semibold text-xs sm:text-sm bg-green-600 hover:bg-green-700 border-green-600"
+                    className="flex-1 h-7 sm:h-9 lg:h-10 font-semibold text-xs sm:text-sm lg:text-base bg-green-600 hover:bg-green-700 border-green-600"
                     onClick={() => setVerificationMode("auto")}
                     disabled={verificationInProgress}
                   >
-                    ⚡ AUTO (Auto Verify)
+                    <span className="hidden sm:inline">⚡ AUTO</span><span className="sm:hidden">⚡ Auto</span>
                   </Button>
                 </div>
               )}
@@ -607,10 +629,10 @@ export default function SessionActive() {
 
               {/* SCAN MODE - Responsive */}
               {mode === "scan" && (
-                <div className="bg-card border-2 border-primary/50 p-4 sm:p-6 lg:p-8 rounded-xl shadow-[0_0_20px_rgba(var(--primary),0.1)]">
-                  <form onSubmit={handleScanSubmit} className="flex flex-col items-center gap-3 sm:gap-4 lg:gap-6">
-                    <Label className="text-sm sm:text-lg lg:text-xl tracking-widest text-primary flex items-center gap-2 font-black uppercase text-center">
-                      <ScanLine className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
+                <div className="bg-card border-2 border-primary/50 p-2 sm:p-4 lg:p-8 rounded-xl shadow-[0_0_20px_rgba(var(--primary),0.1)]">
+                  <form onSubmit={handleScanSubmit} className="flex flex-col items-center gap-2 sm:gap-3 lg:gap-6">
+                    <Label className="text-xs sm:text-sm lg:text-lg xl:text-xl tracking-widest text-primary flex items-center gap-1 sm:gap-2 font-black uppercase text-center line-clamp-2">
+                      <ScanLine className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6 flex-shrink-0" />
                       {getScanStepLabel()}
                     </Label>
                     
@@ -628,15 +650,15 @@ export default function SessionActive() {
                       </div>
                     )}
 
-                    <div className="w-full flex gap-1 sm:gap-2 items-center justify-center">
+                    <div className="w-full flex gap-0.5 sm:gap-1 lg:gap-2 items-center justify-center min-h-12 sm:min-h-14 lg:min-h-16">
                       {scanStep === "spool" && !needsAlternateSelection && !pendingVerification && (
-                        <Button type="button" variant="ghost" size="icon" className="shrink-0 h-12 sm:h-14 lg:h-16 w-12 sm:w-14 lg:w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); setInternalIdInput(""); setCaseConverted(false); }}>
-                          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
+                        <Button type="button" variant="ghost" size="icon" className="shrink-0 h-10 sm:h-12 lg:h-14 xl:h-16 w-10 sm:w-12 lg:w-14 xl:w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); setInternalIdInput(""); setCaseConverted(false); }}>
+                          <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6" />
                         </Button>
                       )}
                       {needsAlternateSelection && (
-                        <Button type="button" variant="ghost" size="icon" className="shrink-0 h-12 sm:h-14 lg:h-16 w-12 sm:w-14 lg:w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); setInternalIdInput(""); setCaseConverted(false); }}>
-                          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
+                        <Button type="button" variant="ghost" size="icon" className="shrink-0 h-10 sm:h-12 lg:h-14 xl:h-16 w-10 sm:w-12 lg:w-14 xl:w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); setInternalIdInput(""); setCaseConverted(false); }}>
+                          <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6" />
                         </Button>
                       )}
                       {!pendingVerification && (
@@ -644,17 +666,17 @@ export default function SessionActive() {
                           ref={inputRef}
                           value={scanInput}
                           onChange={(e) => setScanInput(e.target.value)}
-                          className="flex-1 text-center text-2xl sm:text-3xl lg:text-4xl h-14 sm:h-16 lg:h-24 font-mono tracking-[0.2em] bg-background border-2 border-border focus-visible:border-primary rounded-lg shadow-inner text-xs sm:text-base"
-                          placeholder={needsAlternateSelection ? "Press ENTER..." : (scanStep === "feeder" ? "SCAN FEEDER NO..." : verificationMode === "auto" ? "SCAN MPN/ID (Auto Submit)" : "SCAN MPN/ID or ENTER")}
+                          className="flex-1 text-center text-lg sm:text-2xl lg:text-3xl xl:text-4xl h-10 sm:h-12 lg:h-16 xl:h-20 font-mono tracking-[0.15em] sm:tracking-[0.2em] bg-background border-2 border-border focus-visible:border-primary rounded-lg shadow-inner text-xs sm:text-sm"
+                          placeholder={needsAlternateSelection ? "Press ENTER..." : (scanStep === "feeder" ? "SCAN FEEDER..." : verificationMode === "auto" ? "SCAN MPN/ID" : "SCAN MPN/ID...")}
                           autoFocus
                           autoComplete="off"
                         />
                       )}
                     </div>
                     {scanStep === "spool" && !needsAlternateSelection && !pendingVerification && (
-                      <div className="w-full space-y-2">
-                        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 p-2 sm:p-3 rounded text-center">
-                          <p className="text-xs sm:text-sm text-muted-foreground">Feeder <strong className="text-foreground font-mono">{pendingFeeder}</strong> selected</p>
+                      <div className="w-full space-y-1 sm:space-y-2">
+                        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 p-1.5 sm:p-2 lg:p-3 rounded text-center">
+                          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">Feeder <strong className="text-foreground font-mono">{pendingFeeder}</strong> selected</p>
                         </div>
                         
                         <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 p-2 sm:p-3 rounded-lg">
@@ -677,17 +699,17 @@ export default function SessionActive() {
 
               {/* SPLICE MODE - Responsive */}
               {mode === "splice" && (
-                <div className="bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-400 p-4 sm:p-6 lg:p-8 rounded-xl">
-                  <form onSubmit={handleSpliceSubmit} className="flex flex-col items-center gap-3 sm:gap-4 lg:gap-6">
-                    <Label className="text-sm sm:text-lg lg:text-xl tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-2 font-black uppercase text-center px-2">
-                      <Scissors className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6" />
+                <div className="bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-400 p-2 sm:p-4 lg:p-8 rounded-xl">
+                  <form onSubmit={handleSpliceSubmit} className="flex flex-col items-center gap-2 sm:gap-3 lg:gap-6">
+                    <Label className="text-xs sm:text-sm lg:text-base xl:text-lg tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1 sm:gap-2 font-black uppercase text-center line-clamp-2">
+                      <Scissors className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6 flex-shrink-0" />
                       {spliceStepLabels[spliceStep]}
                     </Label>
                     <Input
                       ref={inputRef}
                       value={spliceInput}
                       onChange={(e) => setSpliceInput(e.target.value)}
-                      className="w-full max-w-2xl text-center text-2xl sm:text-3xl lg:text-4xl h-14 sm:h-16 lg:h-24 font-mono tracking-[0.2em] bg-background border-2 border-amber-300 focus-visible:border-amber-500 rounded-lg shadow-inner text-xs sm:text-base"
+                      className="w-full max-w-2xl text-center text-lg sm:text-2xl lg:text-3xl xl:text-4xl h-10 sm:h-12 lg:h-16 xl:h-20 font-mono tracking-[0.15em] sm:tracking-[0.2em] bg-background border-2 border-amber-300 focus-visible:border-amber-500 rounded-lg shadow-inner text-xs sm:text-sm"
                       placeholder={
                         spliceStep === "feeder" ? "SCAN NO..." :
                         spliceStep === "oldSpool" ? "SCAN OLD..." :
@@ -697,12 +719,12 @@ export default function SessionActive() {
                       autoComplete="off"
                     />
                     {spliceStep !== "feeder" && spliceStartTime && (
-                      <p className="text-xs sm:text-sm text-amber-700 dark:text-amber-400">
-                        Timer: <strong>{Math.round((Date.now() - spliceStartTime) / 1000)}s</strong>
+                      <p className="text-xs sm:text-sm text-amber-700 dark:text-amber-400 font-bold">
+                        ⏱️ {Math.round((Date.now() - spliceStartTime) / 1000)}s
                       </p>
                     )}
                     <Button type="button" variant="ghost" className="text-muted-foreground text-xs sm:text-sm" onClick={cancelSplice}>
-                      Cancel Splice
+                      Cancel
                     </Button>
                   </form>
                 </div>
@@ -711,31 +733,31 @@ export default function SessionActive() {
           )}
 
           {/* Feedback Area - Responsive */}
-          <div className="h-28 sm:h-32 lg:h-40 flex items-center justify-center shrink-0">
+          <div className="h-20 sm:h-24 lg:h-32 xl:h-40 flex items-center justify-center shrink-0">
             {lastScanResult ? (
-              <div className={`w-full h-full flex flex-col items-center justify-center rounded-xl border-2 shadow-lg transition-all ${
+              <div className={`w-full h-full flex flex-col items-center justify-center rounded-xl border-2 shadow-lg transition-all gap-1 sm:gap-2 p-2 sm:p-3 lg:p-4 ${
                 lastScanResult.status === "ok" ? "bg-green-50 dark:bg-green-950/30 border-green-500 text-green-700 dark:text-green-300" :
                 lastScanResult.status === "splice" ? "bg-amber-50 dark:bg-amber-950/30 border-amber-400 text-amber-600 dark:text-amber-400" :
                 lastScanResult.msg?.includes("ALREADY") || lastScanResult.msg?.includes("DUPLICATE") ? 
                   "bg-orange-50 dark:bg-orange-950/30 border-orange-400 text-orange-700 dark:text-orange-300" :
                 "bg-red-50 dark:bg-red-950/30 border-red-500 text-red-700 dark:text-red-300"
               }`}>
-                <div className="flex items-center gap-2 sm:gap-4">
-                  {lastScanResult.status === "ok" && <CheckCircle2 className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12" />}
-                  {lastScanResult.status === "splice" && <Scissors className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12" />}
+                <div className="flex items-center gap-1 sm:gap-2 lg:gap-3">
+                  {lastScanResult.status === "ok" && <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10" />}
+                  {lastScanResult.status === "splice" && <Scissors className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10" />}
                   {lastScanResult.status === "reject" && (
                     lastScanResult.msg?.includes("ALREADY") || lastScanResult.msg?.includes("DUPLICATE") ?
-                    <AlertCircle className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12" /> :
-                    <XCircle className="w-8 h-8 sm:w-10 sm:h-10 lg:w-12 lg:h-12" />
+                    <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10" /> :
+                    <XCircle className="w-6 h-6 sm:w-8 sm:h-8 lg:w-10 lg:h-10" />
                   )}
-                  <div className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-widest uppercase">
+                  <div className="text-lg sm:text-2xl lg:text-3xl xl:text-4xl font-black tracking-widest uppercase">
                     {lastScanResult.status === "splice" ? "SPLICED" :
                      lastScanResult.status === "ok" ? "PASS ✓" :
                      lastScanResult.msg?.includes("ALREADY") || lastScanResult.msg?.includes("DUPLICATE") ?
                      "⚠️ DUPLICATE" : "FAIL ✗"}
                   </div>
                 </div>
-                <div className="text-xs sm:text-sm lg:text-base mt-2 sm:mt-3 font-bold tracking-wide text-center px-2 line-clamp-3">
+                <div className="text-xs sm:text-sm lg:text-base font-bold tracking-wide text-center px-2 line-clamp-2">
                   {lastScanResult.msg}
                 </div>
               </div>
@@ -896,6 +918,35 @@ export default function SessionActive() {
         </div>
           )}
       </div>
+
+      {/* Notification Alert Dialog */}
+      <AlertDialog open={showNotification} onOpenChange={setShowNotification}>
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              {notificationType === "duplicate" && <AlertCircle className="w-5 h-5 text-orange-600" />}
+              {notificationType === "error" && <AlertCircle className="w-5 h-5 text-red-600" />}
+              {notificationType === "warning" && <AlertCircle className="w-5 h-5 text-yellow-600" />}
+              {notificationType === "duplicate" ? "⚠️ DUPLICATE DETECTED" : notificationType === "error" ? "❌ ERROR" : "⚡ WARNING"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm sm:text-base font-mono mt-4">
+              {notificationMessage}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6">
+            <AlertDialogAction 
+              onClick={() => setShowNotification(false)}
+              className={`w-full font-bold text-lg sm:text-xl py-6 ${
+                notificationType === "duplicate" ? "bg-orange-600 hover:bg-orange-700" : 
+                notificationType === "error" ? "bg-red-600 hover:bg-red-700" : 
+                "bg-blue-600 hover:bg-blue-700"
+              }`}
+            >
+              ✓ OK
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

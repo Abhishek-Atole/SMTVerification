@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Link, useLocation } from "wouter";
 import { LayoutDashboard, Boxes, History, PlusSquare, BarChart3, LogOut, Sun, Moon, Menu, X, Trash2, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";

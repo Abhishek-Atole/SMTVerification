@@ -18,9 +18,28 @@ export const bomItemsTable = pgTable(
     bomId: integer("bom_id")
       .notNull()
       .references(() => bomsTable.id, { onDelete: "cascade" }),
+    // CSV Fields - Required
+    srNo: text("sr_no"),
     feederNumber: text("feeder_number").notNull(),
-    feederId: integer("feeder_id"),
+    itemName: text("item_name").notNull(),
+    rdeplyPartNo: text("rdeply_part_no"),
+    referenceDesignator: text("reference_designator"),
+    
+    // CSV Fields - Optional
+    values: text("values"),
+    packageDescription: text("package_description"),
+    dnpParts: boolean("dnp_parts").default(false),
+    supplier1: text("supplier_1"),
+    partNo1: text("part_no_1"),
+    supplier2: text("supplier_2"),
+    partNo2: text("part_no_2"),
+    supplier3: text("supplier_3"),
+    partNo3: text("part_no_3"),
+    remarks: text("remarks"),
+    
+    // Legacy Fields (for backward compatibility)
     partNumber: text("part_number").notNull(),
+    feederId: integer("feeder_id"),
     componentId: integer("component_id"),
     mpn: text("mpn"),
     manufacturer: text("manufacturer"),
@@ -33,6 +52,7 @@ export const bomItemsTable = pgTable(
     cost: numeric("cost", { precision: 10, scale: 4 }),
     isAlternate: boolean("is_alternate").default(false),
     parentItemId: integer("parent_item_id") as any,
+    internalId: text("internal_id"), // NEW: Internal ID for verification (optional)
     deletedAt: timestamp("deleted_at"),
     deletedBy: text("deleted_by"),
   } as any,

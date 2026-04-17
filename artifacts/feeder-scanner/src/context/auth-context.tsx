@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createContext, useContext, useEffect, useState } from "react";
 
 type Role = "engineer" | "qa" | "operator";

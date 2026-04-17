@@ -79,7 +79,7 @@ app.get("/api/test-db", async (req, res) => {
 });
 
 // Handle common browser requests silently (no 404 logs)
-app.use((req, res, next) => {
+app.use((req, res, next): void => {
   const url = req.url;
   // Silently handle these common requests
   if (
@@ -88,7 +88,8 @@ app.use((req, res, next) => {
     url.startsWith("/.well-known/") ||
     url.startsWith("/apple-touch-icon")
   ) {
-    return res.status(204).end();
+    res.status(204).end();
+    return;
   }
   next();
 });

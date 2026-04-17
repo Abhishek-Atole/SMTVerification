@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>INTBUZ BOM Editor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header .meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        
+        .meta-item {
+            background: rgba(255,255,255,0.1);
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .meta-label {
+            font-weight: 600;
+            opacity: 0.8;
+        }
+        
+        .meta-value {
+            margin-top: 5px;
+            font-size: 13px;
+        }
+        
+        .controls {
+            padding: 20px 30px;
+            background: #fafafa;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        button {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        button.secondary {
+            background: #6c757d;
+        }
+        
+        button.secondary:hover {
+            background: #5a6268;
+        }
+        
+        button.danger {
+            background: #dc3545;
+        }
+        
+        button.danger:hover {
+            background: #c82333;
+        }
+        
+        button.success {
+            background: #28a745;
+        }
+        
+        button.success:hover {
+            background: #218838;
+        }
+        
+        .search-box {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .stat-box {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+            text-transform: uppercase;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            padding: 20px 30px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        
+        table thead {
+            background: #f8f9fa;
+            border-bottom: 2px solid #667eea;
+        }
+        
+        table th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        table tbody tr {
+            border-bottom: 1px solid #eee;
+            transition: background 0.2s;
+        }
+        
+        table tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        table td {
+            padding: 12px 15px;
+        }
+        
+        table input {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        
+        table input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .action-buttons button {
+            padding: 6px 12px;
+            font-size: 12px;
+            margin: 0;
+        }
+        
+        .row-number {
+            background: #f0f0f0;
+            font-weight: 600;
+            color: #667eea;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .modal-content h2 {
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+        }
+        
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+        
+        .message {
+            padding: 15px 30px;
+            margin: 20px 30px 0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .message.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .message.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>INTBUZ BOM Editor</h1>
+            <div class="meta">
+                <div class="meta-item">
+                    <div class="meta-label">BOM Number</div>
+                    <div class="meta-value" id="bomNumber">RD/BOM/INTBUZ/R1.1</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Project</div>
+                    <div class="meta-value" id="bomProject">INTBUZ</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Customer</div>
+                    <div class="meta-value" id="bomCustomer">Mahindra Last Mile Mobility</div>
+                </div>
+                <div class="meta-item">
+                    <div class="meta-label">Revision</div>
+                    <div class="meta-value" id="bomRevision">R00/ 06-01-2026</div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="message"></div>
+        
+        <div class="controls">
+            <input type="text" class="search-box" id="searchBox" placeholder="Search components...">
+            <button onclick="addNewComponent()">+ Add Component</button>
+            <button class="secondary" onclick="loadBOM()">Reload</button>
+            <button class="success" onclick="saveBOM()">💾 Save Changes</button>
+            <button class="secondary" onclick="exportJSON()">📥 Export JSON</button>
+            <button class="secondary" onclick="document.getElementById('fileInput').click()">📤 Import CSV/Excel</button>
+            <input type="file" id="fileInput" style="display:none;" accept=".csv,.xlsx,.xls" onchange="handleFileImport(event)">
+        </div>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-number" id="totalItems">0</div>
+                <div class="stat-label">Total Items</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number" id="totalCapacitors">0</div>
+                <div class="stat-label">Capacitors</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number" id="totalResistors">0</div>
+                <div class="stat-label">Resistors</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number" id="totalICs">0</div>
+                <div class="stat-label">ICs</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number" id="totalFeeders">0</div>
+                <div class="stat-label">Feeders</div>
+            </div>
+        </div>
+        
+        <div class="table-wrapper">
+            <table id="bomTable">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">SR</th>
+                        <th style="width: 100px;">Feeder</th>
+                        <th style="width: 120px;">Item Name</th>
+                        <th style="width: 150px;">Reference</th>
+                        <th style="width: 120px;">Value</th>
+                        <th style="width: 80px;">Package</th>
+                        <th style="width: 100px;">Qty</th>
+                        <th style="width: 150px;">Supplier 1</th>
+                        <th style="width: 180px;">Part No 1</th>
+                        <th style="width: 150px;">Supplier 2</th>
+                        <th style="width: 100px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                </tbody>
+            </table>
+            <div id="noData" class="no-data" style="display:none;">
+                No BOM data loaded. Click "Reload" to load the BOM file.
+            </div>
+        </div>
+    </div>
+    
+    <!-- Add/Edit Modal -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Add New Component</h2>
+            <form id="editForm">
+                <div class="form-group">
+                    <label>SR Number *</label>
+                    <input type="number" id="editSrNo" required>
+                </div>
+                <div class="form-group">
+                    <label>Feeder Number</label>
+                    <input type="text" id="editFeeder" placeholder="e.g., YSM-001">
+                </div>
+                <div class="form-group">
+                    <label>Item Name *</label>
+                    <input type="text" id="editItemName" placeholder="e.g., CAPACITOR" required>
+                </div>
+                <div class="form-group">
+                    <label>Reference</label>
+                    <input type="text" id="editReference" placeholder="e.g., C1, C2">
+                </div>
+                <div class="form-group">
+                    <label>Value</label>
+                    <input type="text" id="editValue" placeholder="e.g., 4.7nF/50V">
+                </div>
+                <div class="form-group">
+                    <label>Package</label>
+                    <input type="text" id="editPackage" placeholder="e.g., 0603">
+                </div>
+                <div class="form-group">
+                    <label>Quantity</label>
+                    <input type="number" id="editQty" value="1">
+                </div>
+                <div class="form-group">
+                    <label>RDEPL Part No</label>
+                    <input type="text" id="editRdeplPartNo">
+                </div>
+                <div class="form-group">
+                    <label>Supplier 1</label>
+                    <input type="text" id="editSupplier1">
+                </div>
+                <div class="form-group">
+                    <label>Part No 1</label>
+                    <input type="text" id="editPartNo1">
+                </div>
+                <div class="form-group">
+                    <label>Supplier 2</label>
+                    <input type="text" id="editSupplier2">
+                </div>
+                <div class="form-group">
+                    <label>Part No 2</label>
+                    <input type="text" id="editPartNo2">
+                </div>
+                <div class="form-group">
+                    <label>Remarks</label>
+                    <textarea id="editRemarks"></textarea>
+                </div>
+                <div class="modal-buttons">
+                    <button type="button" class="secondary" onclick="closeModal()">Cancel</button>
+                    <button type="button" class="success" onclick="saveComponent()">Save Component</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.min.js"></script>
+    <script>
+        let bomData = null;
+        let editingIndex = null;
+
+        // Column mapping for imports
+        const COLUMN_MAPPINGS = {
+            'sr ?no|sr no|sr_no|serial ?number|item ?no': 'sr_no',
+            'feeder ?(?:number|no)?|feeder|position': 'feeder_number',
+            'item ?(?:name|type|description)|component ?(?:name|type)|type': 'item_name',
+            'rdepl ?part ?no|rdepl|internal ?part|part ?number ?\\(internal\\)': 'rdepl_part_no',
+            'qty|quantity|required ?qty|required ?quantity|req ?qty': 'required_qty',
+            'reference|ref|designator|pcb ?ref': 'reference',
+            'value|values|component ?value|spec': 'values',
+            'package|pkg|package ?type|component ?package': 'package',
+            'dnp|do ?not ?populate|dnp ?parts': 'dnp_parts',
+            'supplier ?1|make\\/supplier ?1|supplier|make': 'supplier_1',
+            'part ?no ?1|part ?number ?1|part no|manufacturer ?part': 'part_no_1',
+            'supplier ?2|make\\/supplier ?2|supplier ?2': 'supplier_2',
+            'part ?no ?2|part ?number ?2': 'part_no_2',
+            'supplier ?3|make\\/supplier ?3|supplier ?3': 'supplier_3',
+            'part ?no ?3|part ?number ?3': 'part_no_3',
+            'remarks|notes|comment': 'remarks'
+        };
+
+        function normalizeColumnName(name) {
+            if (!name) return '';
+            return name.toLowerCase().trim();
+        }
+
+        function findMappedColumn(headerName) {
+            const normalized = normalizeColumnName(headerName);
+            for (const [patterns, fieldName] of Object.entries(COLUMN_MAPPINGS)) {
+                const patternArray = patterns.split('|');
+                for (const pattern of patternArray) {
+                    const regex = new RegExp(`^${pattern}$`);
+                    if (regex.test(normalized)) {
+                        return fieldName;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            if (lines.length < 2) {
+                throw new Error('CSV file must have at least a header row and one data row');
+            }
+
+            const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+            const columnMap = {};
+            const requiredFields = [];
+
+            // Map columns
+            for (let i = 0; i < headers.length; i++) {
+                const mapped = findMappedColumn(headers[i]);
+                if (mapped) {
+                    columnMap[i] = mapped;
+                }
+            }
+
+            if (Object.keys(columnMap).length === 0) {
+                throw new Error('No recognizable columns found. Required: SR NO, Item Name, Feeder, Reference, Value, Package, Qty, Suppliers, Part Numbers');
+            }
+
+            const items = [];
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+
+                const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+                const item = {
+                    sr_no: 0,
+                    feeder_number: '',
+                    item_name: '',
+                    rdepl_part_no: '',
+                    required_qty: 0,
+                    reference: '',
+                    values: '',
+                    package: '',
+                    dnp_parts: '',
+                    supplier_1: '',
+                    part_no_1: '',
+                    supplier_2: '',
+                    part_no_2: '',
+                    supplier_3: '',
+                    part_no_3: '',
+                    remarks: ''
+                };
+
+                for (const [colIdx, fieldName] of Object.entries(columnMap)) {
+                    const value = values[colIdx] || '';
+                    if (fieldName === 'sr_no' || fieldName === 'required_qty') {
+                        item[fieldName] = parseInt(value) || 0;
+                    } else {
+                        item[fieldName] = value;
+                    }
+                }
+
+                if (item.item_name) {
+                    items.push(item);
+                }
+            }
+
+            if (items.length === 0) {
+                throw new Error('No valid data rows found in CSV');
+            }
+
+            return items;
+        }
+
+        async function parseExcel(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        const firstSheet = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheet];
+
+                        // Get the range to determine actual data
+                        const range = XLSX.utils.decode_range(worksheet['!ref']);
+                        const headers = [];
+                        const rows = [];
+
+                        // Extract headers
+                        for (let col = range.s.c; col <= range.e.c; col++) {
+                            const cell = worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: col })];
+                            headers.push(cell ? String(cell.v) : '');
+                        }
+
+                        // Extract data rows
+                        for (let row = range.s.r + 1; row <= range.e.r; row++) {
+                            const rowData = [];
+                            for (let col = range.s.c; col <= range.e.c; col++) {
+                                const cell = worksheet[XLSX.utils.encode_cell({ r: row, c: col })];
+                                rowData.push(cell ? String(cell.v) : '');
+                            }
+                            rows.push(rowData);
+                        }
+
+                        const columnMap = {};
+                        for (let i = 0; i < headers.length; i++) {
+                            const mapped = findMappedColumn(headers[i]);
+                            if (mapped) {
+                                columnMap[i] = mapped;
+                            }
+                        }
+
+                        if (Object.keys(columnMap).length === 0) {
+                            throw new Error('No recognizable columns found. Required: SR NO, Item Name, Feeder, Reference, Value, Package, Qty, Suppliers, Part Numbers');
+                        }
+
+                        const items = [];
+                        for (const rowData of rows) {
+                            const item = {
+                                sr_no: 0,
+                                feeder_number: '',
+                                item_name: '',
+                                rdepl_part_no: '',
+                                required_qty: 0,
+                                reference: '',
+                                values: '',
+                                package: '',
+                                dnp_parts: '',
+                                supplier_1: '',
+                                part_no_1: '',
+                                supplier_2: '',
+                                part_no_2: '',
+                                supplier_3: '',
+                                part_no_3: '',
+                                remarks: ''
+                            };
+
+                            for (const [colIdx, fieldName] of Object.entries(columnMap)) {
+                                const value = rowData[colIdx] || '';
+                                if (fieldName === 'sr_no' || fieldName === 'required_qty') {
+                                    item[fieldName] = parseInt(value) || 0;
+                                } else {
+                                    item[fieldName] = value;
+                                }
+                            }
+
+                            if (item.item_name) {
+                                items.push(item);
+                            }
+                        }
+
+                        if (items.length === 0) {
+                            throw new Error('No valid data rows found in Excel file');
+                        }
+
+                        resolve(items);
+                    } catch (error) {
+                        reject(new Error('Excel parsing error: ' + error.message));
+                    }
+                };
+                reader.onerror = () => reject(new Error('Failed to read file'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        async function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            try {
+                showMessage('Importing file...', 'success');
+                let items = [];
+
+                if (file.name.endsWith('.csv')) {
+                    const text = await file.text();
+                    items = parseCSV(text);
+                } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                    items = await parseExcel(file);
+                } else {
+                    throw new Error('Unsupported file format. Please use CSV, XLSX, or XLS');
+                }
+
+                if (items.length === 0) {
+                    throw new Error('No valid data found in file');
+                }
+
+                // Show import preview/confirmation
+                const importCount = items.length;
+                const confirmImport = confirm(
+                    `Found ${importCount} components to import.\n\n` +
+                    `This will REPLACE your current BOM with data from the file.\n\n` +
+                    `Columns detected:\n` +
+                    `- SR Numbers: ${items[0].sr_no ? '✓' : '✗'}\n` +
+                    `- Item Names: ${items[0].item_name ? '✓' : '✗'}\n` +
+                    `- Feeders: ${items[0].feeder_number ? '✓' : '✗'}\n` +
+                    `- References: ${items[0].reference ? '✓' : '✗'}\n` +
+                    `- Values: ${items[0].values ? '✓' : '✗'}\n` +
+                    `- Packages: ${items[0].package ? '✓' : '✗'}\n` +
+                    `- Quantities: ${items[0].required_qty > 0 ? '✓' : '✗'}\n` +
+                    `- Suppliers: ${items[0].supplier_1 ? '✓' : '✗'}\n\n` +
+                    `Click OK to proceed with import`
+                );
+
+                if (!confirmImport) {
+                    showMessage('Import cancelled', 'success');
+                    document.getElementById('fileInput').value = '';
+                    return;
+                }
+
+                // Replace BOM
+                bomData.bom_items = items;
+                updateStats();
+                renderTable();
+
+                showMessage(`✅ Successfully imported ${importCount} components from ${file.name}`, 'success');
+                document.getElementById('fileInput').value = '';
+            } catch (error) {
+                showMessage('❌ Import error: ' + error.message, 'error');
+                document.getElementById('fileInput').value = '';
+            }
+        }
+
+        async function loadBOM() {
+            try {
+                const response = await fetch('bom-intbuz-r1.1.json');
+                bomData = await response.json();
+                renderTable();
+                updateStats();
+                showMessage('BOM loaded successfully', 'success');
+            } catch (error) {
+                showMessage('Error loading BOM: ' + error.message, 'error');
+            }
+        }
+
+        function renderTable(filter = '') {
+            if (!bomData) {
+                document.getElementById('noData').style.display = 'block';
+                document.getElementById('bomTable').style.display = 'none';
+                return;
+            }
+
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            bomData.bom_items
+                .filter(item => {
+                    const searchLower = filter.toLowerCase();
+                    return !filter || 
+                        item.item_name.toLowerCase().includes(searchLower) ||
+                        item.feeder_number.toLowerCase().includes(searchLower) ||
+                        item.reference.toLowerCase().includes(searchLower) ||
+                        item.values.toLowerCase().includes(searchLower);
+                })
+                .forEach((item, idx) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="row-number">${item.sr_no}</td>
+                        <td><input type="text" value="${item.feeder_number}" onchange="updateField(${idx}, 'feeder_number', this.value)"></td>
+                        <td><input type="text" value="${item.item_name}" onchange="updateField(${idx}, 'item_name', this.value)"></td>
+                        <td><input type="text" value="${item.reference}" onchange="updateField(${idx}, 'reference', this.value)"></td>
+                        <td><input type="text" value="${item.values}" onchange="updateField(${idx}, 'values', this.value)"></td>
+                        <td><input type="text" value="${item.package}" onchange="updateField(${idx}, 'package', this.value)"></td>
+                        <td><input type="number" value="${item.required_qty}" onchange="updateField(${idx}, 'required_qty', parseInt(this.value))"></td>
+                        <td><input type="text" value="${item.supplier_1}" onchange="updateField(${idx}, 'supplier_1', this.value)"></td>
+                        <td><input type="text" value="${item.part_no_1}" onchange="updateField(${idx}, 'part_no_1', this.value)"></td>
+                        <td><input type="text" value="${item.supplier_2}" onchange="updateField(${idx}, 'supplier_2', this.value)"></td>
+                        <td class="action-buttons">
+                            <button onclick="editComponent(${idx})">Edit</button>
+                            <button class="danger" onclick="deleteComponent(${idx})">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+            document.getElementById('noData').style.display = 'none';
+            document.getElementById('bomTable').style.display = 'table';
+        }
+
+        function updateStats() {
+            if (!bomData) return;
+            
+            document.getElementById('totalItems').textContent = bomData.summary.total_items;
+            document.getElementById('totalCapacitors').textContent = bomData.summary.components.capacitors;
+            document.getElementById('totalResistors').textContent = bomData.summary.components.resistors;
+            document.getElementById('totalICs').textContent = bomData.summary.components.ics;
+            document.getElementById('totalFeeders').textContent = bomData.summary.feeders.length;
+        }
+
+        function updateField(idx, field, value) {
+            if (bomData && idx < bomData.bom_items.length) {
+                bomData.bom_items[idx][field] = value;
+            }
+        }
+
+        function editComponent(idx) {
+            editingIndex = idx;
+            const item = bomData.bom_items[idx];
+            
+            document.getElementById('modalTitle').textContent = 'Edit Component';
+            document.getElementById('editSrNo').value = item.sr_no;
+            document.getElementById('editFeeder').value = item.feeder_number;
+            document.getElementById('editItemName').value = item.item_name;
+            document.getElementById('editReference').value = item.reference;
+            document.getElementById('editValue').value = item.values;
+            document.getElementById('editPackage').value = item.package;
+            document.getElementById('editQty').value = item.required_qty;
+            document.getElementById('editRdeplPartNo').value = item.rdepl_part_no;
+            document.getElementById('editSupplier1').value = item.supplier_1;
+            document.getElementById('editPartNo1').value = item.part_no_1;
+            document.getElementById('editSupplier2').value = item.supplier_2;
+            document.getElementById('editPartNo2').value = item.part_no_2;
+            document.getElementById('editRemarks').value = item.remarks;
+            
+            document.getElementById('editModal').classList.add('active');
+        }
+
+        function addNewComponent() {
+            editingIndex = null;
+            
+            document.getElementById('modalTitle').textContent = 'Add New Component';
+            document.getElementById('editForm').reset();
+            document.getElementById('editSrNo').value = (bomData.bom_items.length > 0 ? Math.max(...bomData.bom_items.map(i => i.sr_no)) + 1 : 1);
+            
+            document.getElementById('editModal').classList.add('active');
+        }
+
+        function saveComponent() {
+            const component = {
+                sr_no: parseInt(document.getElementById('editSrNo').value),
+                feeder_number: document.getElementById('editFeeder').value,
+                item_name: document.getElementById('editItemName').value,
+                reference: document.getElementById('editReference').value,
+                values: document.getElementById('editValue').value,
+                package: document.getElementById('editPackage').value,
+                required_qty: parseInt(document.getElementById('editQty').value) || 0,
+                rdepl_part_no: document.getElementById('editRdeplPartNo').value,
+                dnp_parts: '',
+                supplier_1: document.getElementById('editSupplier1').value,
+                part_no_1: document.getElementById('editPartNo1').value,
+                supplier_2: document.getElementById('editSupplier2').value,
+                part_no_2: document.getElementById('editPartNo2').value,
+                supplier_3: '',
+                part_no_3: '',
+                remarks: document.getElementById('editRemarks').value
+            };
+
+            if (editingIndex !== null) {
+                bomData.bom_items[editingIndex] = component;
+            } else {
+                bomData.bom_items.push(component);
+            }
+
+            updateStats();
+            renderTable();
+            closeModal();
+            showMessage('Component saved successfully', 'success');
+        }
+
+        function deleteComponent(idx) {
+            if (confirm('Are you sure you want to delete this component?')) {
+                bomData.bom_items.splice(idx, 1);
+                updateStats();
+                renderTable();
+                showMessage('Component deleted', 'success');
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('editModal').classList.remove('active');
+        }
+
+        function saveBOM() {
+            // Update summary
+            bomData.summary.total_items = bomData.bom_items.length;
+            bomData.summary.components = {
+                capacitors: bomData.bom_items.filter(i => i.item_name === 'CAPACITOR').length,
+                resistors: bomData.bom_items.filter(i => i.item_name === 'RESISTOR').length,
+                ics: bomData.bom_items.filter(i => i.item_name.includes('IC')).length,
+                pcb: bomData.bom_items.filter(i => i.item_name === 'PCB').length
+            };
+
+            const json = JSON.stringify(bomData, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'bom-intbuz-r1.1.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showMessage('BOM exported. Download the file and replace the original.', 'success');
+        }
+
+        function exportJSON() {
+            saveBOM();
+        }
+
+        function showMessage(text, type) {
+            const msg = document.getElementById('message');
+            msg.textContent = text;
+            msg.className = 'message ' + type;
+            msg.style.display = 'block';
+            setTimeout(() => {
+                msg.style.display = 'none';
+            }, 3000);
+        }
+
+        document.getElementById('searchBox').addEventListener('input', (e) => {
+            renderTable(e.target.value);
+        });
+
+        // Close modal on outside click
+        document.getElementById('editModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('editModal')) {
+                closeModal();
+            }
+        });
+
+        // Load BOM on page load
+        loadBOM();
+    </script>
+</body>
+</html>

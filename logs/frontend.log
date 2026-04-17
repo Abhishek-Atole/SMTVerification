@@ -2,8 +2,19 @@
 > @workspace/feeder-scanner@0.0.0 dev
 > vite --config vite.config.ts --host 0.0.0.0
 
+Port 5173 is in use, trying another one...
 
-  VITE v7.3.1  ready in 334 ms
+  VITE v7.3.1  ready in 527 ms
 
-  ➜  Local:   http://localhost:5173/
-  ➜  Network: http://192.168.0.106:5173/
+  ➜  Local:   http://localhost:5174/
+1:10:44 AM [vite] (client) hmr update /src/pages/session-active.tsx, /src/index.css
+1:11:03 AM [vite] (client) hmr update /src/pages/session-active.tsx, /src/index.css
+1:12:01 AM [vite] (client) hmr update /src/pages/session-active.tsx, /src/index.css
+1:12:08 AM [vite] (client) hmr update /src/pages/session-active.tsx, /src/index.css
+1:12:48 AM [vite] (client) hmr update /src/pages/session-active.tsx, /src/index.css
+1:13:41 AM [vite] (client) hmr update /src/pages/session-active.tsx, /src/index.css
+1:14:22 AM [vite] (client) hmr update /src/pages/session-active.tsx, /src/index.css
+1:15:10 AM [vite] (client) hmr update /src/pages/session-active.tsx, /src/index.css
+1:15:11 AM [vite] (client) hmr update /src/pages/session-active.tsx, /src/index.css
+1:15:14 AM [vite] (client) hmr update /src/pages/session-active.tsx, /src/index.css
+1:15:33 AM [vite] (client) hmr update /src/pages/session-active.tsx, /src/index.css

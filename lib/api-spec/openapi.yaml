@@ -770,9 +770,25 @@ components:
       properties:
         feederNumber:
           type: string
+          description: "Feeder number (e.g., YSM-020). Auto-converted to UPPERCASE."
+        mpnOrInternalId:
+          type: string
+          description: "MPN or Internal ID. Optional in manual mode, required for auto validation in auto mode."
+        internalIdType:
+          type: string
+          enum: [mpn, internal_id]
+          description: "Type of ID scanned: 'mpn' for Part Number, 'internal_id' for alternative ID"
+        verificationMode:
+          type: string
+          enum: [manual, auto]
+          description: "manual=requires ENTER after each field + VERIFY button, auto=auto-submits after each field"
         spoolBarcode:
           type: string
-      required: [feederNumber]
+          description: "[LEGACY] Spool barcode"
+        selectedItemId:
+          type: integer
+          description: "[OPTIONAL] BOM item ID if alternate selection needed"
+      required: [feederNumber, verificationMode]
 
     ScanResult:
       type: object
@@ -782,8 +798,31 @@ components:
         status:
           type: string
           enum: [ok, reject]
+          description: "Scan status: ok (passed validation), reject (failed or duplicate)"
         message:
           type: string
+          description: "Detailed message with validation results"
+        isDuplicate:
+          type: boolean
+          description: "True if this is a duplicate feeder entry in session"
+        validationDetails:
+          type: object
+          description: "Detailed validation information"
+          properties:
+            isDuplicate:
+              type: boolean
+            feederNumberMatched:
+              type: boolean
+              description: "Feeder number found in BOM"
+            mpnMatched:
+              type: boolean
+              description: "MPN matched BOM expected component"
+            internalIdMatched:
+              type: boolean
+              description: "Internal ID matched (if provided)"
+            caseConverted:
+              type: boolean
+              description: "True if input was converted from lowercase to UPPERCASE"
       required: [scan, status, message]
 
     SessionSummary:

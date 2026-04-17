@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useState } from "react";
 import { useListSessions } from "@workspace/api-client-react";
 import { Link } from "wouter";

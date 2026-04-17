@@ -85,7 +85,7 @@ router.get("/traceability/sessions-for-reel/:reelId", async (req, res) => {
     const { reelId } = req.params;
     const sessions = await TraceabilityService.findSessionsForReel(reelId);
 
-    return res.json({
+    res.json({
       reelId,
       count: sessions.length,
       sessions,
@@ -105,7 +105,7 @@ router.get("/traceability/sessions-for-lot/:lotNumber", async (req, res) => {
     const { lotNumber } = req.params;
     const sessions = await TraceabilityService.findSessionsForLot(lotNumber);
 
-    return res.json({
+    res.json({
       lotNumber,
       count: sessions.length,
       sessions,
@@ -125,7 +125,7 @@ router.get("/traceability/alternate-usage", async (req, res) => {
     const limit = req.query.limit ? Number(req.query.limit) : 100;
     const report = await TraceabilityService.getAlternateUsageReport(limit);
 
-    return res.json({
+    res.json({
       count: report.length,
       limit,
       report,

@@ -59,21 +59,66 @@ router.post("/bom", async (req, res) => {
 router.get("/bom/:bomId", async (req, res) => {
   try {
     const bomId = Number(req.params.bomId);
-    const [bom] = await db
+    const boms = await db
       .select()
       .from(bomsTable)
-      .where(eq(bomsTable.id, bomId))
-      .then((results) => results.filter((b) => !b.deletedAt));
+      .where(eq(bomsTable.id, bomId));
+    
+    const bom = boms.find((b: any) => !b.deletedAt);
+    
     if (!bom) {
       return res.status(404).json({ error: "BOM not found" });
-      return;
     }
+    
     const items = await db
       .select()
       .from(bomItemsTable)
-      .where(eq(bomItemsTable.bomId, bomId))
-      .then((results) => results.filter((i) => !i.deletedAt));
-    return res.json({ ...bom, items });
+      .where(eq(bomItemsTable.bomId, bomId));
+    
+    const filteredItems = items.filter((i: any) => !i.deletedAt);
+    
+    // Manually serialize to avoid issues with Decimal types
+    const serializedItems = filteredItems.map((item: any) => ({
+      id: item.id,
+      bomId: item.bomId,
+      srNo: item.srNo,
+      feederNumber: item.feederNumber,
+      itemName: item.itemName,
+      rdeplyPartNo: item.rdeplyPartNo,
+      referenceDesignator: item.referenceDesignator,
+      values: item.values,
+      packageDescription: item.packageDescription,
+      dnpParts: item.dnpParts,
+      supplier1: item.supplier1,
+      partNo1: item.partNo1,
+      supplier2: item.supplier2,
+      partNo2: item.partNo2,
+      supplier3: item.supplier3,
+      partNo3: item.partNo3,
+      remarks: item.remarks,
+      partNumber: item.partNumber,
+      feederId: item.feederId,
+      componentId: item.componentId,
+      mpn: item.mpn,
+      manufacturer: item.manufacturer,
+      packageSize: item.packageSize,
+      expectedMpn: item.expectedMpn,
+      description: item.description,
+      location: item.location,
+      quantity: item.quantity,
+      leadTime: item.leadTime,
+      cost: item.cost ? String(item.cost) : null,
+      isAlternate: item.isAlternate,
+      parentItemId: item.parentItemId,
+    }));
+    
+    return res.json({
+      id: bom.id,
+      name: bom.name,
+      description: bom.description,
+      createdAt: bom.createdAt,
+      items: serializedItems,
+    });
   } catch (err) {
     req.log.error(err);
     return res.status(500).json({ error: "Failed to get BOM" });
@@ -143,7 +188,24 @@ router.post("/bom/:bomId/items", async (req, res) => {
   try {
     const bomId = Number(req.params.bomId);
     const {
+      // CSV Fields
+      srNo,
       feederNumber,
+      itemName,
+      rdeplyPartNo,
+      referenceDesignator,
+      values,
+      packageDescription,
+      dnpParts,
+      supplier1,
+      partNo1,
+      supplier2,
+      partNo2,
+      supplier3,
+      partNo3,
+      remarks,
+      
+      // Legacy Fields
       partNumber,
       mpn,
       manufacturer,
@@ -157,28 +219,47 @@ router.post("/bom/:bomId/items", async (req, res) => {
       parentItemId,
     } = req.body;
 
-    if (!feederNumber || !partNumber) {
-      return res.status(400).json({ error: "feederNumber and partNumber are required" });
+    // Require at least feederNumber and either itemName or partNumber
+    if (!feederNumber || (!itemName && !partNumber)) {
+      return res.status(400).json({ error: "feederNumber and (itemName or partNumber) are required" });
     }
 
     // Validate if this is an alternate, parentItemId must exist
     if (isAlternate && parentItemId) {
-      const [parent] = await db.select().from(bomItemsTable).where(eq(bomItemsTable.id, parentItemId));
+      const parents = await db.select().from(bomItemsTable).where(eq(bomItemsTable.id, parentItemId));
+      const parent = parents[0];
       if (!parent || parent.bomId !== bomId) {
         return res.status(400).json({ error: "Parent item not found in this BOM" });
       }
     }
 
-    const [item] = await db
+    const itemsResult = await db
       .insert(bomItemsTable)
       .values({
         bomId,
+        // CSV Fields
+        srNo: srNo || null,
         feederNumber,
-        partNumber,
+        itemName: itemName || null,
+        rdeplyPartNo: rdeplyPartNo || null,
+        referenceDesignator: referenceDesignator || null,
+        values: values || null,
+        packageDescription: packageDescription || null,
+        dnpParts: dnpParts ?? false,
+        supplier1: supplier1 || null,
+        partNo1: partNo1 || null,
+        supplier2: supplier2 || null,
+        partNo2: partNo2 || null,
+        supplier3: supplier3 || null,
+        partNo3: partNo3 || null,
+        remarks: remarks || null,
+        
+        // Legacy Fields
+        partNumber: partNumber || itemName || "",
         mpn: mpn || null,
-        manufacturer: manufacturer || null,
-        packageSize: packageSize || null,
-        description,
+        manufacturer: manufacturer || supplier1 || null,
+        packageSize: packageSize || packageDescription || null,
+        description: description || itemName || null,
         location,
         quantity: quantity ?? 1,
         leadTime: leadTime || null,
@@ -186,7 +267,9 @@ router.post("/bom/:bomId/items", async (req, res) => {
         isAlternate: isAlternate ?? false,
         parentItemId: parentItemId || null,
       })
-      .returning();
+      .returning() as any[];
+    
+    const item = itemsResult[0];
 
     return res.status(201).json(item);
   } catch (err) {
@@ -200,7 +283,24 @@ router.patch("/bom/:bomId/items/:itemId", async (req, res) => {
     const itemId = Number(req.params.itemId);
     const bomId = Number(req.params.bomId);
     const {
+      // CSV Fields
+      srNo,
       feederNumber,
+      itemName,
+      rdeplyPartNo,
+      referenceDesignator,
+      values,
+      packageDescription,
+      dnpParts,
+      supplier1,
+      partNo1,
+      supplier2,
+      partNo2,
+      supplier3,
+      partNo3,
+      remarks,
+      
+      // Legacy Fields
       partNumber,
       mpn,
       manufacturer,
@@ -214,20 +314,41 @@ router.patch("/bom/:bomId/items/:itemId", async (req, res) => {
       parentItemId,
     } = req.body;
 
-    const [existingItem] = await db.select().from(bomItemsTable).where(eq(bomItemsTable.id, itemId));
+    const existingItems = await db.select().from(bomItemsTable).where(eq(bomItemsTable.id, itemId));
+    const existingItem = existingItems[0];
     if (!existingItem || existingItem.bomId !== bomId) {
       return res.status(404).json({ error: "Item not found" });
     }
 
     // Validate if this is an alternate, parentItemId must exist
     if (isAlternate !== undefined && isAlternate && parentItemId) {
-      const [parent] = await db.select().from(bomItemsTable).where(eq(bomItemsTable.id, parentItemId));
+      const parents = await db.select().from(bomItemsTable).where(eq(bomItemsTable.id, parentItemId));
+      const parent = parents[0];
       if (!parent || parent.bomId !== bomId) {
         return res.status(400).json({ error: "Parent item not found in this BOM" });
       }
     }
 
     const updateData: Record<string, unknown> = {};
+    
+    // CSV Fields
+    if (srNo !== undefined) updateData.srNo = srNo;
+    if (feederNumber !== undefined) updateData.feederNumber = feederNumber;
+    if (itemName !== undefined) updateData.itemName = itemName;
+    if (rdeplyPartNo !== undefined) updateData.rdeplyPartNo = rdeplyPartNo;
+    if (referenceDesignator !== undefined) updateData.referenceDesignator = referenceDesignator;
+    if (values !== undefined) updateData.values = values;
+    if (packageDescription !== undefined) updateData.packageDescription = packageDescription;
+    if (dnpParts !== undefined) updateData.dnpParts = dnpParts;
+    if (supplier1 !== undefined) updateData.supplier1 = supplier1;
+    if (partNo1 !== undefined) updateData.partNo1 = partNo1;
+    if (supplier2 !== undefined) updateData.supplier2 = supplier2;
+    if (partNo2 !== undefined) updateData.partNo2 = partNo2;
+    if (supplier3 !== undefined) updateData.supplier3 = supplier3;
+    if (partNo3 !== undefined) updateData.partNo3 = partNo3;
+    if (remarks !== undefined) updateData.remarks = remarks;
+    
+    // Legacy Fields
     if (feederNumber !== undefined) updateData.feederNumber = feederNumber;
     if (partNumber !== undefined) updateData.partNumber = partNumber;
     if (mpn !== undefined) updateData.mpn = mpn;
@@ -241,11 +362,13 @@ router.patch("/bom/:bomId/items/:itemId", async (req, res) => {
     if (isAlternate !== undefined) updateData.isAlternate = isAlternate;
     if (parentItemId !== undefined) updateData.parentItemId = parentItemId;
 
-    const [updatedItem] = await db
+    const updatedItemsResult = await db
       .update(bomItemsTable)
       .set(updateData)
       .where(eq(bomItemsTable.id, itemId))
-      .returning();
+      .returning() as any[];
+    
+    const updatedItem = updatedItemsResult[0];
 
     return res.json(updatedItem);
   } catch (err) {
@@ -276,6 +399,77 @@ router.delete("/bom/:bomId/items/:itemId", async (req: any, res) => {
   } catch (err) {
     req.log.error(err);
     return res.status(500).json({ error: "Failed to delete BOM item" });
+  }
+});
+
+// BOM Report Generation Endpoint
+router.get("/bom/:bomId/report", async (req, res) => {
+  try {
+    const bomId = Number(req.params.bomId);
+    
+    // Get BOM details
+    const boms = await db
+      .select()
+      .from(bomsTable)
+      .where(eq(bomsTable.id, bomId));
+    
+    const bom = boms.find((b: any) => !b.deletedAt);
+    if (!bom) {
+      return res.status(404).json({ error: "BOM not found" });
+    }
+    
+    // Get BOM items
+    const items = await db
+      .select()
+      .from(bomItemsTable)
+      .where(eq(bomItemsTable.bomId, bomId));
+    
+    const validItems = items.filter((i: any) => !i.deletedAt);
+    
+    // Generate report
+    const reportData = {
+      id: bom.id,
+      name: bom.name,
+      description: bom.description,
+      createdAt: bom.createdAt,
+      generatedAt: new Date(),
+      totalItems: validItems.length,
+      reportPeriod: {
+        startDate: bom.createdAt,
+        endDate: new Date(),
+      },
+      summary: {
+        totalComponents: validItems.length,
+        uniqueManufacturers: new Set(validItems.map((i: any) => i.manufacturer).filter(Boolean)).size,
+        uniqueSuppliers: new Set(validItems.map((i: any) => i.supplier1).filter(Boolean)).size,
+        totalQuantity: validItems.reduce((sum: number, i: any) => sum + (i.quantity || 1), 0),
+      },
+      items: validItems.map((item: any) => ({
+        id: item.id,
+        srNo: item.srNo,
+        feederNumber: item.feederNumber,
+        itemName: item.itemName,
+        partNumber: item.partNumber,
+        mpn: item.mpn,
+        manufacturer: item.manufacturer,
+        packageSize: item.packageSize,
+        quantity: item.quantity || 1,
+        supplier1: item.supplier1,
+        partNo1: item.partNo1,
+        supplier2: item.supplier2,
+        partNo2: item.partNo2,
+        supplier3: item.supplier3,
+        partNo3: item.partNo3,
+        remarks: item.remarks,
+        description: item.description,
+        location: item.location,
+      })),
+    };
+    
+    return res.json(reportData);
+  } catch (err) {
+    req.log.error(err);
+    return res.status(500).json({ error: "Failed to generate BOM report" });
   }
 });
 

@@ -43,6 +43,8 @@ export const scanRecordsTable = pgTable(
     reelId: text("reel_id"), // New: Physical reel ID
     alternateUsed: boolean("alternate_used").default(false), // New: Was this an alternate?
     validationResult: text("validation_result"), // 'pass', 'alternate_pass', 'mismatch', 'alternate_not_found'
+    internalIdScanned: text("internal_id_scanned"), // NEW: Internal ID scanned (optional)
+    verificationMode: text("verification_mode").default("manual"), // NEW: 'manual' or 'auto'
     description: text("description"),
     location: text("location"),
     scannedAt: timestamp("scanned_at").defaultNow().notNull(),
@@ -51,6 +53,7 @@ export const scanRecordsTable = pgTable(
     sessionIdIdx: index("scan_records_session_id_idx").on(table.sessionId),
     feederIdIdx: index("scan_records_feeder_id_idx").on(table.feederId),
     scannedMpnIdx: index("scan_records_scanned_mpn_idx").on(table.scannedMpn),
+    verificationModeIdx: index("scan_records_verification_mode_idx").on(table.verificationMode), // NEW
   })
 );
 

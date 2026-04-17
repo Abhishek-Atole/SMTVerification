@@ -8,11 +8,9 @@ import {
 } from "../src/schema";
 
 async function seed() {
-  console.log("🌱 Starting database seed...\n");
 
   try {
     // 1. Create Sample Feeders
-    console.log("📦 Creating sample feeders...");
     const feeders = await db
       .insert(feedersTable)
       .values([
@@ -54,10 +52,7 @@ async function seed() {
       ])
       .returning({ id: feedersTable.id, feederId: feedersTable.feederId });
 
-    console.log(`✓ Created ${feeders.length} feeders\n`);
-
     // 2. Create Sample Components
-    console.log("🔌 Creating sample components...");
     const components = await db
       .insert(componentsTable)
       .values([
@@ -99,10 +94,7 @@ async function seed() {
       ])
       .returning({ id: componentsTable.id, mpn: componentsTable.mpn });
 
-    console.log(`✓ Created ${components.length} components\n`);
-
     // 3. Create Alternate Component Mappings
-    console.log("🔀 Creating approved alternate mappings...");
     const primaryDiode = components.find((c) => c.mpn === "MM1Z5V1");
     const altDiode1 = components.find((c) => c.mpn === "BZT52C5V1");
     const altDiode2 = components.find((c) => c.mpn === "MMSZ5231B");
@@ -126,11 +118,9 @@ async function seed() {
           notes: "Approved as drop-in replacement",
         },
       ]);
-      console.log(`✓ Created 2 approved alternate mappings\n`);
     }
 
     // 4. Create Sample BOM
-    console.log("📋 Creating sample BOM...");
     const bom = await db
       .insert(bomsTable)
       .values({
@@ -142,7 +132,7 @@ async function seed() {
     const bomId = bom[0].id;
 
     // 5. Add BOM Items with Component/Feeder Mappings
-    console.log("📍 Adding BOM items...");
+
     const dioComponent = components.find((c) => c.mpn === "MM1Z5V1");
     const resistorComponent = components.find((c) => c.mpn === "RC1206FK1001");
     const capacitorComponent = components.find((c) => c.mpn === "CC1206KRX5R7BB104");
@@ -180,23 +170,8 @@ async function seed() {
           quantity: 300,
         },
       ]);
-      console.log(`✓ Created 3 BOM items\n`);
     }
-
-    console.log("✅ Seed completed successfully!\n");
-    console.log("Sample Data Created:");
-    console.log(`  • Feeders: ${feeders.length} (FDR_001 to FDR_005)`);
-    console.log(`  • Components: ${components.length} (Diode, Resistor, Capacitor)`);
-    console.log(`  • Alternate Mappings: 2 (MM1Z5V1 → BZT52C5V1, MMSZ5231B)`);
-    console.log(`  • BOM: 1 (SMT_TEST_BOM_001)`);
-    console.log(`  • BOM Items: 3 (T1, T2, T3)`);
-    console.log("\nTest Cases:");
-    console.log("  1. Scan FDR_001 + MM1Z5V1 → PASS (exact match)");
-    console.log("  2. Scan FDR_001 + BZT52C5V1 → PASS (approved alternate)");
-    console.log("  3. Scan FDR_001 + UNKNOWN_MPN → FAIL (not in master)");
-    console.log("\nTry visiting /api/feeders to see the new feeder data!");
   } catch (error) {
-    console.error("❌ Seed failed:", error);
     process.exit(1);
   }
 }

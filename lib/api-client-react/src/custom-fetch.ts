@@ -360,32 +360,15 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
   const url = resolveUrl(input);
-  
-  // Diagnostic logging for DELETE requests
-  if (method === "DELETE") {
-    console.log("[customFetch] DELETE request starting:", { url, responseType });
-  }
 
   const response = await fetch(input, { ...init, method, headers });
-  
-  // Diagnostic logging for DELETE responses
-  if (method === "DELETE") {
-    console.log("[customFetch] DELETE response received:", { status: response.status, ok: response.ok, statusText: response.statusText });
-  }
 
   if (!response.ok) {
-    if (method === "DELETE") {
-      console.log("[customFetch] DELETE response not OK, throwing error");
-    }
     const errorData = await parseErrorBody(response, method);
     throw new ApiError(response, errorData, requestInfo);
   }
 
   const result = (await parseSuccessBody(response, responseType, requestInfo)) as T;
-  
-  if (method === "DELETE") {
-    console.log("[customFetch] DELETE successful, returning:", { result });
-  }
   
   return result;
 }

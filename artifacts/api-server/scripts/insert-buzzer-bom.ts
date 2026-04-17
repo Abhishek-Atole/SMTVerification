@@ -3,7 +3,6 @@ import { bomsTable, bomItemsTable } from "@workspace/db/schema";
 
 async function insertBuzzerBOM() {
   try {
-    console.log("Inserting Intermittent Buzzer BOM...");
 
     // Create BOM
     const [bomResult] = await db.insert(bomsTable).values({
@@ -12,7 +11,6 @@ async function insertBuzzerBOM() {
     }).returning();
 
     const bomId = bomResult.id;
-    console.log(`✓ BOM created with ID: ${bomId}`);
 
     // BOM Items
     const items = [
@@ -155,12 +153,8 @@ async function insertBuzzerBOM() {
       });
     }
 
-    console.log(`✓ Inserted ${items.length} BOM items`);
-    console.log("✓ Buzzer BOM migration complete!");
-
     process.exit(0);
   } catch (error) {
-    console.error("Error inserting BOM:", error);
     process.exit(1);
   }
 }
