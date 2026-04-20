@@ -6,7 +6,7 @@
 
 set -e
 
-PROJECT_DIR="/media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification"
+PROJECT_DIR="/mnt/recovery/Final SMT MES SYSTEM/SMTVerification"
 API_DIR="$PROJECT_DIR/artifacts/api-server"
 FRONTEND_DIR="$PROJECT_DIR/artifacts/feeder-scanner"
 LOG_DIR="$PROJECT_DIR/logs"

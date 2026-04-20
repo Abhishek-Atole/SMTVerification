@@ -1,0 +1,451 @@
+import { db } from "@workspace/db";
+import { sessionsTable, scanRecordsTable } from "@workspace/db/schema";
+import { ReportFilters, FilterService } from "./filter-service";
+import { sql } from "drizzle-orm";
+
+/**
+ * Report data types for each report
+ */
+export interface FPYReportData {
+  date: string;
+  lineId?: string;
+  pcbId?: string;
+  totalFeeders: number;
+  passFeeders: number;
+  failFeeders: number;
+  fpy: number; // Percentage (0-100)
+}
+
+export interface OEEReportData {
+  sessionId: number;
+  operatorName: string;
+  durationHours: number;
+  quality: number; // 0-100
+  efficiency: number; // feeders per minute
+  availability: number; // 0-100
+  oee: number; // overall OEE percentage
+}
+
+export interface OperatorPerformanceData {
+  operatorName: string;
+  sessionsCount: number;
+  totalScans: number;
+  passRate: number; // Percentage
+  failRate: number; // Percentage
+  feedersPerMinute: number;
+}
+
+export interface OperatorComparisonData {
+  operators: {
+    operatorName: string;
+    accuracy: number;
+    speed: number;
+    errors: number;
+  }[];
+}
+
+export interface FeederPerformanceData {
+  feederNumber: string;
+  usageCount: number;
+  failCount: number;
+  errorRate: number; // Percentage
+  lastUsedAt: Date;
+}
+
+export interface FeederReliabilityData {
+  feederNumber: string;
+  repeatFailures: number;
+  warningFrequency: number;
+  lastFailedAt: Date;
+}
+
+export interface AlarmReportData {
+  alarmType: string; // 'high', 'medium', 'low'
+  feederNumber: string;
+  mismatchCount: number;
+  lastOccurredAt: Date;
+  severity: number; // 1-10
+}
+
+export interface ErrorAnalysisData {
+  type: "feeder" | "component" | "lot";
+  identifier: string; // feeder number or component MPN or lot number
+  failCount: number;
+  errorRate: number;
+  topErrors: string[];
+}
+
+export interface ComponentUsageData {
+  mpn: string;
+  manufacturer?: string;
+  usageCount: number;
+  failCount: number;
+  bomUsageCount: number;
+}
+
+export interface LotTraceabilityData {
+  lotNumber: string;
+  dateCode?: string;
+  usageCount: number;
+  failCount: number;
+  failRate: number;
+  affectedFeeders: string[];
+}
+
+export interface TrendReportData {
+  date: string;
+  sessionsCount: number;
+  totalScans: number;
+  passCount: number;
+  failCount: number;
+  passRate: number; // Percentage
+  avgCycleTime: number; // Seconds
+}
+
+/**
+ * ReportService - Generates all 10 priority reports with SQL queries
+ */
+export class ReportService {
+  /**
+   * 1. FPY (First Pass Yield) Report
+   * Formula: PASS_COUNT / TOTAL_FEEDERS * 100
+   */
+  static async generateFPYReport(filters: ReportFilters): Promise<FPYReportData[]> {
+    const { startDate, endDate } = FilterService.buildDateQuery("custom", { startDate: filters.startDate!, endDate: filters.endDate! });
+
+    const query = sql`
+      SELECT 
+        DATE(sr.scanned_at) as date,
+        COUNT(*) as total_feeders,
+        COUNT(CASE WHEN sr.validation_result = 'pass' OR sr.validation_result = 'pass_free_scan' THEN 1 END) as pass_feeders,
+        COUNT(CASE WHEN sr.validation_result != 'pass' AND sr.validation_result != 'pass_free_scan' AND sr.validation_result != 'alternate_pass' THEN 1 END) as fail_feeders,
+        ROUND(100.0 * COUNT(CASE WHEN sr.validation_result = 'pass' OR sr.validation_result = 'pass_free_scan' THEN 1 END) / COUNT(*), 2) as fpy
+      FROM scan_records sr
+      JOIN sessions s ON sr.session_id = s.id
+      WHERE sr.scanned_at BETWEEN ${startDate} AND ${endDate}
+        ${filters.lineId ? sql`AND s.supervisor_name = ${filters.lineId}` : sql``}
+        ${filters.pcbId ? sql`AND s.panel_name = ${filters.pcbId}` : sql``}
+        ${filters.operatorId ? sql`AND s.operator_name = ${filters.operatorId}` : sql``}
+        ${filters.shiftId ? sql`AND s.shift_name = ${filters.shiftId}` : sql``}
+      GROUP BY DATE(sr.scanned_at)
+      ORDER BY date DESC;
+    `;
+
+    const results = await db.execute(query);
+    return (results as any[]).map((row) => ({
+      date: row.date || new Date().toISOString(),
+      totalFeeders: row.total_feeders || 0,
+      passFeeders: row.pass_feeders || 0,
+      failFeeders: row.fail_feeders || 0,
+      fpy: parseFloat(row.fpy || "0"),
+    }));
+  }
+
+  /**
+   * 2. OEE (Overall Equipment Effectiveness) Report
+   * Formula: OEE = Availability × Efficiency × Quality
+   */
+  static async generateOEEReport(filters: ReportFilters): Promise<OEEReportData[]> {
+    const { startDate, endDate } = FilterService.buildDateQuery("custom", { startDate: filters.startDate!, endDate: filters.endDate! });
+
+    const query = sql`
+      SELECT 
+        s.id as session_id,
+        s.operator_name,
+        ROUND(EXTRACT(EPOCH FROM (s.end_time - s.start_time))::numeric / 3600, 2) as duration_hours,
+        ROUND(100.0 * COUNT(CASE WHEN sr.validation_result = 'pass' OR sr.validation_result = 'pass_free_scan' THEN 1 END) / COUNT(*), 2) as quality,
+        ROUND(COUNT(sr.id)::numeric / (EXTRACT(EPOCH FROM (s.end_time - s.start_time)) / 60), 2) as efficiency,
+        100.0 as availability
+      FROM scan_records sr
+      JOIN sessions s ON sr.session_id = s.id
+      WHERE sr.scanned_at BETWEEN ${startDate} AND ${endDate}
+        ${filters.lineId ? sql`AND s.supervisor_name = ${filters.lineId}` : sql``}
+        ${filters.pcbId ? sql`AND s.panel_name = ${filters.pcbId}` : sql``}
+        ${filters.operatorId ? sql`AND s.operator_name = ${filters.operatorId}` : sql``}
+      GROUP BY s.id, s.operator_name
+      ORDER BY session_id DESC;
+    `;
+
+    const results = await db.execute(query);
+    return (results as any[]).map((row) => {
+      const quality = parseFloat(row.quality || "0") / 100;
+      const efficiency = parseFloat(row.efficiency || "1") / 100; // Normalize to 0-1
+      const availability = parseFloat(row.availability || "100") / 100;
+      const oee = (quality * efficiency * availability) * 100;
+
+      return {
+        sessionId: row.session_id,
+        operatorName: row.operator_name,
+        durationHours: parseFloat(row.duration_hours || "0"),
+        quality: parseFloat(row.quality || "0"),
+        efficiency: parseFloat(row.efficiency || "0"),
+        availability,
+        oee: Math.min(100, oee),
+      };
+    });
+  }
+
+  /**
+   * 3. Operator Performance Report
+   */
+  static async generateOperatorReport(filters: ReportFilters): Promise<OperatorPerformanceData[]> {
+    const { startDate, endDate } = FilterService.buildDateQuery("custom", { startDate: filters.startDate!, endDate: filters.endDate! });
+
+    const query = sql`
+      SELECT 
+        s.operator_name,
+        COUNT(DISTINCT s.id) as sessions_count,
+        COUNT(sr.id) as total_scans,
+        ROUND(100.0 * COUNT(CASE WHEN sr.validation_result = 'pass' OR sr.validation_result = 'pass_free_scan' THEN 1 END) / COUNT(*), 2) as pass_rate,
+        ROUND(COUNT(sr.id)::numeric / NULLIF(SUM(EXTRACT(EPOCH FROM (s.end_time - s.start_time)) / 60), 0), 2) as feeders_per_minute
+      FROM scan_records sr
+      JOIN sessions s ON sr.session_id = s.id
+      WHERE sr.scanned_at BETWEEN ${startDate} AND ${endDate}
+        ${filters.lineId ? sql`AND s.supervisor_name = ${filters.lineId}` : sql``}
+      GROUP BY s.operator_name
+      ORDER BY pass_rate DESC;
+    `;
+
+    const results = await db.execute(query);
+    return (results as any[]).map((row) => ({
+      operatorName: row.operator_name,
+      sessionsCount: row.sessions_count || 0,
+      totalScans: row.total_scans || 0,
+      passRate: parseFloat(row.pass_rate || "0"),
+      failRate: 100 - parseFloat(row.pass_rate || "0"),
+      feedersPerMinute: parseFloat(row.feeders_per_minute || "0"),
+    }));
+  }
+
+  /**
+   * 4. Operator Comparison Report
+   */
+  static async generateOperatorComparisonReport(filters: ReportFilters): Promise<OperatorComparisonData> {
+    const operatorData = await this.generateOperatorReport(filters);
+
+    return {
+      operators: operatorData.map((op) => ({
+        operatorName: op.operatorName,
+        accuracy: op.passRate,
+        speed: op.feedersPerMinute,
+        errors: 100 - op.passRate,
+      })),
+    };
+  }
+
+  /**
+   * 5. Feeder Performance Report
+   */
+  static async generateFeederReport(filters: ReportFilters): Promise<FeederPerformanceData[]> {
+    const { startDate, endDate } = FilterService.buildDateQuery("custom", { startDate: filters.startDate!, endDate: filters.endDate! });
+
+    const query = sql`
+      SELECT 
+        sr.feeder_number,
+        COUNT(*) as usage_count,
+        COUNT(CASE WHEN sr.validation_result != 'pass' AND sr.validation_result != 'pass_free_scan' AND sr.validation_result != 'alternate_pass' THEN 1 END) as fail_count,
+        ROUND(100.0 * COUNT(CASE WHEN sr.validation_result != 'pass' AND sr.validation_result != 'pass_free_scan' AND sr.validation_result != 'alternate_pass' THEN 1 END) / COUNT(*), 2) as error_rate,
+        MAX(sr.scanned_at) as last_used_at
+      FROM scan_records sr
+      WHERE sr.scanned_at BETWEEN ${startDate} AND ${endDate}
+        ${filters.lineId ? sql`AND sr.feeder_number LIKE ${filters.lineId + "%"}` : sql``}
+      GROUP BY sr.feeder_number
+      ORDER BY error_rate DESC, usage_count DESC
+      LIMIT 50;
+    `;
+
+    const results = await db.execute(query);
+    return (results as any[]).map((row) => ({
+      feederNumber: row.feeder_number,
+      usageCount: row.usage_count || 0,
+      failCount: row.fail_count || 0,
+      errorRate: parseFloat(row.error_rate || "0"),
+      lastUsedAt: new Date(row.last_used_at),
+    }));
+  }
+
+  /**
+   * 6. Feeder Reliability Report
+   */
+  static async generateFeederReliabilityReport(filters: ReportFilters): Promise<FeederReliabilityData[]> {
+    const { startDate, endDate } = FilterService.buildDateQuery("custom", { startDate: filters.startDate!, endDate: filters.endDate! });
+
+    const query = sql`
+      SELECT 
+        sr.feeder_number,
+        COUNT(*) as repeat_failures,
+        COUNT(CASE WHEN sr.validation_result = 'mismatch' THEN 1 END) as warning_frequency,
+        MAX(sr.scanned_at) as last_failed_at
+      FROM scan_records sr
+      WHERE sr.scanned_at BETWEEN ${startDate} AND ${endDate}
+        AND (sr.validation_result != 'pass' AND sr.validation_result != 'pass_free_scan' AND sr.validation_result != 'alternate_pass')
+      GROUP BY sr.feeder_number
+      HAVING COUNT(*) > 1
+      ORDER BY repeat_failures DESC
+      LIMIT 50;
+    `;
+
+    const results = await db.execute(query);
+    return (results as any[]).map((row) => ({
+      feederNumber: row.feeder_number,
+      repeatFailures: row.repeat_failures || 0,
+      warningFrequency: row.warning_frequency || 0,
+      lastFailedAt: new Date(row.last_failed_at),
+    }));
+  }
+
+  /**
+   * 7. Alarm Report
+   */
+  static async generateAlarmReport(filters: ReportFilters): Promise<AlarmReportData[]> {
+    const { startDate, endDate } = FilterService.buildDateQuery("custom", { startDate: filters.startDate!, endDate: filters.endDate! });
+
+    const query = sql`
+      SELECT 
+        sr.validation_result as alarm_type,
+        sr.feeder_number,
+        COUNT(*) as mismatch_count,
+        MAX(sr.scanned_at) as last_occurred_at
+      FROM scan_records sr
+      WHERE sr.scanned_at BETWEEN ${startDate} AND ${endDate}
+        AND sr.validation_result IN ('mismatch', 'feeder_not_found')
+      GROUP BY sr.validation_result, sr.feeder_number
+      ORDER BY mismatch_count DESC
+      LIMIT 100;
+    `;
+
+    const results = await db.execute(query);
+    return (results as any[]).map((row, idx) => ({
+      alarmType: row.alarm_type === 'mismatch' ? 'high' : row.alarm_type === 'feeder_not_found' ? 'medium' : 'low',
+      feederNumber: row.feeder_number,
+      mismatchCount: row.mismatch_count || 0,
+      lastOccurredAt: new Date(row.last_occurred_at),
+      severity: Math.min(10, Math.ceil((row.mismatch_count || 0) / 10)),
+    }));
+  }
+
+  /**
+   * 8. Error Analysis Report
+   */
+  static async generateErrorAnalysisReport(filters: ReportFilters): Promise<ErrorAnalysisData[]> {
+    const { startDate, endDate } = FilterService.buildDateQuery("custom", { startDate: filters.startDate!, endDate: filters.endDate! });
+
+    // Top failed feeders
+    const feederQuery = sql`
+      SELECT 
+        sr.feeder_number as identifier,
+        COUNT(*) as fail_count,
+        ROUND(100.0 * COUNT(*) / (SELECT COUNT(*) FROM scan_records WHERE scanned_at BETWEEN ${startDate} AND ${endDate}), 2) as error_rate
+      FROM scan_records sr
+      WHERE sr.scanned_at BETWEEN ${startDate} AND ${endDate}
+        AND (sr.validation_result != 'pass' AND sr.validation_result != 'pass_free_scan' AND sr.validation_result != 'alternate_pass')
+      GROUP BY sr.feeder_number
+      ORDER BY fail_count DESC
+      LIMIT 10;
+    `;
+
+    const results = await db.execute(feederQuery);
+    return (results as any[]).map((row) => ({
+      type: "feeder",
+      identifier: row.identifier,
+      failCount: row.fail_count || 0,
+      errorRate: parseFloat(row.error_rate || "0"),
+      topErrors: [],
+    }));
+  }
+
+  /**
+   * 9. Component Usage Report
+   */
+  static async generateComponentReport(filters: ReportFilters): Promise<ComponentUsageData[]> {
+    const { startDate, endDate } = FilterService.buildDateQuery("custom", { startDate: filters.startDate!, endDate: filters.endDate! });
+
+    const query = sql`
+      SELECT 
+        sr.scanned_mpn as mpn,
+        COUNT(*) as usage_count,
+        COUNT(CASE WHEN sr.validation_result = 'mismatch' THEN 1 END) as fail_count
+      FROM scan_records sr
+      WHERE sr.scanned_at BETWEEN ${startDate} AND ${endDate}
+        AND sr.scanned_mpn IS NOT NULL
+      GROUP BY sr.scanned_mpn
+      ORDER BY usage_count DESC
+      LIMIT 100;
+    `;
+
+    const results = await db.execute(query);
+    return (results as any[]).map((row) => ({
+      mpn: row.mpn,
+      usageCount: row.usage_count || 0,
+      failCount: row.fail_count || 0,
+      bomUsageCount: 0, // Would need BOM table join
+    }));
+  }
+
+  /**
+   * 10. Lot Traceability Report
+   */
+  static async generateLotTraceabilityReport(filters: ReportFilters): Promise<LotTraceabilityData[]> {
+    const { startDate, endDate } = FilterService.buildDateQuery("custom", { startDate: filters.startDate!, endDate: filters.endDate! });
+
+    const query = sql`
+      SELECT 
+        sr.lot_number,
+        sr.date_code,
+        COUNT(*) as usage_count,
+        COUNT(CASE WHEN sr.validation_result = 'mismatch' THEN 1 END) as fail_count,
+        ROUND(100.0 * COUNT(CASE WHEN sr.validation_result = 'mismatch' THEN 1 END) / COUNT(*), 2) as fail_rate,
+        ARRAY_AGG(DISTINCT sr.feeder_number) as affected_feeders
+      FROM scan_records sr
+      WHERE sr.scanned_at BETWEEN ${startDate} AND ${endDate}
+        AND sr.lot_number IS NOT NULL
+      GROUP BY sr.lot_number, sr.date_code
+      ORDER BY fail_count DESC
+      LIMIT 100;
+    `;
+
+    const results = await db.execute(query);
+    return (results as any[]).map((row) => ({
+      lotNumber: row.lot_number,
+      dateCode: row.date_code,
+      usageCount: row.usage_count || 0,
+      failCount: row.fail_count || 0,
+      failRate: parseFloat(row.fail_rate || "0"),
+      affectedFeeders: row.affected_feeders || [],
+    }));
+  }
+
+  /**
+   * 11. Trend Report for dashboard
+   */
+  static async generateTrendReport(filters: ReportFilters): Promise<TrendReportData[]> {
+    const { startDate, endDate } = FilterService.buildDateQuery("custom", { startDate: filters.startDate!, endDate: filters.endDate! });
+
+    const query = sql`
+      SELECT 
+        DATE(sr.scanned_at) as date,
+        COUNT(DISTINCT s.id) as sessions_count,
+        COUNT(sr.id) as total_scans,
+        COUNT(CASE WHEN sr.validation_result = 'pass' OR sr.validation_result = 'pass_free_scan' THEN 1 END) as pass_count,
+        COUNT(CASE WHEN sr.validation_result != 'pass' AND sr.validation_result != 'pass_free_scan' AND sr.validation_result != 'alternate_pass' THEN 1 END) as fail_count,
+        ROUND(100.0 * COUNT(CASE WHEN sr.validation_result = 'pass' OR sr.validation_result = 'pass_free_scan' THEN 1 END) / COUNT(*), 2) as pass_rate,
+        ROUND(AVG(EXTRACT(EPOCH FROM (s.end_time - s.start_time)) / COUNT(sr.id) OVER (PARTITION BY s.id)), 2) as avg_cycle_time
+      FROM scan_records sr
+      JOIN sessions s ON sr.session_id = s.id
+      WHERE sr.scanned_at BETWEEN ${startDate} AND ${endDate}
+      GROUP BY DATE(sr.scanned_at)
+      ORDER BY date DESC;
+    `;
+
+    const results = await db.execute(query);
+    return (results as any[]).map((row) => ({
+      date: row.date || new Date().toISOString(),
+      sessionsCount: row.sessions_count || 0,
+      totalScans: row.total_scans || 0,
+      passCount: row.pass_count || 0,
+      failCount: row.fail_count || 0,
+      passRate: parseFloat(row.pass_rate || "0"),
+      avgCycleTime: parseFloat(row.avg_cycle_time || "0"),
+    }));
+  }
+}

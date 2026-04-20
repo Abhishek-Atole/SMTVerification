@@ -53,6 +53,9 @@ export default function Dashboard() {
   const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [showTrashBin, setShowTrashBin] = useState(false);
+  const [showAllActiveSessions, setShowAllActiveSessions] = useState(false);
+  const [showAllCompletedSessions, setShowAllCompletedSessions] = useState(false);
+  const [showAllAdminControls, setShowAllAdminControls] = useState(false);
   const [recoveringSessionId, setRecoveringSessionId] = useState<number | null>(null);
 
   // Trash bin hooks
@@ -260,233 +263,119 @@ export default function Dashboard() {
   if (user?.role === "operator") {
     return (
       <>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center space-y-4 sm:space-y-6">
-          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-16 sm:h-20 mb-2" />
-          <div className="w-20 sm:w-24 h-20 sm:h-24 bg-primary/10 rounded-full flex items-center justify-center mb-2 sm:mb-4">
-            <ScanLine className="w-10 sm:w-12 h-10 sm:h-12 text-primary" />
-          </div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-foreground">Ready to Scan</h1>
-          <p className="text-base sm:text-lg lg:text-xl text-muted-foreground max-w-lg px-2">
-            Start a new verification session or resume an active one.
-          </p>
-          <Button asChild size="lg" className="h-12 sm:h-16 px-6 sm:px-12 text-base sm:text-xl font-bold tracking-wide rounded-full shadow-lg hover:shadow-xl transition-all w-full sm:w-auto" data-testid="btn-start-session">
-            <Link href="/session/new">START NEW SESSION</Link>
-          </Button>
-        </div>
-
-        {activeSessions.length > 0 && (
-          <div className="space-y-3 sm:space-y-4">
-            <h2 className="text-lg sm:text-xl font-bold border-b border-border pb-2 flex items-center gap-2">
-              <Play className="w-4 sm:w-5 h-4 sm:h-5 text-primary flex-shrink-0" /> Active Sessions
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-              {activeSessions.map(session => (
-                <Card key={session.id} className="bg-card border-border hover:border-primary/50 transition-colors shadow-sm">
-                  <CardHeader className="pb-2 sm:pb-3">
-                    <CardTitle className="text-base sm:text-lg flex items-center justify-between gap-2 flex-wrap">
-                      <span className="truncate">{session.panelName}</span>
-                      <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-md uppercase tracking-wider font-semibold flex-shrink-0">Active</span>
-                    </CardTitle>
-                    <p className="text-xs sm:text-sm text-muted-foreground">{session.shiftName} - {session.operatorName}</p>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-2.5 mt-2 sm:mt-4">
-                      <div className="text-xs sm:text-sm text-muted-foreground">
-                        BOM: {session.bomName || session.bomId}
-                      </div>
-                      <Button asChild size="sm" className="font-bold tracking-wide w-full sm:w-auto" data-testid={`btn-resume-session-${session.id}`}>
-                        <Link href={`/session/${session.id}`}>RESUME</Link>
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {completedSessions.length > 0 && (
-          <div className="space-y-3 sm:space-y-4">
-            <h2 className="text-lg sm:text-xl font-bold border-b border-border pb-2 flex items-center gap-2">
-              <CheckCircle2 className="w-4 sm:w-5 h-4 sm:h-5 text-success flex-shrink-0" /> Completed Sessions (Incomplete Only)
-            </h2>
-            <p className="text-xs sm:text-sm text-muted-foreground mb-3">You can only delete incomplete changeovers below:</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-              {completedSessions.map(session => {
-                // Check if session is incomplete (has no scans or minimal scans)
-                const isIncomplete = !session.scans || session.scans.length === 0;
-                if (!isIncomplete) return null;
-                
-                return (
-                  <Card key={session.id} className="bg-card border-border border-amber-200 dark:border-amber-800 hover:border-amber-400 transition-colors shadow-sm">
-                    <CardHeader className="pb-2 sm:pb-3">
-                      <CardTitle className="text-base sm:text-lg flex items-center justify-between gap-2 flex-wrap">
-                        <span className="truncate">{session.panelName}</span>
-                        <span className="text-xs px-2 py-1 bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 rounded-md uppercase tracking-wider font-semibold flex-shrink-0">Incomplete</span>
-                      </CardTitle>
-                      <p className="text-xs sm:text-sm text-muted-foreground">{session.shiftName}</p>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex flex-col gap-2 mt-2 sm:mt-4">
-                        <div className="text-xs sm:text-sm text-muted-foreground">
-                          BOM: {session.bomName || "N/A"}
-                        </div>
-                        <div className="flex gap-2 w-full">
-                          <Button 
-                            asChild 
-                            variant="secondary" 
-                            size="sm" 
-                            className="flex-1 font-medium"
-                          >
-                            <Link href={`/session/${session.id}/report`}>VIEW</Link>
-                          </Button>
-                          <Button 
-                            variant="destructive" 
-                            size="sm" 
-                            className="font-medium gap-1"
-                            disabled={deleteSessionMutation.isPending && deletingSessionId === session.id}
-                            onClick={() => handleDeleteSession(session.id)}
-                          >
-                            {deleteSessionMutation.isPending && deletingSessionId === session.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-3 h-3" />
-                            )}
-                            DELETE
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-            {completedSessions.filter(s => !s.scans || s.scans.length === 0).length === 0 && (
-              <p className="text-muted-foreground text-sm py-4">No incomplete sessions available for deletion.</p>
-            )}
-          </div>
-        )}
-
-        {/* TRASH BIN SECTION */}
-        <div className="space-y-3 sm:space-y-4 border-t border-border pt-6 sm:pt-8">
-          <div className="flex items-center justify-between">
-            <button 
-              onClick={() => setShowTrashBin(!showTrashBin)}
-              className="text-lg sm:text-xl font-bold border-b border-border pb-2 flex items-center gap-2 hover:text-muted-foreground transition-colors"
-            >
-              <Trash2 className="w-4 sm:w-5 h-4 sm:h-5 text-destructive flex-shrink-0" /> 
-              Trash Bin
-              <span className="text-xs px-2 py-1 bg-destructive/10 text-destructive rounded-md">
-                {trashStats?.totalCount || 0}
-              </span>
-            </button>
-            {(trashStats?.totalCount || 0) > 0 && (
-              <Link href="/trash" className="text-xs text-blue-600 hover:text-blue-700 font-semibold">
-                View All →
-              </Link>
-            )}
-          </div>
-          
-          {showTrashBin && (
-            <div>
-              {trashItemsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        <div className="min-h-screen bg-gradient-to-b from-background to-secondary/5 p-4 sm:p-8 lg:p-12">
+          <div className="max-w-6xl mx-auto w-full space-y-10 animate-in fade-in duration-500">
+            <div className="flex flex-col items-center justify-center py-12 sm:py-16 text-center space-y-6">
+              <div className="flex items-center justify-center gap-3 mb-2">
+                <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-12 sm:h-16" />
+                <div className="hidden sm:block h-8 w-px bg-border" />
+                <div className="text-left">
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Welcome</p>
+                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-foreground">Ready to Scan</h1>
                 </div>
-              ) : !trashItems || trashItems.items?.length === 0 ? (
-                <p className="text-xs sm:text-sm text-muted-foreground py-4">Trash is empty. Deleted items will appear here.</p>
-              ) : (
-                <div>
-                  {/* Trash Stats Summary */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-                    <div className="bg-destructive/5 p-2 rounded">
-                      <p className="text-xs text-muted-foreground">Sessions</p>
-                      <p className="text-lg font-bold">{trashStats?.sessionCount || 0}</p>
-                    </div>
-                    <div className="bg-destructive/5 p-2 rounded">
-                      <p className="text-xs text-muted-foreground">BOMs</p>
-                      <p className="text-lg font-bold">{trashStats?.bomCount || 0}</p>
-                    </div>
-                    <div className="bg-destructive/5 p-2 rounded">
-                      <p className="text-xs text-muted-foreground">BOM Items</p>
-                      <p className="text-lg font-bold">{trashStats?.itemCount || 0}</p>
-                    </div>
-                    <div className="bg-destructive/5 p-2 rounded">
-                      <p className="text-xs text-muted-foreground">Total</p>
-                      <p className="text-lg font-bold">{trashStats?.totalCount || 0}</p>
-                    </div>
-                  </div>
+              </div>
+              <p className="text-sm sm:text-base text-muted-foreground max-w-2xl leading-relaxed">
+                Start a new verification session or resume an active one to begin quality assurance checks.
+              </p>
+              <div className="pt-6">
+                <Button asChild size="lg" className="h-16 px-10 text-lg font-bold rounded-xl shadow-lg hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70" data-testid="btn-start-session">
+                  <Link href="/session/new">⚡ Start New Session</Link>
+                </Button>
+              </div>
+            </div>
 
-                  {/* Recent Trash Items */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mt-3 sm:mt-4">
-                    {trashItems.items?.slice(0, 6).map((item: any) => {
-                      const isRecovering = recoveringTrashItem?.type === item.type && recoveringTrashItem?.id === item.id;
-                      const isDeleting = deletingTrashItem?.type === item.type && deletingTrashItem?.id === item.id;
-                      return (
-                        <Card key={`${item.type}-${item.id}`} className="bg-card border-border border-destructive/20 hover:border-destructive/40 transition-colors shadow-sm">
-                          <CardHeader className="pb-2 sm:pb-3">
-                            <CardTitle className="text-base sm:text-lg flex items-center justify-between gap-2 flex-wrap">
-                              <span className="truncate text-sm">{item.name}</span>
-                              <span className="text-xs px-2 py-1 bg-destructive/10 text-destructive rounded-md uppercase tracking-wider font-semibold flex-shrink-0">
-                                {item.type.replace('_', ' ')}
-                              </span>
-                            </CardTitle>
-                            <p className="text-xs sm:text-sm text-muted-foreground">
-                              {new Date(item.deletedAt).toLocaleDateString()}
-                              {item.deletedBy && ` • by ${item.deletedBy}`}
-                            </p>
-                          </CardHeader>
-                          <CardContent>
-                            <div className="flex gap-2 w-full">
-                              <Button 
-                                variant="secondary" 
-                                size="sm" 
-                                className="flex-1 font-medium gap-1 text-xs"
-                                disabled={isRecovering || isDeleting}
-                                onClick={() => handleRecoverTrashItem(item.type, item.id, item.name)}
-                              >
-                                {isRecovering ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  "↻"
-                                )}
-                                {isRecovering ? "RECOVERING" : "RECOVER"}
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="font-medium gap-1 text-xs text-destructive hover:bg-destructive/10"
-                                disabled={isRecovering || isDeleting}
-                                onClick={() => handlePermanentDeleteTrashItem(item.type, item.id, item.name)}
-                              >
-                                {isDeleting ? (
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  <Trash2 className="w-3 h-3" />
-                                )}
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                  
-                  {(trashItems.items?.length || 0) > 6 && (
-                    <Link href="/trash" className="inline-block mt-4 text-sm text-blue-600 hover:text-blue-700 font-semibold">
-                      See all {trashStats?.totalCount} deleted items →
-                    </Link>
+            {activeSessions.length > 0 && (
+              <div className="space-y-3 sm:space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg sm:text-xl font-bold border-b border-border pb-2 flex items-center gap-2">
+                    <Play className="w-4 sm:w-5 h-4 sm:h-5 text-primary flex-shrink-0" /> Active Sessions
+                  </h2>
+                  {activeSessions.length > 4 && (
+                    <button
+                      onClick={() => setShowAllActiveSessions(!showAllActiveSessions)}
+                      className="text-xs px-3 py-1  text-blue-600 hover:text-blue-700 font-semibold transition-colors"
+                    >
+                      {showAllActiveSessions ? "Show Less ↑" : `View All (${activeSessions.length}) ↓`}
+                    </button>
                   )}
                 </div>
-              )}
-            </div>
-          )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                  {(showAllActiveSessions ? activeSessions : activeSessions.slice(0, 4)).map(session => (
+                    <Card key={session.id} className="bg-gradient-to-br from-blue-50/50 to-blue-50/20 dark:from-blue-950/20 dark:to-background border-blue-200 dark:border-blue-800 hover:border-blue-400 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 cursor-pointer overflow-hidden">
+                      <div className="h-1 bg-gradient-to-r from-blue-500 to-blue-400"></div>
+                      <CardHeader className="pb-3 sm:pb-4">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <CardTitle className="text-base sm:text-lg font-bold truncate leading-tight text-foreground">
+                            {session.panelName}
+                          </CardTitle>
+                          <span className="text-xs px-3 py-1 bg-blue-500/90 text-white rounded-full font-semibold flex-shrink-0 whitespace-nowrap">Active</span>
+                        </div>
+                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{session.shiftName}</p>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div className="text-xs text-muted-foreground bg-muted/40 px-2 py-1 rounded line-clamp-1">
+                          BOM: {session.bomName || session.bomId}
+                        </div>
+                        <Button asChild className="w-full font-bold py-2 h-10 rounded-lg bg-blue-600 hover:bg-blue-700 hover:shadow-md transition-all duration-200" data-testid={`btn-resume-session-${session.id}`}>
+                          <Link href={`/session/${session.id}`}>▶ RESUME</Link>
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {completedSessions.length > 0 && (
+              <div className="space-y-3 sm:space-y-4">
+                <h2 className="text-lg sm:text-xl font-bold border-b border-border pb-2 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 sm:w-5 h-4 sm:h-5 text-success flex-shrink-0" /> Completed Sessions
+                </h2>
+                <p className="text-xs sm:text-sm text-muted-foreground mb-3">Incomplete sessions available for deletion:</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+                  {completedSessions.map(session => {
+                    const isIncomplete = !session.scans || session.scans.length === 0;
+                    if (!isIncomplete) return null;
+                    return (
+                      <Card key={session.id} className="bg-gradient-to-br from-amber-50/50 to-amber-50/20 dark:from-amber-950/20 dark:to-background border-amber-200 dark:border-amber-800 hover:border-amber-400 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+                        <div className="h-1 bg-gradient-to-r from-amber-500 to-amber-400"></div>
+                        <CardHeader className="pb-3 sm:pb-4">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <CardTitle className="text-base sm:text-lg font-bold truncate leading-tight text-foreground">
+                              {session.panelName}
+                            </CardTitle>
+                            <span className="text-xs px-3 py-1 bg-amber-500/90 text-white rounded-full font-semibold flex-shrink-0 whitespace-nowrap">Incomplete</span>
+                          </div>
+                          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{session.shiftName}</p>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="text-xs text-muted-foreground bg-muted/40 px-2 py-1 rounded line-clamp-1">
+                            BOM: {session.bomName || "N/A"}
+                          </div>
+                          <div className="flex gap-2 w-full">
+                            <Button asChild className="flex-1 font-semibold py-2 h-9 text-sm rounded-lg bg-blue-600 hover:bg-blue-700" size="sm">
+                              <Link href={`/session/${session.id}/report`}>📋 VIEW</Link>
+                            </Button>
+                            <Button className="font-semibold py-2 h-9 text-sm rounded-lg bg-red-600 hover:bg-red-700 transition-all duration-200" size="sm" disabled={deleteSessionMutation.isPending && deletingSessionId === session.id} onClick={() => handleDeleteSession(session.id)}>
+                              {deleteSessionMutation.isPending && deletingSessionId === session.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <>🗑️ DELETE</>
+                              )}
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-      <DeleteLoadingOverlay />
-      <RecoveryLoadingOverlay />
-    </>
+        <DeleteLoadingOverlay />
+        <RecoveryLoadingOverlay />
+      </>
     );
   }
 
@@ -494,50 +383,77 @@ export default function Dashboard() {
   if (user?.role === "qa") {
     return (
       <>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mb-4 sm:mb-6">
-          <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
-            <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-12 sm:h-16 flex-shrink-0" />
-            <div className="min-w-0">
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground">QA Dashboard</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">Quality & Performance Overview</p>
+        <div className="min-h-screen bg-gradient-to-b from-background to-secondary/5 p-4 sm:p-8 lg:p-12">
+        <div className="max-w-6xl mx-auto w-full space-y-10 animate-in fade-in duration-500">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+            <div className="flex items-center gap-4">
+              <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-14 sm:h-16 flex-shrink-0" />
+              <div>
+                <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Quality Assurance</p>
+                <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">QA Dashboard</h1>
+              </div>
             </div>
+            <Button asChild className="font-bold gap-2 h-12 px-6 rounded-lg bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 hover:shadow-lg transition-all duration-200 hover:-translate-y-0.5" size="lg">
+              <Link href="/analytics">
+                📊 Analytics
+              </Link>
+            </Button>
           </div>
-          <Button asChild variant="outline" className="font-bold gap-2">
-            <Link href="/analytics">
-              <BarChart3 className="w-4 h-4" /> Full Analytics
-            </Link>
-          </Button>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+          <Card className="border-l-4 border-l-blue-500 bg-gradient-to-br from-blue-50/80 to-blue-50/40 dark:from-blue-950/30 dark:to-background shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer overflow-hidden">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/10 rounded-full -mr-10 -mt-10"></div>
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="text-xs uppercase tracking-wider font-bold text-muted-foreground">📊 Scans</CardTitle>
+            </CardHeader>
+            <CardContent><div className="text-3xl sm:text-4xl font-black text-blue-600">{overview?.totalScans ?? '-'}</div></CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-green-500 bg-gradient-to-br from-green-50/80 to-green-50/40 dark:from-green-950/30 dark:to-background shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer overflow-hidden">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-green-500/10 rounded-full -mr-10 -mt-10"></div>
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="text-xs uppercase tracking-wider font-bold text-muted-foreground">✅ OK Rate</CardTitle>
+            </CardHeader>
+            <CardContent><div className="text-3xl sm:text-4xl font-black text-green-600">{overview?.overallOkRate?.toFixed(1) ?? '-'}%</div></CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-red-500 bg-gradient-to-br from-red-50/80 to-red-50/40 dark:from-red-950/30 dark:to-background shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer overflow-hidden">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-red-500/10 rounded-full -mr-10 -mt-10"></div>
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="text-xs uppercase tracking-wider font-bold text-muted-foreground">❌ Rejected</CardTitle>
+            </CardHeader>
+            <CardContent><div className="text-3xl sm:text-4xl font-black text-red-600">{overview?.totalReject ?? '-'}</div></CardContent>
+          </Card>
+          <Card className="border-l-4 border-l-purple-500 bg-gradient-to-br from-purple-50/80 to-purple-50/40 dark:from-purple-950/30 dark:to-background shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer overflow-hidden">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/10 rounded-full -mr-10 -mt-10"></div>
+            <CardHeader className="pb-2 sm:pb-3">
+              <CardTitle className="text-xs uppercase tracking-wider font-bold text-muted-foreground">▶️ Active</CardTitle>
+            </CardHeader>
+            <CardContent><div className="text-3xl sm:text-4xl font-black text-purple-600">{overview?.activeSessions ?? '-'}</div></CardContent>
+          </Card>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total Scans</CardTitle></CardHeader>
-            <CardContent><div className="text-3xl font-bold">{overview?.totalScans}</div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Overall OK Rate</CardTitle></CardHeader>
-            <CardContent><div className="text-3xl font-bold text-success">{overview?.overallOkRate?.toFixed(1) || 0}%</div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Reject Count</CardTitle></CardHeader>
-            <CardContent><div className="text-3xl font-bold text-destructive">{overview?.totalReject}</div></CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Active Sessions</CardTitle></CardHeader>
-            <CardContent><div className="text-3xl font-bold text-primary">{overview?.activeSessions}</div></CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-4">
-          <h2 className="text-xl font-bold border-b border-border pb-2 flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-success" /> Recently Completed Sessions
-          </h2>
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold text-foreground flex items-center gap-3">
+                <div className="w-1 h-8 bg-green-500 rounded-full"></div>
+                Recently Completed
+              </h2>
+              <p className="text-sm text-muted-foreground">Latest verification session results</p>
+            </div>
+            {completedSessions.length > 4 && (
+              <button
+                onClick={() => setShowAllCompletedSessions(!showAllCompletedSessions)}
+                className="text-sm px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg font-semibold transition-colors"
+              >
+                {showAllCompletedSessions ? "Show Less" : `View All (${completedSessions.length})`}
+              </button>
+            )}
+          </div>
           {completedSessions.length === 0 ? (
             <p className="text-muted-foreground text-sm py-4">No completed sessions.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {completedSessions.slice(0, 6).map(session => (
+              {(showAllCompletedSessions ? completedSessions : completedSessions.slice(0, 4)).map(session => (
                 <Card key={session.id} className="bg-card shadow-sm">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-lg flex items-center justify-between">
@@ -629,46 +545,44 @@ export default function Dashboard() {
                       const isRecovering = recoveringTrashItem?.type === item.type && recoveringTrashItem?.id === item.id;
                       const isDeleting = deletingTrashItem?.type === item.type && deletingTrashItem?.id === item.id;
                       return (
-                        <Card key={`${item.type}-${item.id}`} className="bg-card border-border border-destructive/20 hover:border-destructive/40 transition-colors shadow-sm">
-                          <CardHeader className="pb-2">
-                            <CardTitle className="text-lg flex items-center justify-between">
-                              <span className="truncate">{item.name}</span>
-                              <span className="text-xs px-2 py-1 bg-destructive/10 text-destructive rounded-md uppercase tracking-wider font-semibold">
+                        <Card key={`${item.type}-${item.id}`} className="bg-gradient-to-br from-red-50/50 to-red-50/20 dark:from-red-950/20 dark:to-background border-red-200 dark:border-red-800 hover:border-red-400 hover:shadow-lg transition-all duration-300 hover:-translate-y-1 overflow-hidden">
+                          <div className="h-1 bg-gradient-to-r from-red-500 to-red-400"></div>
+                          <CardHeader className="pb-3">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <CardTitle className="text-sm font-bold truncate text-foreground leading-tight">{item.name}</CardTitle>
+                              <span className="text-xs px-3 py-1 bg-red-500/90 text-white rounded-full font-semibold flex-shrink-0 whitespace-nowrap">
                                 {item.type.replace('_', ' ')}
                               </span>
-                            </CardTitle>
-                            <p className="text-sm text-muted-foreground">
+                            </div>
+                            <p className="text-xs text-muted-foreground">
                               {new Date(item.deletedAt).toLocaleDateString()}
                               {item.deletedBy && ` • by ${item.deletedBy}`}
                             </p>
                           </CardHeader>
                           <CardContent>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 w-full">
                               <Button 
-                                variant="secondary" 
+                                className="flex-1 font-semibold py-2 h-9 text-sm rounded-lg bg-green-600 hover:bg-green-700 transition-all duration-200" 
                                 size="sm" 
-                                className="flex-1 font-medium gap-1"
                                 disabled={isRecovering || isDeleting}
                                 onClick={() => handleRecoverTrashItem(item.type, item.id, item.name)}
                               >
                                 {isRecovering ? (
                                   <Loader2 className="w-3 h-3 animate-spin" />
                                 ) : (
-                                  "↻"
+                                  <>↩️ RESTORE</>
                                 )}
-                                {isRecovering ? "RECOVERING" : "RECOVER"}
                               </Button>
                               <Button 
-                                variant="ghost" 
+                                className="font-semibold py-2 h-9 text-sm rounded-lg bg-gray-600 hover:bg-gray-700 transition-all duration-200" 
                                 size="sm" 
-                                className="font-medium gap-1 text-destructive hover:bg-destructive/10"
                                 disabled={isRecovering || isDeleting}
                                 onClick={() => handlePermanentDeleteTrashItem(item.type, item.id, item.name)}
                               >
                                 {isDeleting ? (
                                   <Loader2 className="w-3 h-3 animate-spin" />
                                 ) : (
-                                  <Trash2 className="w-3 h-3" />
+                                  <>🗑️</>
                                 )}
                               </Button>
                             </div>
@@ -692,54 +606,74 @@ export default function Dashboard() {
         </div>
 
         {/* ADMIN CONTROL PANEL - QA FULL ACCESS */}
-        <div className="space-y-4 border-t border-border pt-6">
-          <h2 className="text-xl font-bold border-b border-border pb-2">Admin Controls</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="bg-card border-border shadow-sm hover:border-primary/50 transition-colors cursor-pointer">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Boxes className="w-4 h-4 text-primary" />
-                  BOM Management
+        <div className="space-y-6 border-t border-border pt-8">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold text-foreground flex items-center gap-3">
+                <div className="w-1 h-8 bg-orange-500 rounded-full"></div>
+                Admin Controls
+              </h2>
+              <p className="text-sm text-muted-foreground">System management and access</p>
+            </div>
+            {showAllAdminControls && (
+              <button
+                onClick={() => setShowAllAdminControls(!showAllAdminControls)}
+                className="text-sm px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg font-semibold transition-colors"
+              >
+                Show Less
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6">
+            <Card className="bg-gradient-to-br from-blue-50/50 to-blue-50/20 dark:from-blue-950/20 dark:to-background border-blue-200 dark:border-blue-800 hover:border-blue-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-2 cursor-pointer overflow-hidden">
+              <div className="h-1 bg-gradient-to-r from-blue-500 to-blue-400"></div>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold flex items-center gap-3 text-foreground">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg"><Boxes className="w-5 h-5 text-blue-600" /></div>
+                  BOMs
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground mb-3">Create, edit, and manage all BOMs in the system</p>
-                <Button asChild variant="secondary" size="sm" className="w-full font-medium">
-                  <Link href="/bom">Manage BOMs</Link>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground line-clamp-2">Create & manage bill of materials</p>
+                <Button asChild className="w-full font-bold py-2 h-10 rounded-lg bg-blue-600 hover:bg-blue-700 hover:shadow-md transition-all duration-200">
+                  <Link href="/bom">📦 Manage</Link>
                 </Button>
               </CardContent>
             </Card>
 
-            <Card className="bg-card border-border shadow-sm hover:border-primary/50 transition-colors cursor-pointer">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-primary" />
-                  Advanced Reports
+            <Card className="bg-gradient-to-br from-purple-50/50 to-purple-50/20 dark:from-purple-950/20 dark:to-background border-purple-200 dark:border-purple-800 hover:border-purple-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-2 cursor-pointer overflow-hidden">
+              <div className="h-1 bg-gradient-to-r from-purple-500 to-purple-400"></div>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold flex items-center gap-3 text-foreground">
+                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg"><BarChart3 className="w-5 h-5 text-purple-600" /></div>
+                  Reports
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground mb-3">Export and analyze comprehensive system data</p>
-                <Button asChild variant="secondary" size="sm" className="w-full font-medium">
-                  <Link href="/analytics">View Reports</Link>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground line-clamp-2">Analytics & export data</p>
+                <Button asChild className="w-full font-bold py-2 h-10 rounded-lg bg-purple-600 hover:bg-purple-700 hover:shadow-md transition-all duration-200">
+                  <Link href="/analytics">📊 View</Link>
                 </Button>
               </CardContent>
             </Card>
 
-            <Card className="bg-card border-border shadow-sm hover:border-primary/50 transition-colors cursor-pointer">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Trash2 className="w-4 h-4 text-destructive" />
-                  Full Trash Access
+            <Card className="bg-gradient-to-br from-red-50/50 to-red-50/20 dark:from-red-950/20 dark:to-background border-red-200 dark:border-red-800 hover:border-red-400 hover:shadow-xl transition-all duration-300 hover:-translate-y-2 cursor-pointer overflow-hidden">
+              <div className="h-1 bg-gradient-to-r from-red-500 to-red-400"></div>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold flex items-center gap-3 text-foreground">
+                  <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg"><Trash2 className="w-5 h-5 text-red-600" /></div>
+                  Trash
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-xs text-muted-foreground mb-3">View and manage all deleted items system-wide</p>
-                <Button asChild variant="secondary" size="sm" className="w-full font-medium">
-                  <Link href="/trash">View Trash</Link>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground line-clamp-2">Recover or delete items</p>
+                <Button asChild className="w-full font-bold py-2 h-10 rounded-lg bg-red-600 hover:bg-red-700 hover:shadow-md transition-all duration-200">
+                  <Link href="/trash">🗑️ Access</Link>
                 </Button>
               </CardContent>
             </Card>
           </div>
+        </div>
         </div>
       </div>
       <DeleteLoadingOverlay />
@@ -751,81 +685,96 @@ export default function Dashboard() {
   // ENGINEER VIEW (Default)
   return (
     <>
-    <div className="p-8 max-w-6xl mx-auto w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex justify-between items-end mb-4">
-        <div className="flex items-center gap-4">
-          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-16" />
-          <div>
-            <h1 className="text-3xl font-black tracking-tight text-foreground">Engineer Dashboard</h1>
-            <p className="text-muted-foreground mt-2">System Status & Management</p>
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <Button asChild variant="outline" className="font-bold gap-2">
-            <Link href="/analytics">
-              <BarChart3 className="w-4 h-4" /> Analytics
-            </Link>
-          </Button>
-          <Button asChild className="font-bold tracking-wide" data-testid="btn-start-session">
-            <Link href="/session/new">NEW SESSION</Link>
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="bg-card border-border shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex justify-between items-center">
-              Active Sessions
-              <Play className="w-4 h-4 text-primary" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold text-primary">{activeSessions.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card border-border shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex justify-between items-center">
-              Completed Sessions
-              <CheckCircle2 className="w-4 h-4 text-success" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold text-foreground">{completedSessions.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card border-border shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex justify-between items-center">
-              Total BOMs Configured
-              <Boxes className="w-4 h-4 text-muted-foreground" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold text-foreground">{totalBoms}</div>
-            <div className="mt-2">
-              <Button asChild variant="link" className="p-0 h-auto text-sm text-primary">
-                <Link href="/bom">Manage BOMs &rarr;</Link>
+      <div className="min-h-screen bg-gradient-to-b from-background to-secondary/5 p-4 sm:p-8 lg:p-12">
+        <div className="max-w-6xl mx-auto w-full space-y-10 animate-in fade-in duration-500">
+          <div className="flex justify-between items-start sm:items-center gap-6 flex-col sm:flex-row">
+            <div className="flex items-center gap-4">
+              <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-16" />
+              <div>
+                <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Operations</p>
+                <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">Engineer Dashboard</h1>
+              </div>
+            </div>
+            <div className="flex gap-3 w-full sm:w-auto">
+              <Button asChild variant="outline" className="font-semibold gap-2 flex-1 sm:flex-none h-11">
+                <Link href="/analytics">
+                  <BarChart3 className="w-4 h-4" /> Analytics
+                </Link>
+              </Button>
+              <Button asChild className="font-semibold flex-1 sm:flex-none h-11" data-testid="btn-start-session">
+                <Link href="/session/new">New Session</Link>
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
 
-      <div className="space-y-4">
-        <h2 className="text-xl font-bold border-b border-border pb-2 flex items-center gap-2">
-          <Clock className="w-5 h-5" /> Active Sessions
-        </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="border-0 bg-gradient-to-br from-blue-50/50 to-background hover:shadow-md transition-shadow duration-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-xs uppercase tracking-widest font-semibold text-muted-foreground flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-500" />
+                  Active Sessions
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold text-blue-600">{activeSessions.length}</div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 bg-gradient-to-br from-green-50/50 to-background hover:shadow-md transition-shadow duration-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-xs uppercase tracking-widest font-semibold text-muted-foreground flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                  Completed Sessions
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-4xl font-bold text-green-600">{completedSessions.length}</div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 bg-gradient-to-br from-purple-50/50 to-background hover:shadow-md transition-shadow duration-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-xs uppercase tracking-widest font-semibold text-muted-foreground flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-purple-500" />
+                  BOMs Configured
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-end justify-between">
+                  <div className="text-4xl font-bold text-purple-600">{totalBoms}</div>
+                  <Button asChild variant="link" className="p-0 h-auto text-xs text-purple-600 font-semibold">
+                    <Link href="/bom">Manage →</Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-bold text-foreground flex items-center gap-3">
+              <div className="w-1 h-8 bg-blue-500 rounded-full"></div>
+              Active Sessions
+            </h2>
+            <p className="text-sm text-muted-foreground">Currently running verification sessions</p>
+          </div>
+          {activeSessions.length > 4 && (
+            <button
+              onClick={() => setShowAllActiveSessions(!showAllActiveSessions)}
+              className="text-sm px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg font-semibold transition-colors"
+            >
+              {showAllActiveSessions ? "Show Less" : `View All (${activeSessions.length})`}
+            </button>
+          )}
+        </div>
         {activeSessions.length === 0 ? (
           <div className="p-8 text-center bg-secondary/30 rounded-lg border border-border border-dashed">
             <p className="text-muted-foreground font-medium">No active sessions. Start a new session to begin verification.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {activeSessions.map(session => (
+            {(showAllActiveSessions ? activeSessions : activeSessions.slice(0, 4)).map(session => (
               <Card key={session.id} className="bg-card border-border hover:border-primary/50 transition-colors shadow-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg flex items-center justify-between">
@@ -866,15 +815,29 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="space-y-4">
-        <h2 className="text-xl font-bold border-b border-border pb-2 flex items-center gap-2">
-          <CheckCircle2 className="w-5 h-5 text-success" /> Recently Completed Sessions
-        </h2>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-bold text-foreground flex items-center gap-3">
+              <div className="w-1 h-8 bg-green-500 rounded-full"></div>
+              Recently Completed
+            </h2>
+            <p className="text-sm text-muted-foreground">Latest verification session results</p>
+          </div>
+          {completedSessions.length > 4 && (
+            <button
+              onClick={() => setShowAllCompletedSessions(!showAllCompletedSessions)}
+              className="text-sm px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg font-semibold transition-colors"
+            >
+              {showAllCompletedSessions ? "Show Less" : `View All (${completedSessions.length})`}
+            </button>
+          )}
+        </div>
         {completedSessions.length === 0 ? (
           <p className="text-muted-foreground text-sm py-4">No completed sessions.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {completedSessions.slice(0, 6).map(session => (
+            {(showAllCompletedSessions ? completedSessions : completedSessions.slice(0, 4)).map(session => (
               <Card key={session.id} className="bg-card shadow-sm">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-lg flex items-center justify-between">
@@ -910,16 +873,16 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="space-y-4 border-t border-border pt-6">
+      <div className="space-y-6 border-t border-border pt-8">
         <div className="flex items-center justify-between">
           <button 
             onClick={() => setShowTrashBin(!showTrashBin)}
-            className="text-xl font-bold border-b border-border pb-2 flex items-center gap-2 hover:text-muted-foreground transition-colors"
+            className="text-2xl font-bold flex items-center gap-3 hover:opacity-80 transition-opacity"
           >
-            <Trash2 className="w-5 h-5 text-destructive flex-shrink-0" /> 
+            <div className="w-1 h-8 bg-red-500 rounded-full"></div>
             Trash Bin
-            <span className="text-xs px-2 py-1 bg-destructive/10 text-destructive rounded-md">
-              {trashStats?.totalCount || 0}
+            <span className="text-xs px-3 py-1 bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 rounded-lg font-semibold ml-2">
+              {trashStats?.totalCount || 0} items
             </span>
           </button>
           {(trashStats?.totalCount || 0) > 0 && (
@@ -1030,8 +993,24 @@ export default function Dashboard() {
       </div>
 
       {/* ADVANCED SYSTEM ADMINISTRATION - ENGINEER FULL CONTROL */}
-      <div className="space-y-4 border-t border-border pt-6">
-        <h2 className="text-xl font-bold border-b border-border pb-2">System Administration</h2>
+      <div className="space-y-6 border-t border-border pt-8">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-bold text-foreground flex items-center gap-3">
+              <div className="w-1 h-8 bg-orange-500 rounded-full"></div>
+              System Administration
+            </h2>
+            <p className="text-sm text-muted-foreground">Advanced tools and controls</p>
+          </div>
+          {showAllAdminControls && (
+            <button
+              onClick={() => setShowAllAdminControls(!showAllAdminControls)}
+              className="text-sm px-4 py-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg font-semibold transition-colors"
+            >
+              Show Less
+            </button>
+          )}
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card className="bg-card border-border shadow-sm hover:border-primary/50 transition-colors">
             <CardHeader className="pb-2">
@@ -1111,6 +1090,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+    </div>
     </div>
     <DeleteLoadingOverlay />
     <RecoveryLoadingOverlay />

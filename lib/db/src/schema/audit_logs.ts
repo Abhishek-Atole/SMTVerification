@@ -24,7 +24,8 @@ export const auditLogsTable = pgTable(
 
 export const insertAuditLogSchema = createInsertSchema(auditLogsTable).omit({
   id: true,
-  createdAt: true,
+}).extend({
+  createdAt: z.date().optional(),
 });
 
 export type AuditLog = typeof auditLogsTable.$inferSelect;

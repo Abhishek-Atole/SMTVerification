@@ -62,7 +62,9 @@ export const bomItemsTable = pgTable(
   })
 ) as any;
 
-export const insertBomSchema = createInsertSchema(bomsTable).omit({ id: true, createdAt: true });
+export const insertBomSchema = createInsertSchema(bomsTable).omit({ id: true }).extend({
+  createdAt: z.date().optional(),
+});
 export const insertBomItemSchema = createInsertSchema(bomItemsTable).omit({ id: true });
 
 export type Bom = typeof bomsTable.$inferSelect;

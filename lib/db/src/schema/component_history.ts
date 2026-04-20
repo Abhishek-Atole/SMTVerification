@@ -23,7 +23,8 @@ export const componentHistoryTable = pgTable(
 
 export const insertComponentHistorySchema = createInsertSchema(componentHistoryTable).omit({
   id: true,
-  recordedAt: true,
+}).extend({
+  recordedAt: z.date().optional(),
 });
 
 export type ComponentHistory = typeof componentHistoryTable.$inferSelect;

@@ -3,16 +3,23 @@
 import { db } from "@workspace/db";
 import { auditLogsTable, InsertAuditLog } from "@workspace/db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
+import { TimestampService } from "./timestamp-service";
 
 export class AuditService {
   /**
    * Record an audit log entry
    */
   static async recordAuditLog(data: InsertAuditLog) {
+    // Ensure we use server timestamp for audit logs
+    const auditData = {
+      ...data,
+      createdAt: data.createdAt || TimestampService.createAuditTimestamp(),
+    };
+    
     // @ts-ignore - Drizzle insert type inference issue
     const result = (await db
       .insert(auditLogsTable)
-      .values(data)
+      .values(auditData)
       .returning()) as any[];
     return result[0];
   }

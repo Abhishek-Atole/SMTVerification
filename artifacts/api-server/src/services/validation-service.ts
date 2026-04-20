@@ -3,6 +3,21 @@ import { bomsTable, bomItemsTable, sessionsTable } from "@workspace/db/schema";
 import { ComponentService } from "./component-service";
 import { FeederService } from "./feeder-service";
 import { eq, and } from "drizzle-orm";
+import Fuse from "fuse.js";
+
+const FUZZY_THRESHOLD = 0.95;
+const SUGGESTION_COUNT = 3;
+const OCRERROR_MAPPINGS: Record<string, string[]> = {
+  '0': ['O'],
+  'O': ['0'],
+  '1': ['l', 'I'],
+  'l': ['1', 'I'],
+  'I': ['1', 'l'],
+  'S': ['5'],
+  '5': ['S'],
+  'B': ['8'],
+  '8': ['B'],
+};
 
 export interface ValidationResult {
   status: "pass" | "alternate_pass" | "mismatch" | "feeder_not_found";
@@ -12,6 +27,9 @@ export interface ValidationResult {
   matchedComponentId?: number;
   alternateUsed: boolean;
   validationResult: string;
+  matchScore?: number;
+  suggestions?: any[];
+  normalizations?: Record<string, boolean>;
 }
 
 export class ValidationService {
@@ -189,5 +207,150 @@ export class ValidationService {
   ): Promise<{ hasAnomaly: boolean; message?: string }> {
     // Could implement logic to detect unusual patterns
     return { hasAnomaly: false };
+  }
+
+  /**
+   * Normalize string for fuzzy matching
+   * - Converts to uppercase
+   * - Trims whitespace
+   * - Removes special characters except hyphens and underscores
+   */
+  static normalizeForMatching(value: string | null | undefined): string {
+    if (!value) return '';
+    return value
+      .toUpperCase()
+      .trim()
+      .replace(/[^A-Z0-9-_]/g, '');
+  }
+
+  /**
+   * Calculate match score using Levenshtein distance (0-100)
+   * 100 = perfect match, 0 = completely different
+   */
+  static calculateMatchScore(input: string, expected: string): number {
+    const normalized1 = this.normalizeForMatching(input);
+    const normalized2 = this.normalizeForMatching(expected);
+    
+    if (!normalized1 || !normalized2) return 0;
+    if (normalized1 === normalized2) return 100;
+    
+    try {
+      // Use Fuse.js for Levenshtein distance
+      // Fuse score: 0 = perfect match, 1 = completely different
+      const fuse = new Fuse([normalized2], { 
+        threshold: 0.3,
+        includeScore: true 
+      });
+      const results = fuse.search(normalized1);
+      
+      if (results.length === 0) return 0;
+      
+      const fuseScore = results[0].score || 1;
+      return Math.round((1 - fuseScore) * 100);
+    } catch (error) {
+      console.error('Error calculating match score:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Fuzzy match feeder number against list of BOM items
+   * @returns { match: BOM item or null, score: 0-100, suggestions: alternatives }
+   */
+  static fuzzyMatchFeeder(
+    userInput: string | null | undefined,
+    bomItems: any[],
+    threshold: number = FUZZY_THRESHOLD
+  ): { match: any | null; score: number; suggestions: any[] } {
+    if (!userInput || bomItems.length === 0) {
+      return { match: null, score: 0, suggestions: [] };
+    }
+    
+    const normalizedInput = this.normalizeForMatching(userInput);
+    
+    const fuseOptions = {
+      keys: ['feederNumber'],
+      threshold: 1 - threshold,  // Fuse uses inverted threshold
+      minMatchCharLength: 2,
+      includeScore: true,
+    };
+    
+    try {
+      const fuse = new Fuse(bomItems, fuseOptions);
+      const results = fuse.search(normalizedInput).slice(0, SUGGESTION_COUNT + 1);
+      
+      if (results.length === 0) {
+        return { match: null, score: 0, suggestions: [] };
+      }
+      
+      // Best match
+      const bestResult = results[0];
+      const bestMatch = bestResult.item;
+      const bestScore = Math.round((1 - (bestResult.score || 1)) * 100);
+      
+      // Suggestions (alternatives if not perfect match)
+      const suggestions = bestScore >= 100 
+        ? [] 
+        : results.slice(1, SUGGESTION_COUNT + 1).map(r => r.item);
+      
+      return {
+        match: bestMatch,
+        score: bestScore,
+        suggestions,
+      };
+    } catch (error) {
+      console.error('Error in fuzzyMatchFeeder:', error);
+      return { match: null, score: 0, suggestions: [] };
+    }
+  }
+
+  /**
+   * Fuzzy match MPN or Internal ID value
+   * @returns { score: 0-100, matches: boolean, closestMatch: expected value }
+   */
+  static fuzzyMatchValue(
+    userInput: string | null | undefined,
+    expectedValue: string | null | undefined,
+    threshold: number = FUZZY_THRESHOLD
+  ): { score: number; matches: boolean; closestMatch?: string } {
+    if (!userInput || !expectedValue) {
+      return { score: 0, matches: false };
+    }
+    
+    const normalized1 = this.normalizeForMatching(userInput);
+    const normalized2 = this.normalizeForMatching(expectedValue);
+    
+    if (!normalized1 || !normalized2) {
+      return { score: 0, matches: false };
+    }
+    
+    // Exact match check first (fastest)
+    if (normalized1 === normalized2) {
+      return { score: 100, matches: true, closestMatch: normalized2 };
+    }
+    
+    // Fuzzy match
+    const score = this.calculateMatchScore(normalized1, normalized2);
+    const matchThreshold = threshold * 100;
+    const matches = score >= matchThreshold;
+    
+    return {
+      score,
+      matches,
+      closestMatch: normalized2,
+    };
+  }
+
+  /**
+   * Get details about what normalizations were applied
+   */
+  static getNormalizationDetails(original: string, normalized: string): Record<string, boolean> {
+    if (!original || !normalized) return {};
+    
+    return {
+      uppercased: original !== original.toUpperCase() && normalized === original.toUpperCase(),
+      trimmed: original !== original.trim(),
+      specialCharsRemoved: /[^A-Z0-9-_]/i.test(original),
+    };
   }
 }

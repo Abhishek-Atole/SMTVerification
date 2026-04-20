@@ -1,0 +1,13 @@
+Report Type,operator
+Generated At,Mon, 20 Apr 2026 13:40:41 GMT
+Total Records,1
+dateFilter,today
+startDate,Mon Apr 20 2026 05:30:00 GMT+0530 (India Standard Time)
+endDate,Tue Apr 21 2026 05:29:59 GMT+0530 (India Standard Time)
+lineId,undefined
+pcbId,undefined
+operatorId,undefined
+shiftId,undefined
+
+operatorName,sessionsCount,totalScans,passRate,feedersPerMinute,avgScanTime
+O,1,1,0.00,0.00,1

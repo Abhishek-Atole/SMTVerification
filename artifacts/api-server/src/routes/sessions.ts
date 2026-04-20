@@ -3,6 +3,8 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { sessionsTable, scanRecordsTable, spliceRecordsTable, bomItemsTable, bomsTable, auditLogsTable } from "@workspace/db/schema";
 import { eq, and, sql, isNull, isNotNull } from "drizzle-orm";
+import { ValidationService } from "../services/validation-service";
+import { TimestampService } from "../services/timestamp-service";
 
 const router: IRouter = Router();
 
@@ -55,6 +57,9 @@ router.post("/sessions", async (req, res) => {
     // Convert bomId = 0 (free scan mode) to null for database storage
     const finalBomId = bomId === 0 ? null : bomId;
 
+    // Use server timestamp for session creation
+    const timestamps = TimestampService.createSessionTimestamps();
+
     const [session] = await db
       .insert(sessionsTable)
       .values({
@@ -62,6 +67,8 @@ router.post("/sessions", async (req, res) => {
         operatorName, qaName, shiftName, shiftDate, logoUrl,
         productionCount: productionCount ?? 0,
         status: "active",
+        startTime: timestamps.startTime,
+        createdAt: timestamps.createdAt,
       })
       .returning();
 
@@ -277,6 +284,10 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
     let message = "";
     let mpnMatched = false;
     let internalIdMatched = false;
+    let fuzzyMatchResult: any = { score: 0, matches: false };
+    let matchingAlgorithm = "exact";
+    let expectedValue = "";
+    let suggestions: any[] = [];
 
     if (isFreeScanMode) {
       // Free Scan Mode: Accept any feeder, no BOM validation
@@ -329,12 +340,44 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
           let userInputMatches = false;
           
           if (internalIdType === "mpn") {
-            // User provided an MPN - compare to expectedMpn
-            userInputMatches = hasExpectedMpn && normalizedMpnId === expectedMpn;
+            // User provided an MPN - compare to expectedMpn with fuzzy matching
+            expectedValue = expectedMpn || "";
+            if (hasExpectedMpn && expectedMpn) {
+              // Use fuzzy matching instead of exact match
+              fuzzyMatchResult = ValidationService.fuzzyMatchValue(
+                normalizedMpnId,
+                expectedMpn,
+                0.95 // 95% threshold
+              );
+              userInputMatches = fuzzyMatchResult.matches;
+              matchingAlgorithm = fuzzyMatchResult.score === 100 ? "exact" : "fuzzy";
+              if (fuzzyMatchResult.suggestions && fuzzyMatchResult.suggestions.length > 0) {
+                suggestions = fuzzyMatchResult.suggestions;
+              }
+            } else {
+              // No fuzzy match needed, accept as provided
+              userInputMatches = true;
+            }
             mpnMatched = userInputMatches;
           } else if (internalIdType === "internal_id") {
-            // User provided an Internal ID - compare to expectedInternalId
-            userInputMatches = hasExpectedInternalId && normalizedMpnId === expectedInternalId;
+            // User provided an Internal ID - compare to expectedInternalId with fuzzy matching
+            expectedValue = expectedInternalId || "";
+            if (hasExpectedInternalId && expectedInternalId) {
+              // Use fuzzy matching instead of exact match
+              fuzzyMatchResult = ValidationService.fuzzyMatchValue(
+                normalizedMpnId,
+                expectedInternalId,
+                0.95 // 95% threshold
+              );
+              userInputMatches = fuzzyMatchResult.matches;
+              matchingAlgorithm = fuzzyMatchResult.score === 100 ? "exact" : "fuzzy";
+              if (fuzzyMatchResult.suggestions && fuzzyMatchResult.suggestions.length > 0) {
+                suggestions = fuzzyMatchResult.suggestions;
+              }
+            } else {
+              // No fuzzy match needed, accept as provided
+              userInputMatches = true;
+            }
             internalIdMatched = userInputMatches;
           }
 
@@ -344,11 +387,11 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
             if (hasExpectedMpn || hasExpectedInternalId) {
               if (!userInputMatches) {
                 scanStatus = "reject";
-                const expectedValue = internalIdType === "mpn" ? expectedMpn : expectedInternalId;
-                message = `❌ AUTO MODE REJECTED: ${internalIdType === "mpn" ? "MPN" : "Internal ID"} '${normalizedMpnId}' does NOT match expected '${expectedValue}' for feeder ${normalizedFeeder}`;
+                message = `❌ AUTO MODE REJECTED: ${internalIdType === "mpn" ? "MPN" : "Internal ID"} '${normalizedMpnId}' (${fuzzyMatchResult.score}% match) does NOT meet 95% threshold. Expected: '${expectedValue}'${suggestions.length > 0 ? ` — Did you mean: ${suggestions.join(", ")}?` : ""}`;
               } else {
                 scanStatus = "ok";
-                message = `✅ VERIFIED: Feeder ${normalizedFeeder} with ${internalIdType} ${normalizedMpnId} PASSED validation`;
+                const matchType = matchingAlgorithm === "exact" ? "VERIFIED (EXACT)" : `VERIFIED (${fuzzyMatchResult.score}% MATCH)`;
+                message = `✅ ${matchType}: Feeder ${normalizedFeeder} with ${internalIdType} ${normalizedMpnId} PASSED validation`;
               }
             } else {
               // BOM doesn't require validation, but user provided value - accept it
@@ -356,14 +399,21 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
               message = `✅ Feeder ${normalizedFeeder} with ${internalIdType} ${normalizedMpnId} ACCEPTED`;
             }
           } else if (verificationMode === "manual") {
-            // MANUAL mode: Always record, let operator decide
+            // MANUAL mode: Strict validation - REJECT if provided MPN doesn't meet threshold
             if (userInputMatches) {
               scanStatus = "ok";
-              message = `✅ VERIFIED: Feeder ${normalizedFeeder} with ${internalIdType} ${normalizedMpnId} PASSED`;
+              const matchType = matchingAlgorithm === "exact" ? "VERIFIED (EXACT)" : `VERIFIED (${fuzzyMatchResult.score}% MATCH)`;
+              message = `✅ ${matchType}: Feeder ${normalizedFeeder} with ${internalIdType} ${normalizedMpnId} PASSED`;
             } else {
-              const expectedValue = internalIdType === "mpn" ? expectedMpn : expectedInternalId;
-              scanStatus = "ok"; // Still "ok" status for recording, but with warning
-              message = `⚠️ MISMATCH: Feeder ${normalizedFeeder} - ${internalIdType} provided '${normalizedMpnId}' but expected '${expectedValue}'. OPERATOR REVIEW REQUIRED.`;
+              // STRICT: Reject if user provided insufficient/incorrect MPN/ID but BOM requires validation
+              if (hasExpectedMpn || hasExpectedInternalId) {
+                scanStatus = "reject";
+                message = `❌ VALIDATION FAILED: Feeder ${normalizedFeeder} - ${internalIdType === "mpn" ? "MPN" : "Internal ID"} '${normalizedMpnId}' (${fuzzyMatchResult.score}% match) does NOT meet 95% threshold. Required: '${expectedValue}'${suggestions.length > 0 ? ` — Did you mean: ${suggestions.join(", ")}?` : ""}`;
+              } else {
+                // BOM doesn't require validation, so accept the provided value
+                scanStatus = "ok";
+                message = `✅ Feeder ${normalizedFeeder} with provided ${internalIdType} '${normalizedMpnId}' ACCEPTED (no validation required in BOM)`;
+              }
             }
           }
         } else {
@@ -404,6 +454,11 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
         description: selectedItem?.description ?? null,
         location: selectedItem?.location ?? null,
         verificationMode: verificationMode,
+        matchScore: fuzzyMatchResult.score > 0 ? fuzzyMatchResult.score : null,
+        matchingAlgorithm: matchingAlgorithm,
+        expectedValue: expectedValue || null,
+        suggestions: suggestions.length > 0 ? JSON.stringify(suggestions) : null,
+        scannedAt: TimestampService.createScanTimestamp(),
       })
       .returning();
 
@@ -428,6 +483,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
       }),
       changedBy: operatorName,
       description: auditDescription,
+      createdAt: TimestampService.createAuditTimestamp(),
     });
 
     // === STEP 5: PREPARE RESPONSE ===
@@ -520,6 +576,7 @@ router.post("/sessions/:sessionId/splices", async (req, res) => {
         oldSpoolBarcode: oldSpoolBarcode.trim(),
         newSpoolBarcode: newSpoolBarcode.trim(),
         durationSeconds: durationSeconds ?? null,
+        splicedAt: TimestampService.createOperationTimestamp(),
       })
       .returning();
 

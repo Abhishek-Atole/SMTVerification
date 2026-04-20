@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import usersRouter from "./users";
 import bomRouter from "./bom";
 import sessionsRouter from "./sessions";
 import analyticsRouter from "./analytics";
@@ -10,10 +11,13 @@ import auditRouter from "./audit";
 import testRouter from "./test";
 import trashRouter from "./trash";
 import dashboardRouter from "./dashboard";
+import timestampRouter from "./timestamp";
+import reportsRouter from "./reports";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(usersRouter);
 router.use(bomRouter);
 router.use(sessionsRouter);
 router.use(analyticsRouter);
@@ -24,5 +28,7 @@ router.use(auditRouter);
 router.use(testRouter);
 router.use(trashRouter);
 router.use(dashboardRouter);
+router.use(timestampRouter);
+router.use(reportsRouter);
 
 export default router;

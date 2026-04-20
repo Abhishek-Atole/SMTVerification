@@ -45,6 +45,10 @@ export const scanRecordsTable = pgTable(
     validationResult: text("validation_result"), // 'pass', 'alternate_pass', 'mismatch', 'alternate_not_found'
     internalIdScanned: text("internal_id_scanned"), // NEW: Internal ID scanned (optional)
     verificationMode: text("verification_mode").default("manual"), // NEW: 'manual' or 'auto'
+    matchScore: integer("match_score"), // NEW: 0-100 percentage match score from fuzzy matching
+    matchingAlgorithm: text("matching_algorithm"), // NEW: 'exact' | 'fuzzy' | 'normalized'
+    expectedValue: text("expected_value"), // NEW: What the system expected to match
+    suggestions: text("suggestions"), // NEW: JSON array of alternative matches
     description: text("description"),
     location: text("location"),
     scannedAt: timestamp("scanned_at").defaultNow().notNull(),
@@ -69,9 +73,16 @@ export const spliceRecordsTable = pgTable("splice_records", {
   splicedAt: timestamp("spliced_at").defaultNow().notNull(),
 });
 
-export const insertSessionSchema = createInsertSchema(sessionsTable).omit({ id: true, createdAt: true, startTime: true });
-export const insertScanRecordSchema = createInsertSchema(scanRecordsTable).omit({ id: true, scannedAt: true });
-export const insertSpliceRecordSchema = createInsertSchema(spliceRecordsTable).omit({ id: true, splicedAt: true });
+export const insertSessionSchema = createInsertSchema(sessionsTable).omit({ id: true }).extend({
+  createdAt: z.date().optional(),
+  startTime: z.date().optional(),
+});
+export const insertScanRecordSchema = createInsertSchema(scanRecordsTable).omit({ id: true }).extend({
+  scannedAt: z.date().optional(),
+});
+export const insertSpliceRecordSchema = createInsertSchema(spliceRecordsTable).omit({ id: true }).extend({
+  splicedAt: z.date().optional(),
+});
 
 export type Session = typeof sessionsTable.$inferSelect;
 export type InsertSession = z.infer<typeof insertSessionSchema>;

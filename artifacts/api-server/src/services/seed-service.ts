@@ -12,6 +12,7 @@ import {
   spliceRecordsTable,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
+import { TimestampService } from "./timestamp-service";
 
 interface SeedOptions {
   companiesCount?: number;
@@ -247,7 +248,7 @@ export class SeedDataService {
 
       // Create sample sessions and scans
       for (let s = 0; s < sessionsPerBom; s++) {
-        const now = new Date();
+        const now = TimestampService.getCurrentTimestamp();
         const sessionStart = new Date(now.getTime() - Math.random() * 7 * 24 * 60 * 60 * 1000);
 
         const session = await db
@@ -265,6 +266,7 @@ export class SeedDataService {
             shiftDate: sessionStart.toISOString().split("T")[0],
             status: Math.random() > 0.3 ? "completed" : "active",
             startTime: sessionStart,
+            createdAt: TimestampService.createOperationTimestamp(),
             endTime:
               Math.random() > 0.3
                 ? new Date(sessionStart.getTime() + Math.random() * 3 * 60 * 60 * 1000)
@@ -327,6 +329,7 @@ export class SeedDataService {
                 oldSpoolBarcode: `OLD-SPOOL-${Math.floor(Math.random() * 100000)}`,
                 newSpoolBarcode: `NEW-SPOOL-${Math.floor(Math.random() * 100000)}`,
                 durationSeconds: Math.floor(Math.random() * 120) + 30,
+                splicedAt: TimestampService.createOperationTimestamp(),
               })
               .returning();
 
