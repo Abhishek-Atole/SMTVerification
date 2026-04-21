@@ -53,10 +53,25 @@ export function mockupPreviewPlugin(): Plugin {
 
   function generateSource(components: Array<DiscoveredComponent>): string {
     const entries = components
-      .map(
-        (c) =>
-          `  ${JSON.stringify(c.globKey)}: () => import(${JSON.stringify(c.importPath)})`,
-      )
+      .map((c) => {
+        // Validate component paths to prevent code injection
+        // Reject null bytes (code injection vector) and absolute paths
+        if (c.importPath.includes("\0") || c.globKey.includes("\0")) {
+          throw new Error(`Invalid component path detected`);
+        }
+
+        if (path.isAbsolute(c.importPath) || path.isAbsolute(c.globKey)) {
+          throw new Error(`Absolute paths are not allowed`);
+        }
+
+        // Verify paths don't contain suspicious sequences after normalization
+        const normalized = path.posix.normalize(c.importPath);
+        if (normalized.includes("\0")) {
+          throw new Error(`Null bytes in normalized path`);
+        }
+
+        return `  ${JSON.stringify(c.globKey)}: () => import(${JSON.stringify(c.importPath)})`;
+      })
       .join(",\n");
 
     return [
