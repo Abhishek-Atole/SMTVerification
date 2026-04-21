@@ -3,11 +3,13 @@
 ## Role-Based Access Control (RBAC) Overview
 
 ### Allowed Roles
+
 - ✅ **Engineer:** Full access to dashboard (create sessions, view analytics, manage BOMs)
 - ✅ **QA:** Full access to dashboard (view analytics, verification records, alarms)
 - ❌ **Operator:** NO access to dashboard (can only operate actual scanning)
 
 ### Security Objectives
+
 1. Backend API rejects unauthorized requests with 403 Forbidden
 2. Frontend hides dashboard navigation link from operators
 3. Frontend blocks direct URL access to dashboard for operators
@@ -18,6 +20,7 @@
 ## Backend Security Implementation
 
 ### Current State
+
 Dashboard endpoints in `artifacts/api-server/src/routes/dashboard.ts` lack role-based middleware.
 
 ### Required Implementation
@@ -48,6 +51,7 @@ router.use(requireQAOrEngineer);
 ### Testing Backend Security
 
 #### Test 1: Engineer User Access
+
 ```bash
 # Simulate engineer user request
 curl -H "Cookie: auth_token=<engineer_token>" \
@@ -57,6 +61,7 @@ curl -H "Cookie: auth_token=<engineer_token>" \
 ```
 
 #### Test 2: QA User Access
+
 ```bash
 # Simulate QA user request
 curl -H "Cookie: auth_token=<qa_token>" \
@@ -66,6 +71,7 @@ curl -H "Cookie: auth_token=<qa_token>" \
 ```
 
 #### Test 3: Operator User Denied
+
 ```bash
 # Simulate operator user request
 curl -H "Cookie: auth_token=<operator_token>" \
@@ -76,6 +82,7 @@ curl -H "Cookie: auth_token=<operator_token>" \
 ```
 
 #### Test 4: Unauthenticated Access
+
 ```bash
 # No token
 curl http://localhost:3000/api/dashboard/kpi?sessionId=1
@@ -89,9 +96,11 @@ curl http://localhost:3000/api/dashboard/kpi?sessionId=1
 ## Frontend Security Implementation
 
 ### Navigation Link Security ✅ Already Implemented
+
 **File:** `artifacts/feeder-scanner/src/components/layout.tsx`
 
 Navigation item has role filter:
+
 ```typescript
 { 
   href: "/real-time-dashboard", 
@@ -145,18 +154,21 @@ if (!['qa', 'engineer'].includes(user.role)) {
 ### Testing Frontend Security
 
 #### Test 1: Navigate as Engineer
+
 1. Log in as engineer user
 2. Check sidebar → "Real-Time Dashboard" link visible ✓
 3. Click link → Dashboard loads, displays data ✓
 4. Refresh page → Still displays data ✓
 
 #### Test 2: Navigate as QA
+
 1. Log in as QA user
 2. Check sidebar → "Real-Time Dashboard" link visible ✓
 3. Click link → Dashboard loads, displays data ✓
 4. Refresh page → Still displays data ✓
 
 #### Test 3: Navigate as Operator
+
 1. Log in as operator user
 2. Check sidebar → "Real-Time Dashboard" link should NOT be visible ✗ OR visible but disabled
 3. Try direct URL: `http://localhost:5173/real-time-dashboard`
@@ -164,7 +176,9 @@ if (!['qa', 'engineer'].includes(user.role)) {
    - Without route guard: Loads empty dashboard + API returns 403 errors ⚠️
 
 #### Test 4: Session Selector Permission
+
 Verify operators CAN see other dashboards (main dashboard shows all sessions for planning):
+
 - Main dashboard `/` is accessible to operators
 - Real-time analytics dashboard `/real-time-dashboard` is NOT accessible
 - Session history `/sessions` is accessible to operators (historical view)
@@ -174,6 +188,7 @@ Verify operators CAN see other dashboards (main dashboard shows all sessions for
 ## Security Testing Checklist
 
 ### Backend Tests
+
 - [ ] **401 Unauthenticated:** No token → returns 401 Unauthorized
 - [ ] **403 Operator:** Operator token → returns 403 Forbidden
 - [ ] **200 Engineer:** Engineer token → returns 200 with data
@@ -182,6 +197,7 @@ Verify operators CAN see other dashboards (main dashboard shows all sessions for
 - [ ] **Session filtering:** Engineer only sees their assigned sessions (if implemented)
 
 ### Frontend Tests
+
 - [ ] **Link visibility:** Engineer sees link ✓, Operator doesn't see link ✓
 - [ ] **Direct URL (Engineer):** Navigate to `/real-time-dashboard` → dashboard loads ✓
 - [ ] **Direct URL (QA):** Navigate to `/real-time-dashboard` → dashboard loads ✓
@@ -190,6 +206,7 @@ Verify operators CAN see other dashboards (main dashboard shows all sessions for
 - [ ] **Session selector:** Only shows sessions user has access to ✓
 
 ### Integration Tests
+
 - [ ] **Logout/relogin:** Engineer logout → login as operator → no dashboard access ✓
 - [ ] **Session persistence:** Refresh page as engineer → remains authenticated ✓
 - [ ] **Error recovery:** API returns 500 → dashboard shows error message, not crash ✓
@@ -223,7 +240,9 @@ req.log.warn({
 ```
 
 ### Log Analysis
+
 Monitor logs for:
+
 - Repeated 403 errors from same user → possible account compromise
 - Multiple failed authorization attempts → possible attack
 - Unusual access patterns → suspicious behavior
@@ -246,11 +265,13 @@ Monitor logs for:
 ## Security Best Practices
 
 ### Already Implemented ✓
+
 - Role-based access control
 - Session-based authentication
 - Error messages don't reveal system internals
 
 ### Recommended Improvements
+
 1. **API Key rotation:** Regularly rotate session tokens
 2. **Two-factor authentication:** For sensitive accounts (optional)
 3. **IP whitelist:** Restrict dashboard access to specific IP ranges (optional)
@@ -267,12 +288,14 @@ Monitor logs for:
 ## Test Environment Setup
 
 ### Option 1: Manual Testing
+
 1. Start backend: `npm run dev` (in api-server)
 2. Start frontend: `npm run dev` (in feeder-scanner)
 3. Create test users: engineer, qa, operator
 4. Follow test cases above
 
 ### Option 2: Automated Testing (Future)
+
 ```typescript
 // Example Jest test
 describe("Dashboard Security", () => {

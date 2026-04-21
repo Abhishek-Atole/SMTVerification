@@ -8,6 +8,7 @@
 ## 🎯 4 Realistic Production BOMs
 
 ### 1️⃣ Industrial Controller
+
 - **Use Case**: PLC, Automation, IIoT
 - **Components**: 12 positions
 - **Key ICs**: STM32F407, LM358, LM339
@@ -15,6 +16,7 @@
 - **Estimated Cost**: ~$450-550 per unit
 
 ### 2️⃣ Power Supply Module  
+
 - **Use Case**: Industrial PSU, 24V 5A
 - **Components**: 8 positions
 - **Key ICs**: LM7805 Voltage Regulator
@@ -22,6 +24,7 @@
 - **Estimated Cost**: ~$80-120 per unit
 
 ### 3️⃣ Networking Unit
+
 - **Use Case**: Ethernet PHY, IoT Module
 - **Components**: 10 positions
 - **Key MCU**: STM32F103
@@ -29,6 +32,7 @@
 - **Estimated Cost**: ~$200-300 per unit
 
 ### 4️⃣ Signal Processor
+
 - **Use Case**: High-Speed DSP, Data Acquisition
 - **Components**: 14 positions
 - **Key FPGA**: Xilinx Artix-7
@@ -98,22 +102,26 @@ Generated Data:
 ## 🎓 Example Queries
 
 ### View a BOM
+
 ```bash
 curl http://localhost:3000/api/boms/1 | jq '.name, .description'
 ```
 
 **Output:**
+
 ```json
 "Industrial Controller - Rev A"
 "Advanced industrial control system with networking"
 ```
 
 ### Get BOM Items
+
 ```bash
 curl http://localhost:3000/api/boms/1/items | jq '.[0:3]'
 ```
 
 **Output:**
+
 ```json
 [
   {
@@ -127,11 +135,13 @@ curl http://localhost:3000/api/boms/1/items | jq '.[0:3]'
 ```
 
 ### Find Component Alternates
+
 ```bash
 curl http://localhost:3000/api/components/MPN-12345/alternates | jq '.[]'
 ```
 
 **Output:**
+
 ```json
 {
   "alternateMpn": "ALT-MPN-12345-1",
@@ -141,14 +151,17 @@ curl http://localhost:3000/api/components/MPN-12345/alternates | jq '.[]'
 ```
 
 ### Trace Session Components
+
 ```bash
 curl http://localhost:3000/api/traceability/session/1/trace | jq '.trace | length'
 ```
 
 **Output:**
+
 ```
 8
 ```
+
 (8 components scanned in session 1)
 
 ---
@@ -172,18 +185,23 @@ curl http://localhost:3000/api/traceability/session/1/trace | jq '.trace | lengt
 ## 🚀 Usage
 
 ### Quick Test (Fastest)
+
 ```bash
 curl http://localhost:3000/api/test/seed-quick
 ```
+
 ⏱️ ~2 seconds | 📦 ~100 records
 
 ### Standard Test
+
 ```bash
 curl -X POST http://localhost:3000/api/test/seed
 ```
+
 ⏱️ ~5 seconds | 📦 ~2,900 records
 
 ### Large Scale Test
+
 ```bash
 curl -X POST http://localhost:3000/api/test/seed \
   -H "Content-Type: application/json" \
@@ -193,6 +211,7 @@ curl -X POST http://localhost:3000/api/test/seed \
     "sessionsPerBom": 5
   }'
 ```
+
 ⏱️ ~15 seconds | 📦 ~7,500 records
 
 ---
@@ -200,23 +219,27 @@ curl -X POST http://localhost:3000/api/test/seed \
 ## ✨ Key Features
 
 ✅ **Realistic Data**
+
 - Real component MPNs and manufacturers
 - Authentic BOM structures
 - Production-like component assignments
 
 ✅ **Complete Traceability**
+
 - Reel IDs (REEL-XXXXXX)
 - Lot numbers (LOT-2026-XXXXX)
 - Date codes (WW-YY format)
 - Scan records with timestamps
 
 ✅ **Testing Ready**
+
 - Multiple product types
 - Alternate components usage
 - Mixed pass/fail scenarios
 - Feeder splice operations
 
 ✅ **Audit Trail**
+
 - Change history
 - User attribution
 - Action tracking
@@ -227,21 +250,25 @@ curl -X POST http://localhost:3000/api/test/seed \
 ## 🎯 Next Steps
 
 1. **Seed the database**
+
    ```bash
    curl -X POST http://localhost:3000/api/test/seed
    ```
 
 2. **View statistics**
+
    ```bash
    curl http://localhost:3000/api/test/stats | jq '.'
    ```
 
 3. **Test traceability**
+
    ```bash
    curl http://localhost:3000/api/traceability/session/1/trace | jq '.'
    ```
 
 4. **Explore audit trail**
+
    ```bash
    curl http://localhost:3000/api/audit/logs/component/STM32F407VGT6 | jq '.logs | length'
    ```
@@ -251,6 +278,7 @@ curl -X POST http://localhost:3000/api/test/seed \
 ## 📖 Documentation
 
 For detailed information, see:
+
 - **SAMPLE_BOMS_REFERENCE.md** - Complete BOM specifications
 - **API_REFERENCE.md** - All API endpoints
 - **QUICK_START.md** - 5-minute setup
@@ -259,4 +287,3 @@ For detailed information, see:
 ---
 
 **Version**: 1.0.0 | **Status**: ✅ Production Ready
-

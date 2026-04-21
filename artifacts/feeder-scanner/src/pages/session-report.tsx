@@ -16,7 +16,6 @@ import { Label } from "@/components/ui/label";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 
 const NAVY: [number, number, number] = [0, 51, 102];
 const WHITE: [number, number, number] = [255, 255, 255];
@@ -456,248 +455,29 @@ export default function SessionReport() {
     }
   };
 
-  const exportExcel = () => {
+  const exportExcel = async () => {
     try {
-    const changeoverId = `CHG${String(session.id).padStart(8, "0")}`;
-    const startTimeStr = session.startTime ? format(new Date(session.startTime), "hh:mm:ss aa") : "N/A";
-    const endTimeStr = session.endTime ? format(new Date(session.endTime), "hh:mm:ss aa") : "N/A";
-    const totalBomItems = report.bomItems.length;
-    const passCount = [...bestScanMap.values()].filter((s) => s.status === "ok").length;
-    const failCount = [...bestScanMap.values()].filter((s) => s.status === "reject").length;
-    const passRate = totalBomItems > 0 ? `${((passCount / totalBomItems) * 100).toFixed(1)}%` : "0%";
-    const isComplete = passCount === totalBomItems;
-
-    // Build single sheet as array-of-arrays (10 columns = A..J)
-    const aoa: (string | number)[][] = [];
-    const merges: XLSX.Range[] = [];
-    const addMerge = (r1: number, c1: number, r2: number, c2: number) =>
-      merges.push({ s: { r: r1, c: c1 }, e: { r: r2, c: c2 } });
-
-    let row = 0;
-
-    // Row 0: Company name
-    aoa.push([session.companyName, "", "", "", "", "", "", "", "", ""]);
-    addMerge(row, 0, row, 9);
-    row++;
-
-    // Row 1: Report title
-    aoa.push(["SMT CHANGEOVER VERIFICATION REPORT", "", "", "", "", "", "", "", "", ""]);
-    addMerge(row, 0, row, 9);
-    row++;
-
-    // Row 2: blank
-    aoa.push(["", "", "", "", "", "", "", "", "", ""]);
-    row++;
-
-    // Row 3: Header details row 1
-    aoa.push([
-      "Changeover ID:", changeoverId,
-      "Panel ID:", session.panelName,
-      "Shift:", session.shiftName,
-      "Date:", session.shiftDate,
-      "Duration:", `${summary.durationMinutes || 0} min`,
-    ]);
-    row++;
-
-    // Row 4: Header details row 2
-    aoa.push([
-      "Customer:", session.customerName || "N/A",
-      "Machine:", isFreeScanMode ? "N/A" : "N/A",
-      "Operator:", session.operatorName,
-      "Start Time:", startTimeStr,
-      "BOM Version:", session.bomName || (isFreeScanMode ? "FREE SCAN" : "N/A"),
-    ]);
-    row++;
-
-    // Row 5: Header details row 3
-    aoa.push([
-      "PCB/:", session.panelName.split(" ")[0] || "N/A",
-      "Line:", isFreeScanMode ? "N/A" : "N/A",
-      "QA:", session.qaName || "N/A",
-      "End Time:", endTimeStr,
-      "Supervisor:", session.supervisorName,
-    ]);
-    row++;
-
-    // Row 6: blank
-    aoa.push(["", "", "", "", "", "", "", "", "", ""]);
-    row++;
-
-    // Row 7: Section title
-    aoa.push([isFreeScanMode ? "All Scan Records" : "Component Verification Details", "", "", "", "", "", "", "", "", ""]);
-    addMerge(row, 0, row, 9);
-    row++;
-
-    // Row 8: Table headers
-    if (isFreeScanMode) {
-      aoa.push(["Time", "Feeder No.", "Spool Barcode", "Part Number", "Status", "", "", "", "", ""]);
-    } else {
-      aoa.push(["Feeder No.", "Ref / Des", "Component", "Value", "Package Size", "Part Number", "Scanned Number", "Lot", "Status", "Time"]);
-    }
-    row++;
-
-    // Rows 9+: Data (BOM verification or all scans based on mode)
-    const dataStartRow = row;
-    if (isFreeScanMode) {
-      // Free Scan Mode: Show all scans
-      for (const scan of session.scans) {
-        aoa.push([
-          format(new Date(scan.scannedAt), "HH:mm:ss"),
-          scan.feederNumber,
-          (scan as any)?.spoolBarcode || "-",
-          scan.partNumber || "-",
-          scan.status === "ok" ? "PASS" : "FAIL",
-          "", "", "", "", "",
-        ]);
-        row++;
-      }
-    } else {
-      // BOM Mode: Show BOM verification
-      for (const item of report.bomItems) {
-        const scan = bestScanMap.get(item.feederNumber.toLowerCase());
-        const status = scan?.status === "ok" ? "PASS" : scan?.status === "reject" ? "FAIL" : "MISSING";
-        aoa.push([
-          item.feederNumber,
-          item.location || "N/A",
-          item.description || item.partNumber || "",
-          "N/A",
-          "N/A",
-          item.partNumber,
-          (scan as any)?.spoolBarcode || scan?.feederNumber || "-",
-          "N/A",
-          status,
-          scan ? format(new Date(scan.scannedAt), "HH:mm:ss") : "-",
-        ]);
-        row++;
-      }
-    }
-    void dataStartRow;
-
-    // Blank
-    aoa.push(["", "", "", "", "", "", "", "", "", ""]);
-    row++;
-
-    // Summary section
-    aoa.push(["Summary :", "", "", "", "", "", "", "", "", ""]);
-    addMerge(row, 0, row, 9);
-    row++;
-
-    aoa.push(["Total Feeders Scanned", "PASS", "FAIL", "WARNING", "Pass Rate", "Status", "", "", "", ""]);
-    row++;
-
-    aoa.push([totalBomItems, passCount, failCount, 0, passRate, isComplete ? "COMPLETE" : "INCOMPLETE", "", "", "", ""]);
-    row++;
-
-    // All scans log
-    aoa.push(["", "", "", "", "", "", "", "", "", ""]);
-    row++;
-
-    aoa.push(["All Scan Records", "", "", "", "", "", "", "", "", ""]);
-    addMerge(row, 0, row, 9);
-    row++;
-
-    aoa.push(["Time", "Feeder No.", "Spool Barcode", "Part Number", "Status", "", "", "", "", ""]);
-    row++;
-
-    for (const s of filteredScans) {
-      aoa.push([
-        format(new Date(s.scannedAt), "HH:mm:ss"),
-        s.feederNumber,
-        (s as any).spoolBarcode || "-",
-        s.partNumber || "-",
-        s.status === "ok" ? "PASS" : "FAIL",
-        "", "", "", "", "",
-      ]);
-      row++;
-    }
-
-    // Splice log
-    if (showSplices && splices && splices.length > 0) {
-      aoa.push(["", "", "", "", "", "", "", "", "", ""]);
-      row++;
-
-      aoa.push(["Splice Log", "", "", "", "", "", "", "", "", ""]);
-      addMerge(row, 0, row, 9);
-      row++;
-
-      aoa.push(["Time", "Feeder No.", "Old Spool Barcode", "New Spool Barcode", "Duration (s)", "", "", "", "", ""]);
-      row++;
-
-      for (const sp of splices) {
-        aoa.push([
-          format(new Date(sp.splicedAt), "HH:mm:ss"),
-          sp.feederNumber,
-          sp.oldSpoolBarcode,
-          sp.newSpoolBarcode,
-          sp.durationSeconds ?? "-",
-          "", "", "", "", "",
-        ]);
-        row++;
-      }
-    }
-
-    // Approvals
-    aoa.push(["", "", "", "", "", "", "", "", "", ""]);
-    row++;
-    aoa.push(["Approvals :", "", "", "", "", "", "", "", "", ""]);
-    addMerge(row, 0, row, 9);
-    row++;
-
-    aoa.push(["Supervisor", "", "", "OPERATOR", "", "", "QA", "", "", ""]);
-    addMerge(row, 0, row, 2);
-    addMerge(row, 3, row, 5);
-    addMerge(row, 6, row, 9);
-    row++;
-
-    aoa.push([session.supervisorName, "", "", session.operatorName, "", "", "N/A", "", "", ""]);
-    addMerge(row, 0, row, 2);
-    addMerge(row, 3, row, 5);
-    addMerge(row, 6, row, 9);
-    row++;
-
-    aoa.push(["Name & Date", "", "", "Name & Date", "", "", "Name & Date", "", "", ""]);
-    addMerge(row, 0, row, 2);
-    addMerge(row, 3, row, 5);
-    addMerge(row, 6, row, 9);
-    row++;
-
-    aoa.push(["____________________________", "", "", "____________________________", "", "", "____________________________", "", "", ""]);
-    addMerge(row, 0, row, 2);
-    addMerge(row, 3, row, 5);
-    addMerge(row, 6, row, 9);
-    row++;
-
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!merges"] = merges;
-
-    // Column widths (characters)
-    ws["!cols"] = [
-      { wch: 14 }, // Feeder No.
-      { wch: 14 }, // Ref/Des
-      { wch: 24 }, // Component
-      { wch: 10 }, // Value
-      { wch: 16 }, // Package Size
-      { wch: 28 }, // Part Number
-      { wch: 28 }, // Scanned Number
-      { wch: 10 }, // Lot
-      { wch: 14 }, // Status
-      { wch: 14 }, // Time
-    ];
-
-    // Row heights (points)
-    ws["!rows"] = [
-      { hpt: 22 }, // company
-      { hpt: 20 }, // title
-      { hpt: 8 },  // blank
-      { hpt: 16 }, // detail row 1
-      { hpt: 16 }, // detail row 2
-      { hpt: 16 }, // detail row 3
-    ];
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "SMT Changeover Report");
-    XLSX.writeFile(wb, `smt-changeover-report-${session.id}.xlsx`);
+      // Excel export is handled by backend API for security
+      const response = await fetch(`/api/reports/export/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          format: "xlsx",
+          sessionId: session.id,
+          title: `SMT Changeover Report - ${session.id}`,
+          includeSplices: showSplices,
+        }),
+      });
+      if (!response.ok) throw new Error("Export failed");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `smt-changeover-report-${session.id}.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
     } catch (error) {
+      console.error("Excel export error:", error);
       alert("Failed to generate Excel. Please check the console for details.");
     }
   };

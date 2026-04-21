@@ -9,7 +9,8 @@ All Phase 1 features have been implemented and are ready for testing.
 ## 1. Backend API Verification
 
 ### Server Status
-- **API Server**: http://localhost:3000
+
+- **API Server**: <http://localhost:3000>
 - **Status**: ✅ Running
 - **Database**: PostgreSQL (smtverify@localhost:5432)
 - **Environment**: DATABASE_URL configured, PORT=3000
@@ -17,57 +18,73 @@ All Phase 1 features have been implemented and are ready for testing.
 ### Endpoints to Test
 
 #### 1.1 FPY Report
+
 ```bash
 curl "http://localhost:3000/api/reports/fpy?dateFilter=last7"
 ```
+
 ✅ Expected: Returns FPY data with date, totalFeeders, passFeeders, failFeeders, fpy%
 
 #### 1.2 OEE Report
+
 ```bash
 curl "http://localhost:3000/api/reports/oee?dateFilter=last7"
 ```
+
 ✅ Expected: Returns OEE metrics (quality, efficiency, oee%) per session
 
 #### 1.3 Operator Report
+
 ```bash
 curl "http://localhost:3000/api/reports/operator?dateFilter=last7"
 ```
+
 ✅ Expected: Returns operator performance (sessionsCount, totalScans, passRate%, feedersPerMinute)
 
 #### 1.4 Feeder Report
+
 ```bash
 curl "http://localhost:3000/api/reports/feeder?dateFilter=last30"
 ```
+
 ✅ Expected: Returns top feeders by error rate with usage and fail counts
 
 #### 1.5 Trend Report
+
 ```bash
 curl "http://localhost:3000/api/reports/trend?dateFilter=last7"
 ```
+
 ✅ Expected: Returns daily trend data (sessionsCount, totalScans, passCount, failCount, passRate%)
 
 #### 1.6 Export to PDF
+
 ```bash
 curl -X POST "http://localhost:3000/api/reports/export/fpy" \
   -H "Content-Type: application/json" \
   -d '{"format":"pdf","filters":{"dateFilter":"last7"}}'
 ```
+
 ✅ Expected: Returns JSON with filePath, recordCount, queryTimeMs
 
 #### 1.7 Export to Excel
+
 ```bash
 curl -X POST "http://localhost:3000/api/reports/export/fpy" \
   -H "Content-Type: application/json" \
   -d '{"format":"xlsx","filters":{"dateFilter":"last7"}}'
 ```
+
 ✅ Expected: Returns Excel file export with data and summary sheets
 
 #### 1.8 Export to CSV
+
 ```bash
 curl -X POST "http://localhost:3000/api/reports/export/fpy" \
   -H "Content-Type: application/json" \
   -d '{"format":"csv","filters":{"dateFilter":"last7"}}'
 ```
+
 ✅ Expected: Returns CSV file with proper escaping
 
 ---
@@ -75,10 +92,12 @@ curl -X POST "http://localhost:3000/api/reports/export/fpy" \
 ## 2. Frontend UI Verification
 
 ### Access Point
-- **URL**: http://localhost:5173
+
+- **URL**: <http://localhost:5173>
 - **Login**: Use existing test credentials
 
 ### Navigation
+
 1. Open sidebar menu
 2. Look for "Reports" link with FileText icon
 3. Click to navigate to Reports page
@@ -86,12 +105,14 @@ curl -X POST "http://localhost:3000/api/reports/export/fpy" \
 ### Reports Page Features
 
 #### 2.1 Report Selector
+
 - ✅ 11 report type buttons visible
 - ✅ FPY, OEE, Operator, Operator Comparison, Feeder, Feeder Reliability, Alarm, Error Analysis, Component, Lot Traceability, Trend
 - ✅ Selected report highlighted with blue border and blue background
 - ✅ Clicking a report button loads that report type
 
 #### 2.2 Report Filters
+
 - ✅ Date filter dropdown (Today, Yesterday, Last 7 Days, Last 30 Days, Custom Range)
 - ✅ Custom date range inputs appear when "Custom Range" selected
 - ✅ Multi-field filters: Line, PCB, Operator, Shift
@@ -99,12 +120,14 @@ curl -X POST "http://localhost:3000/api/reports/export/fpy" \
 - ✅ Filters disable during loading
 
 #### 2.3 Export Controls
+
 - ✅ Format selector radio buttons (PDF, Excel, CSV)
 - ✅ Export button with loading state
 - ✅ Record count display
 - ✅ Download completes with alert showing file path and record count
 
 #### 2.4 Chart Visualizations
+
 - ✅ FPY Report: Line chart showing FPY% trend over time
 - ✅ OEE Report: Bar chart comparing Quality, Efficiency, OEE
 - ✅ Operator Report: Bar chart with Pass Rate and Speed metrics
@@ -115,6 +138,7 @@ curl -X POST "http://localhost:3000/api/reports/export/fpy" \
 - ✅ Component Report: Top 10 components by usage
 
 #### 2.5 Data Table Display
+
 - ✅ Column headers match report type
 - ✅ Data rows populate correctly
 - ✅ Striped row styling (alternating white/gray)
@@ -124,6 +148,7 @@ curl -X POST "http://localhost:3000/api/reports/export/fpy" \
 - ✅ Record count footer shows total records
 
 #### 2.6 Loading & Error States
+
 - ✅ Loading spinner displayed during report generation
 - ✅ Error message shown in red alert box if query fails
 - ✅ Empty state message when no data available
@@ -134,10 +159,12 @@ curl -X POST "http://localhost:3000/api/reports/export/fpy" \
 ## 3. Export Functionality Verification
 
 ### PDF Export
+
 1. Select any report
 2. Choose PDF format
 3. Click Export
 ✅ Verify:
+
 - File created in `/artifacts/api-server/exports/reports/`
 - Filename format: `{reportType}-{timestamp}.pdf`
 - File opens in PDF viewer
@@ -147,10 +174,12 @@ curl -X POST "http://localhost:3000/api/reports/export/fpy" \
 - Shows record count footer
 
 ### Excel Export
+
 1. Select any report
 2. Choose Excel format
 3. Click Export
 ✅ Verify:
+
 - File created with `.xlsx` extension
 - Two sheets: "Report Data" and "Summary"
 - Report Data sheet contains full dataset with proper formatting
@@ -158,10 +187,12 @@ curl -X POST "http://localhost:3000/api/reports/export/fpy" \
 - Columns auto-sized for readability
 
 ### CSV Export
+
 1. Select any report
 2. Choose CSV format
 3. Click Export
 ✅ Verify:
+
 - File created with `.csv` extension
 - Headers on first row match column names
 - Data properly escaped (strings quoted, quotes doubled)
@@ -172,6 +203,7 @@ curl -X POST "http://localhost:3000/api/reports/export/fpy" \
 ## 4. Database Verification
 
 ### Tables Created
+
 ```sql
 -- Verify reports table exists
 SELECT * FROM information_schema.tables WHERE table_name = 'reports';
@@ -187,6 +219,7 @@ SELECT indexname FROM pg_indexes WHERE tablename = 'report_exports';
 ✅ Expected: Both tables exist with 3 indexes each
 
 ### Sample Query
+
 ```sql
 SELECT 
   report_type, 
@@ -204,6 +237,7 @@ LIMIT 10;
 ## 5. Performance Verification
 
 ### Query Time Targets
+
 - FPY Report (7 days): < 1 second
 - OEE Report (7 days): < 1 second
 - Operator Report (7 days): < 1 second
@@ -211,6 +245,7 @@ LIMIT 10;
 - Trend Report (30 days): < 2 seconds
 
 ### Measurement
+
 - Open browser developer tools (F12)
 - Go to Reports page
 - Select each report type
@@ -222,16 +257,19 @@ LIMIT 10;
 ## 6. Security Verification
 
 ### Access Control
+
 - ✅ Only Engineer and QA roles can access Reports page
 - ✅ Operator role redirected to dashboard
 - ✅ Anonymous user redirected to login
 
 ### Export Audit
+
 - ✅ All exports logged to report_exports table
 - ✅ Exports include user_id, format, downloaded_at
 - ✅ Download IP address and user agent recorded
 
 ### SQL Injection Prevention
+
 - ✅ FilterService uses parameterized queries
 - ✅ Special characters in filters properly escaped
 - ✅ Date filter validation ensures format correctness
@@ -241,18 +279,21 @@ LIMIT 10;
 ## 7. User Experience Verification
 
 ### Responsive Design
+
 - ✅ Mobile (< 640px): Single column layout
 - ✅ Tablet (640px-1024px): Two column layout
 - ✅ Desktop (> 1024px): Three column layout
 - ✅ Charts responsive to container width
 
 ### State Management
+
 - ✅ Selected report persists when changing filters
 - ✅ Filters retain values when switching reports
 - ✅ Export format selection persists
 - ✅ Loading state prevents multiple simultaneous requests
 
 ### Error Handling
+
 - ✅ Network errors display user-friendly messages
 - ✅ Malformed responses caught and logged
 - ✅ Failed exports show alert with error details
@@ -262,6 +303,7 @@ LIMIT 10;
 ## 8. Test Scenarios
 
 ### Scenario 1: Daily FPY Report
+
 1. Navigate to Reports page
 2. Select "First Pass Yield (FPY)"
 3. Choose "Today" filter
@@ -271,6 +313,7 @@ LIMIT 10;
 ✅ Expected: Complete in < 1 second, chart shows today's FPY trend
 
 ### Scenario 2: Operator Performance Comparison
+
 1. Select "Operator Comparison"
 2. Choose "Last 7 Days"
 3. Observe bar chart comparing operators
@@ -278,6 +321,7 @@ LIMIT 10;
 ✅ Expected: Chart shows accurate accuracy/speed/error metrics for each operator
 
 ### Scenario 3: Multi-Filter Query
+
 1. Select "Feeder Performance"
 2. Enter Line: "Line1"
 3. Enter Operator: "John"
@@ -286,6 +330,7 @@ LIMIT 10;
 ✅ Expected: Report filtered to only John's results on Line1 in last 30 days
 
 ### Scenario 4: Custom Date Range
+
 1. Select any report
 2. Choose "Custom Range"
 3. Enter Start Date: 2 months ago
@@ -294,6 +339,7 @@ LIMIT 10;
 ✅ Expected: Data returned for custom date range
 
 ### Scenario 5: No Data Scenario
+
 1. Select "Feeder Reliability"
 2. Enter Operator: "NonExistentOperator"
 3. Click Apply Filters
@@ -319,6 +365,7 @@ LIMIT 10;
 ## 10. Known Limitations & Future Enhancements
 
 ### Phase 1 Scope (Complete)
+
 - 11 core reports implemented
 - Date filtering (Today/Yesterday/Last 7/Last 30/Custom)
 - Multi-field filtering (Line, PCB, Operator, Shift)
@@ -327,6 +374,7 @@ LIMIT 10;
 - Export audit logging
 
 ### Phase 2 Scope (Deferred)
+
 - SPI/AOI metrics (requires data source identification)
 - Machine tracking (requires additional schema)
 - Scheduled report generation
@@ -392,6 +440,7 @@ Overall Status:
 ## Quick Start for Testing
 
 1. **Start Servers:**
+
    ```bash
    # Terminal 1: API Server (run from repo root)
    # Load DATABASE_URL from .env file or set it directly
@@ -405,7 +454,7 @@ Overall Status:
    ```
 
 2. **Access Application:**
-   - http://localhost:5173
+   - <http://localhost:5173>
    - Navigate to Reports via sidebar
 
 3. **Run Tests:**
@@ -419,21 +468,25 @@ Overall Status:
 ### Common Issues
 
 **Issue: "404 Not Found" on reports endpoints**
+
 - Verify API server is running
 - Check DATABASE_URL is set correctly
 - Verify reports router is imported in main API index
 
 **Issue: Charts not rendering**
+
 - Verify recharts library is installed: `pnpm list recharts`
 - Check browser console for errors
 - Verify report data is valid
 
 **Issue: Export files not created**
+
 - Verify /exports/reports/ directory exists
 - Check file permissions on exports directory
 - Verify pdfkit and xlsx are installed
 
 **Issue: Filters not working**
+
 - Clear browser cache
 - Verify filter values are being sent in query string
 - Check API logs for validation errors
@@ -443,6 +496,7 @@ Overall Status:
 ## Sign-Off
 
 **Phase 1 Analytics & Reporting System**
+
 - Implementation Date: April 2026
 - Status: ✅ COMPLETE
 - All 11 reports functional
@@ -451,6 +505,7 @@ Overall Status:
 - Testing documentation complete
 
 **Next Steps:**
+
 - Deploy to staging environment
 - Run user acceptance testing
 - Gather feedback for Phase 2

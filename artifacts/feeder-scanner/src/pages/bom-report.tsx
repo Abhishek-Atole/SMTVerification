@@ -12,7 +12,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { format } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 
 const NAVY: [number, number, number] = [0, 51, 102];
 const WHITE: [number, number, number] = [255, 255, 255];
@@ -153,24 +152,31 @@ export default function BomReport() {
     doc.save(`BOM-${reportData.id}-Report.pdf`);
   };
 
-  const handleDownloadXLSX = () => {
-    const worksheet = XLSX.utils.json_to_sheet(
-      (bom.items || []).map((item: any) => ({
-        "Feeder Number": item.feederNumber || "—",
-        "MPN": item.mpn || "—",
-        "Part Number": item.partNumber || "—",
-        "Manufacturer": item.manufacturer || "—",
-        "Package Size": item.packageSize || "—",
-        "Quantity": item.quantity || 1,
-        "Description": item.description || "—",
-        "Supplier 1": item.supplier1 || "—",
-        "Location": item.location || "—",
-      }))
-    );
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "BOM");
-    XLSX.writeFile(workbook, `BOM-${reportData.id}-Report.xlsx`);
+  // Excel export is handled by backend API for security
+  // Use /api/reports/export/bom endpoint instead of client-side generation
+  const handleDownloadXLSX = async () => {
+    try {
+      const response = await fetch(`/api/reports/export/bom`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          format: "xlsx",
+          bomId: bom.id,
+          title: bom.name,
+        }),
+      });
+      if (!response.ok) throw new Error("Export failed");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `BOM-${reportData.id}-Report.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Excel export error:", error);
+      alert("Failed to export Excel file");
+    }
   };
 
   return (

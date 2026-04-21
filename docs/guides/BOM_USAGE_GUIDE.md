@@ -1,6 +1,7 @@
 # BOM JSON Usage Guide
 
 ## File Location
+
 `bom-intbuz-r1.1.json` - Located in SMTVerification root directory
 
 ## Quick Reference
@@ -125,6 +126,7 @@ Each BOM item contains:
 ## Summary Information
 
 The `summary` object contains:
+
 - `total_items`: 9 components
 - `components`: Breakdown by type (capacitors, resistors, ICs, PCB)
 - `feeders`: List of all SMT feeder positions
@@ -133,6 +135,7 @@ The `summary` object contains:
 ## Metadata Information
 
 The `metadata` object contains:
+
 - BOM title, number, part name
 - Revision date
 - Customer information
@@ -141,6 +144,7 @@ The `metadata` object contains:
 ## Integration Examples
 
 ### Database Insert
+
 ```javascript
 // Import into database
 bom.bom_items.forEach(async (item) => {
@@ -159,6 +163,7 @@ bom.bom_items.forEach(async (item) => {
 ```
 
 ### API Endpoint
+
 ```javascript
 app.get('/api/bom/intbuz', (req, res) => {
   res.json(bom);
@@ -173,4 +178,3 @@ app.get('/api/bom/intbuz/component/:feeder', (req, res) => {
   res.json(item || { error: 'Not found' });
 });
 ```
-

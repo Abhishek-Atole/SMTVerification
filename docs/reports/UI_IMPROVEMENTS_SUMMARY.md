@@ -3,7 +3,8 @@
 ## ✨ Enhanced Button Styling
 
 ### Primary Action Buttons
-- **"Start New Session"**: 
+
+- **"Start New Session"**:
   - Larger size (h-16) with better padding (px-10)
   - Gradient background: `from-primary to-primary/80`
   - Enhanced hover effects: shadow increase + slight upward movement (-translate-y-1)
@@ -11,6 +12,7 @@
   - Rounded corners (rounded-xl) for modern look
 
 ### Secondary Buttons (Resume, View, Restore, Delete)
+
 - **ACTION BUTTONS**:
   - Increased height (h-9 to h-10) for better touch targets
   - Prominent colored backgrounds:
@@ -34,6 +36,7 @@
 ## 📊 Improved Card Designs
 
 ### Session Cards (Active & Incomplete)
+
 - **Header Accent Bar**: Colored top bar (blue/amber) for quick visual identification
 - **Gradient Background**: Subtle gradient fills for depth
   - Active: Blue-50 gradient
@@ -44,13 +47,14 @@
   - Status badge: Rounded pill (rounded-full) with solid color background
   - BOM info: Compact background (bg-muted/40)
 - **Hover Effects**: -translate-y-1 + shadow increase for lift effect
-- **Info Density**: 
+- **Info Density**:
   - Session name (truncated for mobile)
   - Shift information
   - BOM reference (concise)
   - Action button below
 
 ### Admin/Control Cards
+
 - **Header Icons**: Color-coded background boxes for visual distinction
   - Blue: BOM Management
   - Purple: Reports/Analytics  
@@ -62,6 +66,7 @@
 - **Button Styling**: Matches action button design
 
 ### Metric Cards (Scans, OK Rate, Rejected, Active)
+
 - **Left Border Accent**: 4px colored left border
   - Blue: Scans
   - Green: OK Rate
@@ -76,6 +81,7 @@
 - **Hover**: Shadow increase + lift effect
 
 ### Trash Items Cards
+
 - **Header Bar**: Red-to-red gradient (matching destructive theme)
 - **Item Type Badge**: Pill-shaped, white text on red background
 - **Date Info**: Concise display with creator info
@@ -89,17 +95,20 @@
 ## 📱 Responsive Design Improvements
 
 ### Mobile-First Breakpoints
+
 - **Small screens (sm:)**: Single column -> better readability
 - **Medium screens (md:)**: 2 columns -> balanced layout
 - **Large screens (lg:)**: 3-4 columns -> maximum information density
 
 ### Touch-Friendly Targets
+
 - Minimum button height: 36px (h-9) -> larger touch areas
 - Primary buttons: 64px (h-16) -> prominent and easy to tap
 - Adequate spacing between buttons: gap-2 to gap-6
 - Card padding: Increased from pb-2 to pb-3 sm:pb-4
 
 ### Responsive Typography
+
 - Headers: Scale from mobile to large screens
 - Labels: Consistent sizing with emoji icons
 - Text truncation: Proper line-clamping for long content
@@ -110,6 +119,7 @@
 ## 🎨 Visual Hierarchy & Branding
 
 ### Color Coding Strategy
+
 - **Blue**: Primary actions (Resume, Scans)
 - **Green**: Positive actions (OK Rate, Restore)
 - **Red**: Destructive actions (Delete, Rejected)
@@ -117,6 +127,7 @@
 - **Gray**: Neutral actions (Permanent delete)
 
 ### Typography Hierarchy
+
 1. **Main Header**: 3xl-5xl, font-black
 2. **Section Headers**: 2xl, font-bold
 3. **Card Titles**: base-lg, font-bold
@@ -124,6 +135,7 @@
 5. **Values**: 3xl-4xl, font-black (metrics)
 
 ### Spacing Sistema
+
 - Card gaps: gap-4 (16px) to gap-6 (24px)
 - Internal padding: Scaled for mobile/desktop
 - Section separation: space-y-6 to space-y-10
@@ -144,6 +156,7 @@
 ## 📋 Card Content Strategy - Keep It Concise
 
 ### Session Cards: Show Only Essential Info
+
 ```
 [Session Name] [Status Badge]
 [Shift]
@@ -152,6 +165,7 @@
 ```
 
 ### Admin Cards: Headline + One-liner
+
 ```
 [Icon] [Title]
 [Short description, max 50 chars]
@@ -159,6 +173,7 @@
 ```
 
 ### Metric Cards: Label + Big Number
+
 ```
 [Emoji] [LABEL]
 [Large Value]

@@ -9,6 +9,7 @@
 ## Problem Description
 
 In Free Scan Mode (without BOM), the system was still performing BOM validation checks, which caused:
+
 - Scans to be rejected with "NOT IN BOM" message
 - Unnecessary database queries for non-existent BOM items
 - Incorrect behavior for purpose of free scanning
@@ -35,6 +36,7 @@ In Free Scan Mode (without BOM), the system was still performing BOM validation 
 ### 1. Session Scan Endpoint (`artifacts/api-server/src/routes/sessions.ts`)
 
 **Added Free Scan Mode Check:**
+
 ```typescript
 const isFreeScanMode = session.bomId === null;
 
@@ -51,6 +53,7 @@ if (isFreeScanMode) {
 ### 2. Session Retrieval Endpoint
 
 **Added BOM Lookup Guard:**
+
 ```typescript
 let bomName = "";
 if (session.bomId !== null) {
@@ -62,6 +65,7 @@ if (session.bomId !== null) {
 ### 3. Validation Service (`artifacts/api-server/src/services/validation-service.ts`)
 
 **Added Free Scan Mode Bypass:**
+
 ```typescript
 if (bomId === null) {
   // Free Scan Mode: Accept any component without verification
@@ -80,8 +84,10 @@ if (bomId === null) {
 ## Testing Results
 
 ### ✅ Test 1: Free Scan Mode - Non-existent Feeder
+
 **Before**: Rejected with "NOT IN BOM — REJECTED"  
 **After**: Accepted with "ok" status
+
 ```json
 {
   "status": "ok",
@@ -91,13 +97,17 @@ if (bomId === null) {
 ```
 
 ### ✅ Test 2: Free Scan Mode - Multiple Feeders
+
 All feeders scanned successfully without BOM validation:
+
 - F001 ✅
 - F002 ✅
 - F003 ✅
 
 ### ✅ Test 3: BOM Mode - Still Works Correctly
+
 When `bomId` is set to a valid BOM ID, validation continues to work:
+
 ```json
 {
   "status": "reject",
@@ -121,12 +131,14 @@ When `bomId` is set to a valid BOM ID, validation continues to work:
 ## Behavioral Changes
 
 ### Free Scan Mode (bomId = null)
+
 - ✅ Accepts any feeder number without BOM validation
 - ✅ No BOM item queries required
 - ✅ All scans marked as "ok"
 - ✅ Optimized database queries (skips BOM lookups)
 
 ### BOM Validation Mode (bomId = valid number)
+
 - ✅ Continues to validate feeders against BOM
 - ✅ Rejects feeders not in BOM
 - ✅ Supports alternate components

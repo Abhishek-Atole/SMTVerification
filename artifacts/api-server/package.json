@@ -16,11 +16,11 @@
     "cors": "^2",
     "drizzle-orm": "catalog:",
     "express": "^5",
+    "exceljs": "^4.4.0",
     "fuse.js": "^7.0.0",
     "pdfkit": "^0.13.0",
     "pino": "^9",
-    "pino-http": "^10",
-    "xlsx": "^0.18.5"
+    "pino-http": "^10"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

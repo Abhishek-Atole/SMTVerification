@@ -3,6 +3,7 @@
 ## File: `bom-intbuz-r1.1.json`
 
 ### Top-Level Structure
+
 ```json
 {
   "metadata": { ... },
@@ -61,6 +62,7 @@ High-level overview of the BOM:
 ## 3. BOM Items (Component Array)
 
 ### Sample Item #1 - Capacitor (YSM-001)
+
 ```json
 {
   "sr_no": 1,
@@ -83,6 +85,7 @@ High-level overview of the BOM:
 ```
 
 ### Sample Item #2 - Resistor (YSM-003)
+
 ```json
 {
   "sr_no": 13,
@@ -105,6 +108,7 @@ High-level overview of the BOM:
 ```
 
 ### Sample Item #3 - IC (YSM-008)
+
 ```json
 {
   "sr_no": 18,
@@ -127,6 +131,7 @@ High-level overview of the BOM:
 ```
 
 ### Sample Item #4 - PCB
+
 ```json
 {
   "sr_no": 19,
@@ -220,4 +225,3 @@ High-level overview of the BOM:
 ✅ Feeder configuration complete (YSM-001 through YSM-008)
 ✅ Package types properly formatted
 ✅ Service part numbers captured
-

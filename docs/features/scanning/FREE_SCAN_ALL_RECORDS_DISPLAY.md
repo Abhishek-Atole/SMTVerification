@@ -9,13 +9,16 @@
 ## Problem Analysis
 
 ### Original Issue
+
 In Free Scan Mode (bomId = null), the report's main verification table was showing "No BOM items" because:
+
 - The Component Verification Details table only displayed BOM items from `report.bomItems`
 - Free Scan Mode has no BOM, so `report.bomItems` was empty (length = 0)
 - All actual scanned records were only visible in the separate "ALL SCAN RECORDS" section below
 - Users couldn't see all scan data in the main verification table
 
 ### Root Cause
+
 The report structure was designed for BOM-based sessions and didn't adapt to Free Scan Mode where there are only scans, no BOM items.
 
 ---
@@ -23,22 +26,27 @@ The report structure was designed for BOM-based sessions and didn't adapt to Fre
 ## Solution Implemented
 
 ### 1. **Conditional Main Verification Table** (HTML View)
+
 Modified the Component Verification Details table to display different content based on session mode:
 
 **Free Scan Mode:**
+
 - Shows all scan records in the main verification table
 - Columns: Time, Feeder No., Spool Barcode, Part Number, Status
 - Displays ALL scanned feeders with timestamps
 
 **BOM Mode:**
+
 - Shows BOM item verification (original behavior)
 - Columns: Feeder No., Ref/Des, Component, Part Number, Status, etc.
 - Matches scans against BOM items
 
 ### 2. **Conditional PDF Export**
+
 PDF reports now generate different table structures:
 
 **Free Scan Mode PDF:**
+
 ```
 Section Title: "All Scan Records"
 Table Headers: Time | Feeder No. | Spool Barcode | Part Number | Status
@@ -46,6 +54,7 @@ Rows: All scanned feeders with timestamps
 ```
 
 **BOM Mode PDF:**
+
 ```
 Section Title: "Component Verification Details"
 Table Headers: Feeder No. | Ref/Des | Component | Part Number | Status | Time
@@ -53,15 +62,18 @@ Rows: All BOM items with verification status
 ```
 
 ### 3. **Conditional Excel Export**
+
 Excel reports now generate different data structures:
 
 **Free Scan Mode Excel:**
+
 ```
 Row 8 Headers: Time | Feeder No. | Spool Barcode | Part Number | Status
 Rows 9+: All scanned records
 ```
 
 **BOM Mode Excel:**
+
 ```
 Row 8 Headers: Feeder No. | Ref/Des | Component | Part Number | Status | Time
 Rows 9+: All BOM items with verification status
@@ -72,11 +84,13 @@ Rows 9+: All BOM items with verification status
 ## Code Changes
 
 ### File Modified
+
 `artifacts/feeder-scanner/src/pages/session-report.tsx`
 
 ### Key Changes
 
 #### 1. Component Verification Details Table
+
 ```typescript
 // Conditional header based on mode
 {isFreeScanMode ? "All Scan Records" : "Component Verification Details"}
@@ -113,6 +127,7 @@ Rows 9+: All BOM items with verification status
 ```
 
 #### 2. PDF Export Table
+
 ```typescript
 if (isFreeScanMode) {
   // Free Scan: 5 columns, all scans
@@ -134,6 +149,7 @@ if (isFreeScanMode) {
 ```
 
 #### 3. Excel Export Data
+
 ```typescript
 if (isFreeScanMode) {
   // All scans
@@ -155,6 +171,7 @@ if (isFreeScanMode) {
 ## Test Results
 
 ### Test 1: Free Scan Mode - Multiple Scans ✅
+
 ```
 Session: 43
 Mode: Free Scan (bomId = null)
@@ -166,6 +183,7 @@ Result: PASS ✅
 ```
 
 ### Test 2: BOM Mode - Component Verification ✅
+
 ```
 Session: 44
 Mode: BOM (bomId = 1)
@@ -177,6 +195,7 @@ Result: PASS ✅
 ```
 
 ### Test 3: Backward Compatibility ✅
+
 ```
 BOM Sessions: Continue to work as before
 Report Structure: Unchanged from BOM perspective
@@ -189,6 +208,7 @@ Result: PASS ✅
 ## Report Display Comparison
 
 ### Free Scan Mode Report
+
 | Component | Display |
 |-----------|---------|
 | Main Title | "All Scan Records" |
@@ -199,6 +219,7 @@ Result: PASS ✅
 | Focus | Individual scan records |
 
 ### BOM Mode Report  
+
 | Component | Display |
 |-----------|---------|
 | Main Title | "Component Verification Details" |
@@ -230,11 +251,13 @@ Result: PASS ✅
 ### Free Scan Mode Exports
 
 **PDF:**
+
 - Title: "All Scan Records"
 - Shows: 5 columns (Time, Feeder, Spool, Part, Status)
 - All scanned records included
 
 **Excel:**
+
 - Headers: Time, Feeder No., Spool Barcode, Part Number, Status
 - All scanned records included
 - Can be sorted and filtered by user
@@ -242,11 +265,13 @@ Result: PASS ✅
 ### BOM Mode Exports
 
 **PDF:**
-- Title: "Component Verification Details" 
+
+- Title: "Component Verification Details"
 - Shows: 10 columns (traditional BOM layout)
 - All BOM items with verification status
 
 **Excel:**
+
 - Headers: Traditional BOM layout
 - All BOM items with verification status
 - Can be sorted and filtered by user
@@ -256,12 +281,14 @@ Result: PASS ✅
 ## Summary of Improvements
 
 ### Before Fix
+
 - ❌ Free Scan Mode showed empty main table ("No BOM items")
 - ❌ Had to scroll to "ALL SCAN RECORDS" section to see scans
 - ❌ Main verification table unusable for Free Scan Mode
 - ❌ Report inconsistent between BOM and Free Scan modes
 
 ### After Fix
+
 - ✅ Free Scan Mode displays all scans in main verification table
 - ✅ Consistent report structure for both modes
 - ✅ All scan records visible immediately
@@ -279,6 +306,7 @@ Result: PASS ✅
 **Deployment:** Only frontend component update required
 
 **Files Modified:**
+
 - `artifacts/feeder-scanner/src/pages/session-report.tsx`
 
 **Lines Changed:** ~150 lines across table, PDF, and Excel export logic

@@ -14,10 +14,12 @@ The seed data service now generates **4 realistic production BOMs** with authent
 ## 🏭 BOM Templates
 
 ### 1. Industrial Controller
+
 **Description**: Advanced industrial control system with networking capability
 **Typical Use Case**: PLC, industrial automation, IIoT gateway
 
-#### Components:
+#### Components
+
 | Position | Component | Quantity | Feeder | Category | Manufacturer |
 |----------|-----------|----------|--------|----------|--------------|
 | U1 | ARM Cortex STM32F407 | 1 | 01 | MCU | STMicroelectronics |
@@ -38,10 +40,12 @@ The seed data service now generates **4 realistic production BOMs** with authent
 ---
 
 ### 2. Power Supply Module
+
 **Description**: Switching power supply, 24V 5A output
 **Typical Use Case**: Industrial power distribution, power conditioning
 
-#### Components:
+#### Components
+
 | Position | Component | Quantity | Feeder | Category | Manufacturer |
 |----------|-----------|----------|--------|----------|--------------|
 | U1 | Voltage Regulator LM7805 | 1 | 01 | IC | Texas Instruments |
@@ -58,10 +62,12 @@ The seed data service now generates **4 realistic production BOMs** with authent
 ---
 
 ### 3. Networking Unit
+
 **Description**: Ethernet interface module with PHY
 **Typical Use Case**: Network interface, IoT connectivity
 
-#### Components:
+#### Components
+
 | Position | Component | Quantity | Feeder | Category | Manufacturer |
 |----------|-----------|----------|--------|----------|--------------|
 | U1 | ARM Cortex STM32F103 | 1 | 01 | MCU | STMicroelectronics |
@@ -77,10 +83,12 @@ The seed data service now generates **4 realistic production BOMs** with authent
 ---
 
 ### 4. Signal Processor
+
 **Description**: Real-time signal processing with FPGA
 **Typical Use Case**: High-speed data acquisition, DSP
 
-#### Components:
+#### Components
+
 | Position | Component | Quantity | Feeder | Category | Manufacturer |
 |----------|-----------|----------|--------|----------|--------------|
 | U1 | Xilinx Artix-7 FPGA | 1 | 01 | FPGA | Xilinx |
@@ -98,6 +106,7 @@ The seed data service now generates **4 realistic production BOMs** with authent
 ## 🔧 Component Library
 
 ### Resistors (4 types)
+
 ```
 CF14JT1K00    - Resistor 1K 1/4W     - Vishay
 CF14JT10K0    - Resistor 10K 1/4W    - Vishay
@@ -106,6 +115,7 @@ CF14JT4K70    - Resistor 4.7K 1/4W   - Vishay
 ```
 
 ### Capacitors (4 types)
+
 ```
 AE103C100     - Capacitor 10µF 25V   - Kemet
 EEE1E101P     - Capacitor 100µF 16V  - Panasonic
@@ -114,6 +124,7 @@ C315C105M5U5TA - Capacitor 1µF 25V   - Kemet
 ```
 
 ### Inductors (3 types)
+
 ```
 CDRH127R-2R2  - Inductor 2.2mH       - Murata
 CDRH104R-100  - Inductor 10µH        - Murata
@@ -121,6 +132,7 @@ CDRH3D28      - Inductor 47µH        - Murata
 ```
 
 ### Semiconductors (4 types)
+
 ```
 2N3904        - Transistor NPN       - ON Semiconductor
 2N3906        - Transistor PNP       - ON Semiconductor
@@ -129,6 +141,7 @@ CDRH3D28      - Inductor 47µH        - Murata
 ```
 
 ### ICs (4 types)
+
 ```
 LM358         - Op-Amp                - Texas Instruments
 TL072         - Op-Amp                - Texas Instruments
@@ -137,6 +150,7 @@ LM7805        - Voltage Regulator     - Texas Instruments
 ```
 
 ### Microcontrollers (3 types)
+
 ```
 STM32F103C8T6 - ARM Cortex STM32F103 - STMicroelectronics
 STM32F407VGT6 - ARM Cortex STM32F407 - STMicroelectronics
@@ -144,6 +158,7 @@ PIC18F4520    - 8-bit PIC             - Microchip
 ```
 
 ### FPGAs (2 types)
+
 ```
 XC7A35T-FGG484 - Xilinx Artix-7      - Xilinx
 EP4CE6F17C8N   - Altera Cyclone IV   - Intel
@@ -207,10 +222,12 @@ $ curl -X POST http://localhost:3000/api/test/seed
 Each component in the BOMs has 2 alternates:
 
 **Status Distribution**:
+
 - 1st Alternate: **APPROVED** - Readily available substitute
 - 2nd Alternate: **PENDING** - Under evaluation
 
 **Example**:
+
 ```
 Primary MPN: STM32F407VGT6
 ├── Alternate 1: ALT-STM32F407VGT6-1 (Approved)
@@ -224,6 +241,7 @@ Primary MPN: STM32F407VGT6
 For each BOM, 2 production sessions are created with:
 
 **Session Attributes**:
+
 - Random company assignment
 - Random panel name (PANEL-XXXXX)
 - Random operator from pool
@@ -233,6 +251,7 @@ For each BOM, 2 production sessions are created with:
 - 30% active, 70% completed
 
 **Scans per Session**:
+
 - 15 scans (one per feeder typically)
 - 20% scanning alternates
 - 5% mismatches for QA testing
@@ -245,6 +264,7 @@ For each BOM, 2 production sessions are created with:
 ## 🧪 Testing Use Cases
 
 ### Testing Traceability
+
 ```bash
 # Find all scans for Industrial Controller sessions
 curl http://localhost:3000/api/traceability/session/1/trace | jq '.'
@@ -254,6 +274,7 @@ curl http://localhost:3000/api/traceability/alternate-usage | jq '.report'
 ```
 
 ### Testing Audit Trail
+
 ```bash
 # Get all component creations
 curl http://localhost:3000/api/audit/action/create?limit=50
@@ -263,6 +284,7 @@ curl http://localhost:3000/api/audit/action/update
 ```
 
 ### Testing Analytics
+
 ```bash
 # Get session statistics
 curl http://localhost:3000/api/analytics/sessions
@@ -276,6 +298,7 @@ curl http://localhost:3000/api/analytics/components
 ## 🚀 Customization Options
 
 ### Seed with Different Scale
+
 ```bash
 # Large scale production test
 curl -X POST http://localhost:3000/api/test/seed \
@@ -290,11 +313,13 @@ curl -X POST http://localhost:3000/api/test/seed \
 ```
 
 ### Quick Seed for Development
+
 ```bash
 curl http://localhost:3000/api/test/seed-quick
 ```
 
 Results in:
+
 - 1 company
 - 1 BOM per product type
 - 5 feeders per BOM
@@ -324,6 +349,7 @@ After seeding, verify:
 ## 🔐 Data Integrity
 
 **Constraints Enforced**:
+
 - ✅ Foreign key relationships maintained
 - ✅ Component references valid
 - ✅ BOM item references point to valid components
@@ -337,6 +363,7 @@ After seeding, verify:
 ## 💾 Database Impact
 
 **Tables Populated**:
+
 1. `boms` - Product bill of materials
 2. `bom_items` - Items in each BOM
 3. `components` - Component master data
@@ -352,6 +379,7 @@ After seeding, verify:
 ## 🎓 Learning Resources
 
 **To understand BOMs better**:
+
 1. View a complete BOM: `GET /api/boms/1`
 2. See BOM items: `GET /api/boms/1/items`
 3. Get component details: `GET /api/components/XXXXXX`
@@ -362,4 +390,3 @@ After seeding, verify:
 **Generated**: April 9, 2026
 **Version**: 1.0.0
 **Status**: ✅ Production Ready
-

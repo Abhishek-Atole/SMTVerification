@@ -75,7 +75,6 @@
   "dependencies": {
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
-    "papaparse": "^5.5.3",
-    "xlsx": "^0.18.5"
+    "papaparse": "^5.5.3"
   }
 }

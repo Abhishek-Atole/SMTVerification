@@ -13,6 +13,7 @@
 ## 📱 Access Methods
 
 ### 1. **Local Access (Same Machine)**
+
 Best for development and testing on the machine hosting the system.
 
 ```
@@ -21,6 +22,7 @@ API:      http://localhost:3000
 ```
 
 ### 2. **Local Network Access (LAN - Mobile & Other PCs on Same Wi-Fi)**
+
 Access from other devices connected to **192.168.0.0** network.
 
 ```
@@ -29,11 +31,13 @@ API:      http://192.168.0.110:3000
 ```
 
 **Requirements:**
+
 - Device must be connected to the **SAME Wi-Fi network** (critical!)
 - Ports 5173 and 3000 must not be blocked
 - Modern web browser (Chrome, Firefox, Safari, Edge)
 
 ### 3. **Remote Access (Internet - ngrok Tunnel)**
+
 Access from anywhere on the internet via ngrok.
 
 ```
@@ -56,14 +60,15 @@ All access methods require credentials:
 
 ## 📱 Mobile Phone Access (Step-by-Step)
 
-### On Your Mobile Phone:
+### On Your Mobile Phone
 
 1. **Connect to the SAME Wi-Fi network** as your computer
    - Network name should match your computer's Wi-Fi SSID
-   
+
 2. **Open any web browser** (Chrome, Safari, Firefox, Edge, etc.)
 
 3. **In the address bar, type:**
+
    ```
    http://192.168.0.110:5173
    ```
@@ -76,7 +81,8 @@ All access methods require credentials:
 
 7. **Dashboard loads with real-time data!** ✅
 
-### Important Notes:
+### Important Notes
+
 - ⚠️ Make sure you're on **Wi-Fi**, not mobile data (4G/5G)
 - ⚠️ Must be same network as computer (192.168.0.x)
 - ⚠️ Include the port number **:5173** (don't forget!)
@@ -112,11 +118,13 @@ Same instructions as mobile - use `http://192.168.0.110:5173`
 **Use the correct IP: 192.168.0.110**
 
 **Check if servers are running:**
+
 ```bash
 ps aux | grep -E "node|vite" | grep -v grep
 ```
 
 **If not running, start servers:**
+
 ```bash
 bash start-servers.sh
 ```
@@ -126,6 +134,7 @@ bash start-servers.sh
 **Cause: Phone is not on the same Wi-Fi network**
 
 **Solution:**
+
 1. Go to phone settings
 2. Check Wi-Fi connection
 3. Make sure it's the same SSID/network name as your computer
@@ -135,6 +144,7 @@ bash start-servers.sh
 ### Issue: Can't find the right Wi-Fi network
 
 **Run on your computer:**
+
 ```bash
 iwconfig 2>/dev/null | grep SSID
 # or
@@ -146,7 +156,8 @@ Then connect your phone to the same network.
 
 ### Issue: "Unauthorized - please login"
 
-**This is normal!** The API requires authentication. 
+**This is normal!** The API requires authentication.
+
 - The frontend handles login automatically
 - Make sure you're accessing via **port 5173** (not port 3000)
 - Log in with QA or Engineer credentials
@@ -154,6 +165,7 @@ Then connect your phone to the same network.
 ### Issue: Page loads but empty/no data
 
 **Check:**
+
 1. Are you logged in with QA or Engineer role?
 2. Is the database connected? Check API at: `http://192.168.0.110:3000/api/health`
 3. Restart servers: `bash start-servers.sh`
@@ -178,11 +190,11 @@ Your system is on **192.168.0.0/24** network:
 
 | Endpoint | URL | From | Status |
 |----------|-----|------|--------|
-| **Frontend** | http://localhost:5173 | Your Computer | ✅ |
-| **Frontend** | http://192.168.0.110:5173 | Same Wi-Fi Network | ✅ |
-| **Frontend (ngrok)** | https://nonangling-unspruced-taren.ngrok-free.dev | Internet | ✅ |
-| **API** | http://localhost:3000 | Your Computer | ✅ |
-| **API** | http://192.168.0.110:3000 | Same Wi-Fi Network | ✅ |
+| **Frontend** | <http://localhost:5173> | Your Computer | ✅ |
+| **Frontend** | <http://192.168.0.110:5173> | Same Wi-Fi Network | ✅ |
+| **Frontend (ngrok)** | <https://nonangling-unspruced-taren.ngrok-free.dev> | Internet | ✅ |
+| **API** | <http://localhost:3000> | Your Computer | ✅ |
+| **API** | <http://192.168.0.110:3000> | Same Wi-Fi Network | ✅ |
 
 ---
 

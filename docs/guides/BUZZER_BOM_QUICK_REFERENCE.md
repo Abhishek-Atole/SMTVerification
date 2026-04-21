@@ -27,6 +27,7 @@
 ### System Integration
 
 #### API Endpoints
+
 ```
 GET  /api/bom                    → Lists all BOMs (including #19)
 GET  /api/bom/19                 → Gets Buzzer BOM with all 11 items
@@ -36,7 +37,8 @@ DEL  /api/bom/19/items/:id       → Delete item
 ```
 
 #### Frontend Integration
-- **Access**: http://localhost:5173/bom/19 (requires authentication)
+
+- **Access**: <http://localhost:5173/bom/19> (requires authentication)
 - **Display**: Card-based grid with all components
 - **Features**: Edit, delete, add new items capabilities
 - **Columns**: Feeder number, part number, MPN, manufacturer, package, description
@@ -44,11 +46,13 @@ DEL  /api/bom/19/items/:id       → Delete item
 ### Component Inventory
 
 #### Capacitors (4)
+
 - C1, C2: 4.7nF/50V (KEMET primary, YAGEO alternate)
 - C3, C4: 0.1µF/50V (KEMET primary, YAGEO alternate)
 - Package: 0603
 
 #### Resistors (5)
+
 - R3: 4.7K Ohm ±1% (0603)
 - R4: 270K Ohm 1% (0805)
 - R5: 10K Ohm 5% (0805)
@@ -57,11 +61,13 @@ DEL  /api/bom/19/items/:id       → Delete item
 - Manufacturer: Royal Ohm
 
 #### IC (1)
+
 - U1: 555 Timer IC (SE555QS-13)
 - Manufacturer: Diodes Inc
 - Package: SO-8
 
 #### PCB (1)
+
 - INTBUZ/R&D/R1.1
 - Part: Bare PCB (1.6mm FR-4)
 - In-house
@@ -69,17 +75,20 @@ DEL  /api/bom/19/items/:id       → Delete item
 ### Verification Commands
 
 **Check all BOM data:**
+
 ```bash
 curl -s http://localhost:3000/api/bom/19 | jq '.'
 ```
 
 **Count items:**
+
 ```bash
 curl -s http://localhost:3000/api/bom/19 | jq '.items | length'
 # Output: 11
 ```
 
 **Query database directly:**
+
 ```bash
 PGPASSWORD=smtverify psql -h localhost -U smtverify -d smtverify \
   -c "SELECT feeder_number, part_number, manufacturer FROM bom_items 
@@ -89,6 +98,7 @@ PGPASSWORD=smtverify psql -h localhost -U smtverify -d smtverify \
 ### Testing the System
 
 #### Manual Verification
+
 1. ✅ API responds with BOM data
 2. ✅ All 11 items present in database
 3. ✅ Feeder numbers correctly mapped
@@ -97,6 +107,7 @@ PGPASSWORD=smtverify psql -h localhost -U smtverify -d smtverify \
 6. ✅ Alternate components marked
 
 #### Production Ready
+
 - ✅ Data integrity confirmed
 - ✅ No duplicate entries
 - ✅ Foreign key constraints satisfied
@@ -128,11 +139,13 @@ PGPASSWORD=smtverify psql -h localhost -U smtverify -d smtverify \
 ### Files & Commits
 
 **Files Created/Modified:**
+
 - `artifacts/api-server/scripts/insert-buzzer-bom.ts` - Migration script
 - `BUZZER_BOM_IMPLEMENTATION.md` - Complete documentation
 - `Intermittent Buzzer E-BOM-Rev-001_1 (1)1 (1).xlsx` - Source file (committed)
 
 **Commit History:**
+
 ```
 a7a0c61 - feat: insert Intermittent Buzzer BOM with 11 components
 c3f945f - docs: add comprehensive Buzzer BOM implementation guide
@@ -141,6 +154,7 @@ c3f945f - docs: add comprehensive Buzzer BOM implementation guide
 ### Usage Workflow
 
 **For Scanning/Verification:**
+
 1. Select BOM 19 (Intermittent Buzzer)
 2. System prompts: "Scan Feeder C1"
 3. Scanner reads part barcode
@@ -149,6 +163,7 @@ c3f945f - docs: add comprehensive Buzzer BOM implementation guide
 6. Continue until all 11 components verified
 
 **For Component Management:**
+
 1. Go to BOM #19 in web interface
 2. View all 11 components in card layout
 3. Edit component specifications
@@ -157,6 +172,7 @@ c3f945f - docs: add comprehensive Buzzer BOM implementation guide
 6. Export as needed
 
 ### Performance Metrics
+
 - ✅ BOM Load Time: <100ms
 - ✅ Item Query Time: <50ms each
 - ✅ API Response: Consistent <200ms

@@ -7,6 +7,7 @@ Welcome to the SMT Verification System documentation. Start here to understand w
 ### What is SMT Verification?
 
 The SMT Verification System is a comprehensive solution for managing and verifying Surface Mount Technology (SMT) assembly processes. It allows operators to:
+
 - Create verification sessions for tracking feeder/spool conditions
 - Manage Bills of Materials (BOMs) with detailed component information
 - Scan and verify components during production
@@ -26,6 +27,7 @@ All features implemented, tested, and documented. Ready for immediate deployment
 **Start with:** [SYSTEM_COMPLETE.md](SYSTEM_COMPLETE.md)
 
 This document provides:
+
 - System architecture and design
 - Complete feature list with status
 - Database schema overview
@@ -44,6 +46,7 @@ This document provides:
 **Start with:** [ENHANCED_BOM_COMPLETE.md](ENHANCED_BOM_COMPLETE.md)
 
 This document covers:
+
 - **Phase 1:** Database schema enhancement (MPN, manufacturer, package size, lead time, cost)
 - **Phase 2:** Backend API changes (new endpoints for CRUD operations)
 - **Phase 3:** Frontend UI for BOM editing (ItemFormModal, BOM detail page)
@@ -51,6 +54,7 @@ This document covers:
 - **Phase 5:** Analytics dashboard and reporting
 
 Includes:
+
 - Implementation details for each phase
 - API request/response examples
 - Code snippets from actual implementation
@@ -66,6 +70,7 @@ Includes:
 **Start with:** [FREE_SCAN_MODE_COMPLETE.md](FREE_SCAN_MODE_COMPLETE.md)
 
 This document explains:
+
 - Free Scan Mode feature (scan without BOM)
 - Frontend implementation with checkbox UI
 - Backend validation logic
@@ -83,6 +88,7 @@ This document explains:
 **Start with:** [API_REFERENCE.md](API_REFERENCE.md)
 
 Complete API endpoint documentation with:
+
 - All routes and methods
 - Request/response schemas
 - Authentication requirements
@@ -96,6 +102,7 @@ Complete API endpoint documentation with:
 **Start with:** [API_TESTING_GUIDE.md](API_TESTING_GUIDE.md)
 
 Testing instructions including:
+
 - curl command examples
 - Postman collection setup
 - Common test scenarios
@@ -120,28 +127,33 @@ Testing instructions including:
 ## Getting Started in 5 Minutes
 
 ### 1. Deploy the System
+
 ```bash
 cd /media/abhishek-atole/Courses/Final\ SMT\ MES\ SYSTEM/SMTVerification
 ./start-servers.sh
 ```
 
 ### 2. Access the Application
-- Frontend: http://localhost:5173
-- API: http://localhost:3000
+
+- Frontend: <http://localhost:5173>
+- API: <http://localhost:3000>
 
 ### 3. Create a Session
+
 1. Click "New Session"
 2. Choose: Use BOM or Free Scan Mode
 3. Fill in company, panel, shift details
 4. Click "Create"
 
 ### 4. Start Scanning
+
 1. Click "Start Scanning"
 2. Scan feeder barcodes
 3. Select component variant if prompted
 4. Record status (OK/Reject)
 
 ### 5. View Report
+
 1. Click "View Report"
 2. See analytics dashboard
 3. Export as PDF or Excel
@@ -151,21 +163,25 @@ cd /media/abhishek-atole/Courses/Final\ SMT\ MES\ SYSTEM/SMTVerification
 ## Common Tasks
 
 ### Create a BOM with Alternates
+
 1. See [ENHANCED_BOM_COMPLETE.md](ENHANCED_BOM_COMPLETE.md) - Phase 3
 2. Use ItemFormModal to add components
 3. Add alternates via "Mark as Alternate" option
 
 ### Use Free Scan Mode
+
 1. See [FREE_SCAN_MODE_COMPLETE.md](FREE_SCAN_MODE_COMPLETE.md)
 2. Enable "Free Scan Mode" checkbox
 3. Create session without BOM requirement
 
 ### Analyze Alternate Usage
+
 1. Complete verification session with alternates
 2. View report and scroll to "ALTERNATE COMPONENT USAGE ANALYSIS"
 3. Review cost savings and lead time improvements
 
 ### Deploy to Production
+
 1. See [SYSTEM_COMPLETE.md](SYSTEM_COMPLETE.md) - Deployment & Operations section
 2. Run `./start-servers.sh`
 3. Monitor logs in `./logs/` directory
@@ -246,6 +262,7 @@ SMTVerification/
 ## Support & Troubleshooting
 
 ### Check System Health
+
 ```bash
 # API health
 curl http://localhost:3000/api/health
@@ -255,6 +272,7 @@ curl http://localhost:5173
 ```
 
 ### View Logs
+
 ```bash
 # API logs
 tail -f ./logs/api-server.log
@@ -266,14 +284,17 @@ tail -f ./logs/frontend-server.log
 ### Common Issues
 
 **Servers won't start:**
+
 - Check ports 3000 and 5173 are free
 - Verify database connection
 
 **Alternates not appearing:**
+
 - Confirm BOM items have `isAlternate = true`
 - Check `parentItemId` relationships
 
 **Reports showing zeros:**
+
 - Verify `cost` and `leadTime` fields populated
 - Check sample data seeded successfully
 
@@ -284,18 +305,23 @@ See [SYSTEM_COMPLETE.md](SYSTEM_COMPLETE.md) Troubleshooting section for more.
 ## Implementation Phases Summary
 
 ### Phase 1: Database Schema ✅
+
 Enhanced BOM items with MPN, manufacturer, package size, lead time, cost fields
 
 ### Phase 2: Backend APIs ✅
+
 New endpoints for BOM item CRUD operations and alternate selection
 
 ### Phase 3: Frontend UI ✅
+
 ItemFormModal for editing, BOM detail page with alternate management
 
 ### Phase 4: Intelligent Scanning ✅
+
 AlternateSelector modal during verification with proper tracking
 
 ### Phase 5: Analytics ✅
+
 Report dashboard showing alternate usage, cost savings, lead time improvements
 
 **All phases complete and production-ready.**
@@ -324,6 +350,7 @@ Report dashboard showing alternate usage, cost savings, lead time improvements
 ## Questions?
 
 Refer to the appropriate documentation:
+
 - System questions → SYSTEM_COMPLETE.md
 - BOM/Alternates → ENHANCED_BOM_COMPLETE.md
 - Free Scan Mode → FREE_SCAN_MODE_COMPLETE.md
@@ -331,4 +358,3 @@ Refer to the appropriate documentation:
 - Testing → API_TESTING_GUIDE.md
 
 For issues not covered, check the troubleshooting sections in the relevant docs.
-

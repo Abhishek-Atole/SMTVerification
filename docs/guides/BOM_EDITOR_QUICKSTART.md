@@ -1,23 +1,28 @@
 # 🎯 BOM Editor - Quick Start
 
 ## Problem Solved! ✅
+
 You can now edit the BOM easily using a visual web interface!
 
 ## How to Start Editing in 3 Steps
 
 ### Step 1: Open the Editor
+
 ```
 Double-click → bom-editor.html
 ```
+
 (Opens in your default browser)
 
 ### Step 2: Make Changes
+
 - **Edit in table**: Click any cell to edit directly
 - **Add new component**: Click "+ Add Component" button
 - **Delete component**: Click "Delete" button (red)
 - **Search**: Use search box to find components
 
 ### Step 3: Save Your Changes
+
 ```
 Click "💾 Save Changes" → Downloads bom-intbuz-r1.1.json
 Replace original file with the downloaded file
@@ -28,31 +33,37 @@ Replace original file with the downloaded file
 ## Features
 
 ✨ **Visual Editing**
+
 - Click-to-edit table cells
 - Modal dialog for full details
 - Real-time statistics
 
 🔍 **Search Filtering**
+
 - Find by feeder number
 - Find by component name
 - Find by reference (C1, R3, U1)
 - Find by value
 
 ➕ **Add Components**
+
 - Pre-fills next SR number
 - All 13 fields editable
 - Validations for required fields
 
 🗑️ **Delete Components**
+
 - Confirmation before deletion
 - Quick action button
 
 💾 **Save to JSON**
+
 - Export to standard JSON
 - Easy to share and backup
 - Replace original file
 
 🔄 **Reload**
+
 - Discard changes
 - Reload from file
 
@@ -74,6 +85,7 @@ Replace original file with the downloaded file
 ## Current BOM Status
 
 📊 **Statistics**
+
 - Total Components: 9
 - Capacitors: 2 (YSM-001, YSM-002)
 - Resistors: 5 (YSM-003 to YSM-007)
@@ -81,10 +93,12 @@ Replace original file with the downloaded file
 - PCB: 1 (Bare board)
 
 🎯 **Feeders**
+
 - YSM-001 through YSM-008 configured
 - 11 total PCB references (C1-C4, R3-R7, U1)
 
 🛠️ **Suppliers**
+
 - KEMET (capacitors)
 - YAGEO (alternatives)
 - Royal Ohm (resistors)
@@ -125,15 +139,19 @@ Replace original file with the downloaded file
 ## Troubleshooting
 
 ### ❓ "Can't edit - getting errors"
+
 → Make sure `bom-editor.html` and `bom-intbuz-r1.1.json` are in same folder
 
 ### ❓ "Changes aren't saved"
+
 → Click "Save Changes" to download, then replace original file
 
 ### ❓ "File format broken"
+
 → Click "Reload" to revert, or use your latest JSON backup
 
 ### ❓ "Can't find a component"
+
 → Use the search box to filter
 
 ---
@@ -162,6 +180,7 @@ Replace original file with the downloaded file
 ## File Locations
 
 All files in:
+
 ```
 /media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/
 ```

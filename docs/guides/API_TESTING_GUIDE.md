@@ -3,6 +3,7 @@
 ## Quick Reference
 
 ### Base URL
+
 ```
 http://localhost:3000/api
 ```
@@ -12,14 +13,17 @@ http://localhost:3000/api
 ## 🔧 Phase 7 - Testing Endpoints
 
 ### 1. Seed Database
+
 **Endpoint**: `POST /test/seed`
 
 **Without body** (uses defaults):
+
 ```bash
 curl -X POST http://localhost:3000/api/test/seed
 ```
 
 **With custom options**:
+
 ```bash
 curl -X POST http://localhost:3000/api/test/seed \
   -H "Content-Type: application/json" \
@@ -35,6 +39,7 @@ curl -X POST http://localhost:3000/api/test/seed \
 ```
 
 **Success Response**:
+
 ```json
 {
   "success": true,
@@ -45,6 +50,7 @@ curl -X POST http://localhost:3000/api/test/seed \
 ---
 
 ### 2. Quick Seed (Minimal Data)
+
 **Endpoint**: `GET /test/seed-quick`
 
 ```bash
@@ -52,6 +58,7 @@ curl http://localhost:3000/api/test/seed-quick
 ```
 
 **Perfect for**:
+
 - Quick testing
 - Demo purposes
 - CI/CD pipelines
@@ -60,6 +67,7 @@ curl http://localhost:3000/api/test/seed-quick
 ---
 
 ### 3. Get Database Statistics
+
 **Endpoint**: `GET /test/stats`
 
 ```bash
@@ -67,6 +75,7 @@ curl http://localhost:3000/api/test/stats
 ```
 
 **Response**:
+
 ```json
 {
   "timestamp": "2026-04-09T14:32:10.123Z",
@@ -88,6 +97,7 @@ curl http://localhost:3000/api/test/stats
 ---
 
 ### 4. Clear Database
+
 **Endpoint**: `POST /test/clear`
 
 ⚠️ **Warning**: This is destructive and requires confirmation token
@@ -98,6 +108,7 @@ curl -X POST http://localhost:3000/api/test/clear \
 ```
 
 **Success Response**:
+
 ```json
 {
   "success": true,
@@ -106,6 +117,7 @@ curl -X POST http://localhost:3000/api/test/clear \
 ```
 
 **Without confirmation token**:
+
 ```json
 {
   "error": "Clear action not confirmed. Include header: x-confirm-clear: CLEAR_DATABASE_CONFIRMED"
@@ -117,6 +129,7 @@ curl -X POST http://localhost:3000/api/test/clear \
 ## 🔍 Phase 6 - Audit Trail Endpoints
 
 ### 1. Record Audit Log
+
 **Endpoint**: `POST /audit/log`
 
 ```bash
@@ -140,6 +153,7 @@ curl -X POST http://localhost:3000/api/audit/log \
 ```
 
 **Response**:
+
 ```json
 {
   "success": true,
@@ -160,6 +174,7 @@ curl -X POST http://localhost:3000/api/audit/log \
 ---
 
 ### 2. Get Audit Logs for Entity
+
 **Endpoint**: `GET /audit/logs/:entityType/:entityId`
 
 ```bash
@@ -167,6 +182,7 @@ curl http://localhost:3000/api/audit/logs/component/COMP-12345
 ```
 
 **Response**:
+
 ```json
 {
   "entityType": "component",
@@ -188,6 +204,7 @@ curl http://localhost:3000/api/audit/logs/component/COMP-12345
 ---
 
 ### 3. Get Change History
+
 **Endpoint**: `GET /audit/changes/:entityType/:entityId`
 
 ```bash
@@ -195,6 +212,7 @@ curl http://localhost:3000/api/audit/changes/feeder/FEEDER-05
 ```
 
 **Response**:
+
 ```json
 {
   "entityType": "feeder",
@@ -229,6 +247,7 @@ curl http://localhost:3000/api/audit/changes/feeder/FEEDER-05
 ---
 
 ### 4. Get Entity Diff
+
 **Endpoint**: `GET /audit/diff/:entityType/:entityId`
 
 ```bash
@@ -236,6 +255,7 @@ curl http://localhost:3000/api/audit/diff/component/COMP-789
 ```
 
 **Response**:
+
 ```json
 {
   "entityType": "component",
@@ -271,6 +291,7 @@ curl http://localhost:3000/api/audit/diff/component/COMP-789
 ---
 
 ### 5. Get User Actions
+
 **Endpoint**: `GET /audit/user/:userId?limit=100`
 
 ```bash
@@ -278,6 +299,7 @@ curl "http://localhost:3000/api/audit/user/john.doe@ucal.com?limit=50"
 ```
 
 **Response**:
+
 ```json
 {
   "userId": "john.doe@ucal.com",
@@ -300,6 +322,7 @@ curl "http://localhost:3000/api/audit/user/john.doe@ucal.com?limit=50"
 ---
 
 ### 6. Get Logs by Action Type
+
 **Endpoint**: `GET /audit/action/:action?limit=100`
 
 ```bash
@@ -307,6 +330,7 @@ curl "http://localhost:3000/api/audit/action/update?limit=50"
 ```
 
 **Valid action values**:
+
 - `create`
 - `update`
 - `delete`
@@ -318,6 +342,7 @@ curl "http://localhost:3000/api/audit/action/update?limit=50"
 ---
 
 ### 7. Get Logs by Date Range
+
 **Endpoint**: `GET /audit/range?startDate=...&endDate=...&limit=1000`
 
 ```bash
@@ -325,6 +350,7 @@ curl "http://localhost:3000/api/audit/range?startDate=2026-04-01T00:00:00Z&endDa
 ```
 
 **Response**:
+
 ```json
 {
   "startDate": "2026-04-01T00:00:00.000Z",
@@ -350,6 +376,7 @@ curl "http://localhost:3000/api/audit/range?startDate=2026-04-01T00:00:00Z&endDa
 ## 📊 Phase 6 - Traceability Endpoints
 
 ### 1. Find Scans by Reel
+
 **Endpoint**: `GET /traceability/reel/:reelId`
 
 ```bash
@@ -357,6 +384,7 @@ curl http://localhost:3000/api/traceability/reel/REEL-123456
 ```
 
 **Response**:
+
 ```json
 {
   "reelId": "REEL-123456",
@@ -381,6 +409,7 @@ curl http://localhost:3000/api/traceability/reel/REEL-123456
 ---
 
 ### 2. Find Scans by Lot Number
+
 **Endpoint**: `GET /traceability/lot/:lotNumber`
 
 ```bash
@@ -390,6 +419,7 @@ curl http://localhost:3000/api/traceability/lot/LOT-2026-00001
 ---
 
 ### 3. Find Scans by Date Code
+
 **Endpoint**: `GET /traceability/date-code/:dateCode`
 
 ```bash
@@ -399,6 +429,7 @@ curl http://localhost:3000/api/traceability/date-code/14-26
 ---
 
 ### 4. Get Full Session Traceability
+
 **Endpoint**: `GET /traceability/session/:sessionId/trace`
 
 ```bash
@@ -406,6 +437,7 @@ curl http://localhost:3000/api/traceability/session/5/trace
 ```
 
 **Response**:
+
 ```json
 {
   "sessionId": 5,
@@ -432,6 +464,7 @@ curl http://localhost:3000/api/traceability/session/5/trace
 ---
 
 ### 5. Find Sessions Using a Reel
+
 **Endpoint**: `GET /traceability/sessions-for-reel/:reelId`
 
 ```bash
@@ -441,6 +474,7 @@ curl http://localhost:3000/api/traceability/sessions-for-reel/REEL-123456
 ---
 
 ### 6. Find Sessions Using a Lot
+
 **Endpoint**: `GET /traceability/sessions-for-lot/:lotNumber`
 
 ```bash
@@ -450,6 +484,7 @@ curl http://localhost:3000/api/traceability/sessions-for-lot/LOT-2026-00001
 ---
 
 ### 7. Get Alternate Usage Report
+
 **Endpoint**: `GET /traceability/alternate-usage?limit=100`
 
 ```bash
@@ -457,6 +492,7 @@ curl "http://localhost:3000/api/traceability/alternate-usage?limit=50"
 ```
 
 **Response**:
+
 ```json
 {
   "count": 42,
@@ -486,6 +522,7 @@ curl "http://localhost:3000/api/traceability/alternate-usage?limit=50"
 ## 🧪 Complete Testing Workflow
 
 ### Step 1: Clear and Seed
+
 ```bash
 # Clear old data
 curl -X POST http://localhost:3000/api/test/clear \
@@ -496,11 +533,13 @@ curl -X POST http://localhost:3000/api/test/seed
 ```
 
 ### Step 2: Get Statistics
+
 ```bash
 curl http://localhost:3000/api/test/stats
 ```
 
 ### Step 3: Test Traceability
+
 ```bash
 # Get first reel from stats, then query it
 curl http://localhost:3000/api/traceability/reel/REEL-000001
@@ -510,6 +549,7 @@ curl http://localhost:3000/api/traceability/session/1/trace
 ```
 
 ### Step 4: Test Audit
+
 ```bash
 # Test recording an audit log
 curl -X POST http://localhost:3000/api/audit/log \
@@ -532,6 +572,7 @@ curl http://localhost:3000/api/audit/logs/component/TEST-123
 ## 📝 cURL Command Cheat Sheet
 
 ### JSON POST
+
 ```bash
 curl -X POST <url> \
   -H "Content-Type: application/json" \
@@ -539,16 +580,19 @@ curl -X POST <url> \
 ```
 
 ### With Custom Headers
+
 ```bash
 curl -H "X-Custom-Header: value" <url>
 ```
 
 ### Pretty Print JSON
+
 ```bash
 curl <url> | jq '.'
 ```
 
 ### Save to File
+
 ```bash
 curl <url> > response.json
 ```
@@ -570,4 +614,3 @@ curl <url> > response.json
 2. Filter by date range when querying audit logs
 3. Use specific entity IDs instead of scanning all records
 4. Consider pagination for large result sets
-

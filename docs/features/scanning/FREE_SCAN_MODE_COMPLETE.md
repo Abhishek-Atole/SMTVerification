@@ -1,7 +1,9 @@
 # Free Scan Mode - Complete Implementation Guide
 
 ## Overview
+
 Free Scan Mode allows users to create verification sessions and scan feeders/spools **without requiring BOM validation**. This enhancement provides flexibility for scenarios where:
+
 - Users want to quickly verify feeder conditions
 - BOM information is not immediately available
 - Manual verification is needed independent of production orders
@@ -13,6 +15,7 @@ Free Scan Mode allows users to create verification sessions and scan feeders/spo
 **File:** [artifacts/feeder-scanner/src/pages/session-new.tsx](artifacts/feeder-scanner/src/pages/session-new.tsx)
 
 **Changes:**
+
 - Added checkbox: "Free Scan Mode (scan without BOM validation)"
 - BOM selector conditionally hidden when free scan mode is enabled
 - Session creation button logic:
@@ -21,6 +24,7 @@ Free Scan Mode allows users to create verification sessions and scan feeders/spo
 - Sends `bomId: 0` to backend when free scan mode is active
 
 **Key Code:**
+
 ```typescript
 const [freeScanMode, setFreeScanMode] = useState(false);
 
@@ -39,15 +43,19 @@ disabled={createSession.isPending || (!freeScanMode && !bomId)}
 **File:** [artifacts/api-server/src/routes/sessions.ts](artifacts/api-server/src/routes/sessions.ts)
 
 **Changes:**
+
 - Modified validation to allow `bomId = 0` by checking `bomId == null` instead of `!bomId`
 - Converts `bomId = 0` to `NULL` before database insert:
+
   ```typescript
   bomId = bomId === 0 ? null : bomId;
   ```
+
 - Conditional BOM lookup: only queries BOM details if `bomId !== null`
 - Returns session with `bomId: null` for free scan sessions
 
 **Key Logic:**
+
 ```typescript
 // Accept bomId = 0
 if (bomId == null || !companyName || !panelName || !supervisorName || !operatorName || !shiftName || !shiftDate) {
@@ -67,17 +75,21 @@ if (bomId !== null) {
 ### 3. Database Schema
 
 **Changes:**
+
 - Made `bomId` column **nullable** in `sessions` table
 - Migration command:
+
   ```sql
   ALTER TABLE sessions ALTER COLUMN bom_id DROP NOT NULL;
   ALTER TABLE sessions ADD CONSTRAINT fk_bom_id FOREIGN KEY (bom_id) REFERENCES boms(id) ON DELETE SET NULL;
   ```
+
 - Free scan sessions store `NULL` for `bom_id`
 
 ### 4. API Schema (OpenAPI/Zod)
 
 **Changes:**
+
 - Regenerated API client with `bomId?: number` (optional)
 - OpenAPI schema removed `bomId` from required fields
 - Zod validators updated to allow optional `bomId`
@@ -89,15 +101,18 @@ if (bomId !== null) {
 Both scripts are in the project root directory.
 
 **start-servers.sh**
+
 - Automatically starts API server (port 3000) and Frontend server (port 5173)
 - Creates `./logs/` directory for output
 - Logs both servers to separate files for debugging
 - Can be added to crontab for automatic startup on machine boot:
+
   ```bash
   @reboot /path/to/SMTVerification/start-servers.sh
   ```
 
 **stop-servers.sh**
+
 - Safely terminates both servers
 - Kills Node.js processes gracefully
 
@@ -124,6 +139,7 @@ npm run dev
 **Endpoint:** `POST /api/sessions`
 
 **Request (Free Scan Mode):**
+
 ```json
 {
   "bomId": 0,
@@ -137,6 +153,7 @@ npm run dev
 ```
 
 **Response:**
+
 ```json
 {
   "id": "session-xyz",
@@ -154,6 +171,7 @@ npm run dev
 ### Normal BOM-Based Session (Still Works)
 
 **Request (With BOM):**
+
 ```json
 {
   "bomId": 42,
@@ -167,6 +185,7 @@ npm run dev
 ```
 
 **Response:**
+
 ```json
 {
   "id": "session-abc",
@@ -185,6 +204,7 @@ npm run dev
 ## User Experience Flow
 
 ### Free Scan Mode
+
 1. User opens "New Session" page
 2. Enables "Free Scan Mode (scan without BOM validation)" checkbox
 3. BOM selector disappears
@@ -194,6 +214,7 @@ npm run dev
 7. Can scan feeders/spools without BOM constraints
 
 ### Normal Mode (Unchanged)
+
 1. User opens "New Session" page
 2. Leaves "Free Scan Mode" unchecked (default)
 3. BOM selector remains visible
@@ -205,11 +226,13 @@ npm run dev
 ## Responsive Design
 
 Both modes work seamlessly across:
+
 - ✅ Desktop (1920x1080 and larger)
 - ✅ Tablet (768x1024)
 - ✅ Mobile (375x667)
 
 UI automatically:
+
 - Hides BOM selector in free scan mode
 - Shows helpful message "Session will be created without BOM validation"
 - Adjusts button disabled state appropriately
@@ -220,6 +243,7 @@ UI automatically:
 When using deployment scripts:
 
 **API Server Logs:** `./logs/api-server.log`
+
 ```
 2024-01-15 10:25:30 Starting API server on port 3000...
 2024-01-15 10:25:32 Database connected
@@ -227,6 +251,7 @@ When using deployment scripts:
 ```
 
 **Frontend Server Logs:** `./logs/frontend-server.log`
+
 ```
 2024-01-15 10:25:35 Starting Frontend server on port 5173...
 2024-01-15 10:25:38 Frontend ready at http://localhost:5173
@@ -235,24 +260,29 @@ When using deployment scripts:
 ## Troubleshooting
 
 ### Free Scan Mode Button Stays Disabled
+
 **Cause:** `freeScanMode` checkbox not checked AND no BOM selected
 **Solution:** Check the checkbox or select a BOM
 
 ### Session Creation Fails
+
 **Cause:** Missing required fields (company, panel, supervisor, operator, shift, date)
 **Solution:** Fill in all required fields before creating session
 
 ### API Returns 400 Error
+
 **Cause:** Client sent invalid data or field format
 **Solution:** Check API response body for specific field validation errors
 
 ### Servers Won't Start
+
 **Cause:** Ports 3000/5173 already in use
 **Solution:** Kill existing processes or change port configuration
 
 ## Future Enhancements
 
 Potential improvements for future iterations:
+
 - [ ] Save free scan mode preference in user settings
 - [ ] Quick-start templates for common free scan scenarios
 - [ ] Export free scan verification reports
@@ -262,6 +292,7 @@ Potential improvements for future iterations:
 ## Summary
 
 ✅ **Complete and Production-Ready**
+
 - Both BOM-based and free scan modes working perfectly
 - Responsive UI across all devices
 - Auto-deployment scripts configured and tested

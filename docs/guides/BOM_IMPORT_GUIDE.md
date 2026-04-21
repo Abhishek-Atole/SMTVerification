@@ -1,7 +1,9 @@
 # BOM Editor - Import Guide
 
 ## Overview
+
 The BOM editor now supports importing BOM data from multiple file formats:
+
 - ✅ **CSV** (.csv)
 - ✅ **Excel** (.xlsx)
 - ✅ **Excel 97-2003** (.xls)
@@ -9,29 +11,37 @@ The BOM editor now supports importing BOM data from multiple file formats:
 ## Supported File Formats
 
 ### CSV Format
+
 Plain text file with comma-separated values. Can be created with:
+
 - Excel (Save As → CSV UTF-8)
 - Google Sheets (Download → CSV)
 - Any text editor
 
 ### XLSX Format
+
 Modern Excel format (.xlsx). Supported:
+
 - Excel 2007 and later
 - LibreOffice Calc
 - Google Sheets
 
 ### XLS Format
+
 Legacy Excel format (.xls). Supported:
+
 - Excel 97-2003
 - Older versions of Excel
 
 ## Column Requirements
 
 ### Required Columns (At least one must be present)
+
 - **Item Name** / Item Type / Component Name / Type
 - **Reference** / Designator / PCB Reference
 
 ### Highly Recommended Columns
+
 - **SR NO** / Serial Number / Item Number
 - **Feeder Number** / Feeder / Position
 - **Value** / Values / Component Value / Spec
@@ -39,6 +49,7 @@ Legacy Excel format (.xls). Supported:
 - **Quantity** / Qty / Required Quantity
 
 ### Supplier Columns (Optional but useful)
+
 - **Supplier 1** / Make/Supplier 1
 - **Part No 1** / Part Number 1
 - **Supplier 2** / Make/Supplier 2
@@ -47,6 +58,7 @@ Legacy Excel format (.xls). Supported:
 - **Part No 3** / Part Number 3
 
 ### Other Columns (Optional)
+
 - **RDEPL Part No** / Internal Part / Part Number (Internal)
 - **DNP** / Do Not Populate
 - **Remarks** / Notes / Comments
@@ -56,6 +68,7 @@ Legacy Excel format (.xls). Supported:
 The import function recognizes common naming variations:
 
 ### Item Name
+
 - `Item Name` → item_name
 - `Item Type` → item_name
 - `Component Name` → item_name
@@ -63,30 +76,35 @@ The import function recognizes common naming variations:
 - `Component Type` → item_name
 
 ### Reference
+
 - `Reference` → reference
 - `Ref` → reference
 - `Designator` → reference
 - `PCB Reference` → reference
 
 ### Feeder
+
 - `Feeder Number` → feeder_number
 - `Feeder No` → feeder_number
 - `Feeder` → feeder_number
 - `Position` → feeder_number
 
 ### Quantity
+
 - `Qty` → required_qty
 - `Quantity` → required_qty
 - `Required Qty` → required_qty
 - `Required Quantity` → required_qty
 
 ### Supplier
+
 - `Supplier 1` → supplier_1
 - `Make/Supplier 1` → supplier_1
 - `Make` → supplier_1
 - `Supplier` → supplier_1
 
 ### Value/Specification
+
 - `Value` → values
 - `Values` → values
 - `Component Value` → values
@@ -95,16 +113,19 @@ The import function recognizes common naming variations:
 ## How to Import
 
 ### Step 1: Prepare Your File
+
 1. Organize your BOM data in Excel or CSV
 2. Ensure column headers are in the first row
 3. Data should start from row 2
 
 ### Step 2: Upload File
+
 1. Click **"📤 Import CSV/Excel"** button
 2. Select your file (.csv, .xlsx, or .xls)
 3. Click "Open"
 
 ### Step 3: Confirm Import
+
 1. Review the preview showing detected columns
 2. Check marks (✓) indicate recognized data:
    - ✓ SR Numbers detected
@@ -119,6 +140,7 @@ The import function recognizes common naming variations:
 4. Click "Cancel" to abort
 
 ### Step 4: Review Imported Data
+
 1. All your components appear in the table
 2. Use search to verify data
 3. Edit any fields if needed
@@ -144,7 +166,9 @@ SR NO,Feeder Number,Item Name,Reference,Value,Package,Qty,Supplier 1,Part No 1,S
 ## Data Validation
 
 ### What Gets Imported
+
 ✅ All 15 BOM fields:
+
 - SR Number (auto-assigned if blank)
 - Feeder Number
 - Item Name **(required)**
@@ -159,12 +183,14 @@ SR NO,Feeder Number,Item Name,Reference,Value,Package,Qty,Supplier 1,Part No 1,S
 - Remarks
 
 ### What Gets Ignored
+
 ❌ Empty rows
 ❌ Rows without Item Name AND Reference
 ❌ Non-numeric SR Numbers and Quantities (converted to 0)
 ❌ Columns with unrecognized headers
 
 ### Data Type Conversions
+
 - **SR NO / Qty**: Converted to integers
 - **Spaces/Newlines**: Preserved in all text fields
 - **Numbers as text**: Handled correctly
@@ -173,40 +199,52 @@ SR NO,Feeder Number,Item Name,Reference,Value,Package,Qty,Supplier 1,Part No 1,S
 ## Troubleshooting
 
 ### Issue: "No recognizable columns found"
-**Solution:** 
+
+**Solution:**
+
 1. Check your column headers
 2. Use standard headers from the examples above
 3. Avoid special characters in headers
 4. Headers should be in row 1
 
 ### Issue: "No valid data rows found"
+
 **Solution:**
+
 1. Ensure at least one row has "Item Name" AND "Reference"
 2. Item Name column must not be empty for data rows
 3. Check for extra blank rows at the end
 
 ### Issue: Some columns not detected
+
 **Solution:**
+
 1. Use standard header names (examples in table above)
 2. Exact matches work best
 3. Minor variations are auto-detected
 4. If still not detected, manually edit in the editor
 
 ### Issue: Numbers becoming 0
+
 **Solution:**
+
 1. Check if SR NO and Qty are numeric
 2. Non-numeric values convert to 0
 3. For example: "SR-1" converts to 0 (should be just "1")
 
 ### Issue: File won't upload
+
 **Solution:**
+
 1. Only .csv, .xlsx, .xls files supported
 2. Check file extension (case-insensitive)
 3. File size should be < 100MB
 4. No corrupt Excel files
 
 ### Issue: Special characters look wrong
+
 **Solution:**
+
 1. Ensure CSV is UTF-8 encoded
 2. Excel files should be standard format
 3. Copy from "Export JSON" to get correct encoding
@@ -216,10 +254,12 @@ SR NO,Feeder Number,Item Name,Reference,Value,Package,Qty,Supplier 1,Part No 1,S
 ### Complete Import Example
 
 **Before:**
+
 - Old BOM with 5 components
 - Needs updating with 15 new components
 
 **Steps:**
+
 1. Open `bom-editor.html`
 2. Click "📤 Import CSV/Excel"
 3. Select file with 15 components (XLSX)
@@ -245,6 +285,7 @@ SR NO,Feeder Number,Item Name,Reference,Value,Package,Qty,Supplier 1,Part No 1,S
 ## Advanced Usage
 
 ### Bulk Import from Multiple Files
+
 1. Prepare separate files for different suppliers
 2. Import first file
 3. Click "📤 Import" again
@@ -253,6 +294,7 @@ SR NO,Feeder Number,Item Name,Reference,Value,Package,Qty,Supplier 1,Part No 1,S
 6. To append: Export current → Combine in Excel → Re-import
 
 ### Format Conversion
+
 - **From XLS**: Open in Excel → Save As XLSX
 - **From Google Sheets**: Download as CSV
 - **From LibreOffice**: Export as XLSX or CSV
@@ -274,30 +316,38 @@ SR NO,Feeder Number,Item Name,Reference,Value,Package,Qty,Supplier 1,Part No 1,S
 ## Tips & Best Practices
 
 ### Tip 1: Standard Column Names
+
 Use exact names from the guide for reliable detection:
+
 - ✅ `SR NO` or `SR Number`
 - ✅ `Item Name` or `Item Type`
 - ✅ `Reference` or `Ref`
 - ❌ Avoid: `SR#`, `Item`, `Ref.` (may not detect)
 
 ### Tip 2: Preserve Order
+
 Import maintains original row order if SR NO is populated.
 If SR NO is blank, auto-assigns sequential numbers.
 
 ### Tip 3: Backup First
+
 Before importing a large file:
+
 1. Click "Export JSON" to backup current BOM
 2. Keep the downloaded file
 3. Then proceed with import
 
 ### Tip 4: Verify Headers
+
 Before importing:
+
 1. Open file in editor/Excel
 2. Check row 1 has headers
 3. Verify column names make sense
 4. Look for typos or variations
 
 ### Tip 5: Test Small Imports
+
 1. Test with 2-3 components first
 2. Verify data imports correctly
 3. Then do full import
@@ -305,6 +355,7 @@ Before importing:
 ## Supported File Properties
 
 ### CSV Properties
+
 - **Encoding**: UTF-8 (recommended), UTF-16, ASCII
 - **Delimiter**: Comma
 - **Quote character**: Double quotes (")
@@ -312,12 +363,14 @@ Before importing:
 - **Max rows**: 1,000,000+
 
 ### XLSX Properties
+
 - **Version**: Any modern Excel
 - **Max size**: 100 MB
 - **Max rows**: 1,000,000
 - **Multiple sheets**: Imports first sheet only
 
 ### XLS Properties
+
 - **Version**: Excel 97-2003
 - **Max size**: 100 MB
 - **Max rows**: 1,000,000

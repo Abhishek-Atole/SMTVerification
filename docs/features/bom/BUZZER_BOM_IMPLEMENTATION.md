@@ -3,9 +3,11 @@
 **Status**: ✅ COMPLETE
 
 ## Overview
+
 Successfully imported and integrated the **Intermittent Buzzer (INTBUZ/R&D/R1.1)** Bill of Materials from Excel spreadsheet into the SMT Verification system.
 
 **BOM Details:**
+
 - **Part Number**: INTBUZ/R&D/R1.1 /T-206506
 - **Customer**: Mahindra Last Mile Mobility Limited
 - **BOM Rev**: R00/06-01-2026
@@ -15,6 +17,7 @@ Successfully imported and integrated the **Intermittent Buzzer (INTBUZ/R&D/R1.1)
 ## Extracted Data from Excel
 
 ### Source File
+
 - **File**: Intermittent Buzzer E-BOM-Rev-001_1 (1)1 (1).xlsx
 - **Format**: Standard BOM format with multi-supplier support
 - **Columns**: SR NO, Item Name, Part NO, Qty, Reference, Values, Package, DNP, Supplier 1-3
@@ -22,6 +25,7 @@ Successfully imported and integrated the **Intermittent Buzzer (INTBUZ/R&D/R1.1)
 ### Components Inserted
 
 #### Capacitors (4 items)
+
 | Feeder | Part Number | MPN | Manufacturer | Package | Description | Alternate |
 |--------|------------|-----|--------------|---------|-------------|-----------|
 | C1 | RDSCAP0353 | C0603C472K5RACAUTO | KEMET | 0603 | 4.7nF/50V 10% | No |
@@ -30,6 +34,7 @@ Successfully imported and integrated the **Intermittent Buzzer (INTBUZ/R&D/R1.1)
 | C4 | RDSCAP0037 | CC0603KRX7R9BB104 | YAGEO | 0603 | 0.1uF/50V/10% | Yes |
 
 #### Resistors (5 items)
+
 | Feeder | Part Number | MPN | Manufacturer | Package | Description | Tolerance |
 |--------|------------|-----|--------------|---------|-------------|-----------|
 | R3 | RDSRES0987 | CQ03WAF4701T5E | Royal Ohm | 0603 | 4.7K Resistor | ±1% |
@@ -39,11 +44,13 @@ Successfully imported and integrated the **Intermittent Buzzer (INTBUZ/R&D/R1.1)
 | R7 | RDSRES0985 | CQ03WAF1002T5E | Royal Ohm | 0603 | 10K Resistor | ±1% |
 
 #### IC (1 item)
+
 | Feeder | Part Number | MPN | Manufacturer | Package | Description |
 |--------|------------|-----|--------------|---------|-------------|
 | U1 | RDSDIOD0266 | SE555QS-13 | Diodes Inc | SO-8 | 555 Timer IC |
 
 #### PCB (1 item)
+
 | Feeder | Part Number | MPN | Manufacturer | Package | Description |
 |--------|------------|-----|--------------|---------|-------------|
 | PCB | BARE PCB | INTBUZ/R&D/R1.1 | In-house | FR-4 1.6mm | Bare Printed Circuit Board |
@@ -51,6 +58,7 @@ Successfully imported and integrated the **Intermittent Buzzer (INTBUZ/R&D/R1.1)
 ## Database Schema Integration
 
 ### Data Structure
+
 ```
 BOM (ID: 19)
 ├─ Name: "Intermittent Buzzer (INTBUZ/R&D/R1.1)"
@@ -68,6 +76,7 @@ BOM (ID: 19)
 ```
 
 ### Columns Maintained
+
 ✅ **feeder_number** - Original BOM reference designation (C1, C2, R3, R4, R5, R6, R7, U1, PCB)
 ✅ **part_number** - Internal part tracking number
 ✅ **manufacturer** - Supplier/manufacturer name
@@ -79,23 +88,27 @@ BOM (ID: 19)
 ## Migration Process
 
 ### Step 1: Excel Data Extraction
+
 - Opened and parsed: Intermittent Buzzer E-BOM-Rev-001_1 (1)1 (1).xlsx
 - Extracted 11 active rows from data section
 - Read shared strings for proper text mapping
 
 ### Step 2: Data Transformation
+
 - Mapped Excel columns to database schema
 - Split multi-supplier data into structured format
 - Identified alternate components (marked with `is_alternate` flag)
 - Standardized property names to database conventions
 
 ### Step 3: Database Insertion
+
 - Created migration TypeScript script: `insert-buzzer-bom.ts`
 - Used Drizzle ORM for type-safe insertion
 - Maintained referential integrity with foreign keys
 - Inserted 11 BOM items with complete metadata
 
 ### Step 4: Verification
+
 ```sql
 -- Query to verify insertion
 SELECT feeder_number, part_number, manufacturer, mpn 
@@ -109,18 +122,21 @@ ORDER BY feeder_number;
 ## System Improvements Made
 
 ### 1. Feeder Number Column
+
 - Extra column maintained in BOM items table
 - Facilitates feeder machine programming
 - Links to physical pick-and-place operations
 - Enables automated feeder validation
 
 ### 2. Multi-Supplier Support
+
 - Stored primary manufacturer (make/supplier 1)
 - MPN stored for exact component matching
 - Alternate components labeled for substitution scenarios
 - Example: C1/C2 (capacitors), R3-R7 (resistors) can use different suppliers
 
 ### 3. Component Validation
+
 - expected_mpn field enables barcode scanning validation
 - Alternate component handling during scanning
 - Automatic mismatch detection if wrong part scanned
@@ -129,38 +145,47 @@ ORDER BY feeder_number;
 ## API Endpoints for BOM
 
 ### Get Specific BOM
+
 ```bash
 GET /api/bom/19
 ```
+
 **Response**: Complete BOM with all 11 items and metadata
 
 ### List All BOMs
+
 ```bash
 GET /api/bom
 ```
+
 **Response**: All BOMs including the new Buzzer BOM
 
 ### Get BOM Items
+
 ```bash
 GET /api/bom/19/items
 ```
+
 **Response**: Array of 11 component items with full details
 
 ## Frontend Integration
 
 ### BOM Manager Display
+
 - BOM #19 "Intermittent Buzzer (INTBUZ/R&D/R1.1)" visible in BOM list
 - Card-based layout shows all components
 - Feeder numbers displayed alongside part information
 - Edit/Delete actions available per component
 
 ### Scanning & Validation
+
 - Pick feeder numbers from BOM (C1, C2, R3, etc.)
 - System validates scanned MPN against expected_mpn
 - Alternate components handled automatically
 - Real-time validation feedback
 
 ### Data Columns
+
 ✅ Feeder Number - For pick-and-place programming
 ✅ Part Number - Internal tracking
 ✅ Manufacturer - Supplier identification
@@ -172,6 +197,7 @@ GET /api/bom/19/items
 ## Usage Example
 
 ### Scanning Session
+
 1. **Start Session** → Select "Intermittent Buzzer BOM"
 2. **Pick Feeder** → System shows "Feeder C1 - RDSCAP0353"
 3. **Scan Component** → Barcode scan of KEMET C0603C472K5RACAUTO
@@ -180,6 +206,7 @@ GET /api/bom/19/items
 6. **Continue** → Progress through all 11 components
 
 ## Database Commit
+
 ```
 a7a0c61 feat: insert Intermittent Buzzer BOM (INTBUZ/R&D/R1.1) with 11 components and feeder mapping
 - Added migration script to load Buzzer BOM from Excel

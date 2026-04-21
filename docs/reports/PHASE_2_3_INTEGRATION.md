@@ -4,18 +4,21 @@
 
 **File Created:** `artifacts/feeder-scanner/src/pages/real-time-dashboard.tsx`
 
-### Features Implemented:
+### Features Implemented
+
 ✅ 7 KPI Cards (Pass Rate, Passes, Defect Rate, Mismatches, Avg Scan Time, Total Scans, Alternate Passes)
 ✅ 4 Interactive Charts:
-   - Validation Results Pie Chart (Pass/Mismatch/Alternate)
-   - Top Feeder Defects Bar Chart 
-   - Hourly Trends Line Chart (24-hour timeline)
-   - Top Component Defects Bar Chart
+
+- Validation Results Pie Chart (Pass/Mismatch/Alternate)
+- Top Feeder Defects Bar Chart
+- Hourly Trends Line Chart (24-hour timeline)
+- Top Component Defects Bar Chart
 
 ✅ 3 Tabbed Detail Sections:
-   - Verification Records Table (50 most recent)
-   - Alarm Panel (severity levels: critical/warning/info)
-   - Operator Performance Metrics
+
+- Verification Records Table (50 most recent)
+- Alarm Panel (severity levels: critical/warning/info)
+- Operator Performance Metrics
 
 ✅ Session Selector Dropdown
 ✅ Real-time Polling (2-second refetch when session active)
@@ -30,23 +33,29 @@
 **File:** `artifacts/feeder-scanner/src/components/layout.tsx`
 
 ### Step 1: Add icon import (line 2)
+
 Change from:
+
 ```typescript
 import { LayoutDashboard, Boxes, History, PlusSquare, BarChart3, LogOut, Sun, Moon, Menu, X, Trash2 } from "lucide-react";
 ```
 
 To:
+
 ```typescript
 import { LayoutDashboard, Boxes, History, PlusSquare, BarChart3, LogOut, Sun, Moon, Menu, X, Trash2, TrendingUp } from "lucide-react";
 ```
 
 ### Step 2: Add Real-Time Dashboard nav item (line ~17, in NAV_ITEMS array)
+
 After the Analytics line, add:
+
 ```typescript
     { href: "/real-time-dashboard", label: "Real-Time Dashboard", icon: TrendingUp, roles: ["engineer", "qa"] },
 ```
 
 **Complete NAV_ITEMS array:**
+
 ```typescript
   const NAV_ITEMS = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["engineer", "qa", "operator"] },
@@ -60,6 +69,7 @@ After the Analytics line, add:
 ```
 
 ### Step 3: Register route (file routing)
+
 Depending on your routing setup, register route for `/real-time-dashboard` pointing to the new dashboard page.
 
 ---
@@ -67,6 +77,7 @@ Depending on your routing setup, register route for `/real-time-dashboard` point
 ## Real-Time Dashboard Polling Strategy
 
 **Implemented:**
+
 - All 8 queries use conditional `refetchInterval`
 - When sessionId is selected: `refetchInterval: 2000` (2 seconds) - ACTIVE
 - When no sessionId: `refetchInterval: false` - DISABLED
@@ -74,6 +85,7 @@ Depending on your routing setup, register route for `/real-time-dashboard` point
 - All queries fetch independently with separate cache keys
 
 **Performance:**
+
 - Non-blocking queries (each has independent loading state)
 - Minimal CPU impact with 2-second interval
 - Graceful fallback if API unavailable
@@ -102,8 +114,10 @@ All endpoints require integration via Phase 1 (dashboard.ts import in routes/ind
 ## Next Steps: Phase 4-7
 
 ### Phase 4: Database Indexes
+
 - Verify indexes on: `(sessionId, validationResult)`, `(scannedAt)`, `(feederNumber)`
 - Run SQL if missing:
+
 ```sql
 CREATE INDEX IF NOT EXISTS idx_scan_records_session_validation 
   ON scan_records(session_id, validation_result);
@@ -114,16 +128,19 @@ CREATE INDEX IF NOT EXISTS idx_scan_records_feeder
 ```
 
 ### Phase 5: React Query Integration
+
 - Already implemented with conditional refetchInterval
 - Session selector triggers cache invalidation
 - All queries independent with separate keys
 
 ### Phase 6: Security Testing
+
 - Backend: Verify/add middleware to check user role (QA/Engineer only)
 - Frontend: Navigation automatically hidden from operators (role filter)
 - Test endpoints with unauthorized user (expect 403)
 
 ### Phase 7: Git Commit
+
 - Add real-time-dashboard.tsx
 - Update layout.tsx with nav item
 - Add dashboard.ts endpoint import to routes/index.ts

@@ -6,21 +6,23 @@ To automatically start the SMT Verification servers on machine restart, add this
 @reboot /media/abhishek-atole/Courses/Final\ SMT\ MES\ SYSTEM/SMTVerification/start-servers.sh
 ```
 
-## Setup Instructions:
+## Setup Instructions
 
 ### Option 1: Using Crontab (Recommended for regular user)
 
 1. Open crontab editor:
+
 ```bash
 crontab -e
 ```
 
-2. Add this line at the end:
+1. Add this line at the end:
+
 ```bash
 @reboot /media/abhishek-atole/Courses/Final\ SMT\ MES\ SYSTEM/SMTVerification/start-servers.sh
 ```
 
-3. Save and exit (Ctrl+X, then Y, then Enter if using nano)
+1. Save and exit (Ctrl+X, then Y, then Enter if using nano)
 
 ### Option 2: Manual Startup Script
 
@@ -41,10 +43,11 @@ To stop all servers:
 ## Verification
 
 After setup, the servers will:
+
 - Start automatically when the machine boots
 - Be available at:
-  - API: http://localhost:3000
-  - Frontend: http://localhost:5173
+  - API: <http://localhost:3000>
+  - Frontend: <http://localhost:5173>
 - Log output to:
   - API logs: /var/log/smtverify-api.log
   - Frontend logs: /var/log/smtverify-frontend.log
@@ -52,26 +55,31 @@ After setup, the servers will:
 ## Manual Commands
 
 **Start servers manually:**
+
 ```bash
 /media/abhishek-atole/Courses/Final\ SMT\ MES\ SYSTEM/SMTVerification/start-servers.sh
 ```
 
 **Stop servers:**
+
 ```bash
 /media/abhishek-atole/Courses/Final\ SMT\ MES\ SYSTEM/SMTVerification/stop-servers.sh
 ```
 
 **Check if running:**
+
 ```bash
 ps aux | grep -E "node.*index.mjs|npm run dev" | grep -v grep
 ```
 
 **View API logs:**
+
 ```bash
 tail -f /var/log/smtverify-api.log
 ```
 
 **View Frontend logs:**
+
 ```bash
 tail -f /var/log/smtverify-frontend.log
 ```

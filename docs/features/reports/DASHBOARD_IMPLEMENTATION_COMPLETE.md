@@ -1,7 +1,9 @@
 # Real-Time Analytics Dashboard - Complete Implementation Guide
 
 ## Project Overview
+
 Industrial-grade real-time analytics dashboard for SMT Feeder Scanning & Verification system with:
+
 - ✅ 9 backend API endpoints
 - ✅ React frontend with 4 charts and 3 detail tabs  
 - ✅ Real-time polling (2-second intervals)
@@ -23,11 +25,13 @@ Industrial-grade real-time analytics dashboard for SMT Feeder Scanning & Verific
 1. **Edit:** `artifacts/api-server/src/routes/index.ts`
 
    **Add import (line 9):**
+
    ```typescript
    import dashboardRouter from "./dashboard";
    ```
 
    **Add router usage (line 23):**
+
    ```typescript
    router.use(dashboardRouter);
    ```
@@ -91,6 +95,7 @@ Industrial-grade real-time analytics dashboard for SMT Feeder Scanning & Verific
 ```
 
 ### Features
+
 ✅ Real-time data polling (2-second interval when session active)
 ✅ Session selector dropdown (lists all active sessions)
 ✅ Dark mode support (Tailwind CSS)
@@ -111,16 +116,19 @@ Industrial-grade real-time analytics dashboard for SMT Feeder Scanning & Verific
 ### Changes Required
 
 1. **Add icon import (line 2):**
+
    ```typescript
    import { ..., TrendingUp } from "lucide-react";
    ```
 
 2. **Add nav item (in NAV_ITEMS array, after Analytics line):**
+
    ```typescript
    { href: "/real-time-dashboard", label: "Real-Time Dashboard", icon: TrendingUp, roles: ["engineer", "qa"] },
    ```
 
 **Result:**
+
 - ✅ Navigation link visible only to Engineers and QA users
 - ✅ Operators cannot access the dashboard (role filter)
 - ✅ Link appears in sidebar between Analytics and Session History
@@ -146,11 +154,13 @@ Industrial-grade real-time analytics dashboard for SMT Feeder Scanning & Verific
 | idx_sessions_start_time_desc | sessions | (start_time DESC) | Efficiency calculations |
 
 ### Performance Impact
+
 - Query speed: ~10x faster (500ms → 50ms per dashboard refresh)
 - Storage: +15-25 MB
 - Insert/Update: Negligible impact
 
 ### How to Apply
+
 ```bash
 # Option 1: Using psql command line
 psql -h localhost -U smtverify -d smtverify -f dashboard-indexes.sql
@@ -172,6 +182,7 @@ ORDER BY tablename;
 **Status:** Already implemented in frontend
 
 ### Polling Strategy
+
 ```typescript
 // All 8 queries in real-time-dashboard.tsx use:
 const { data, isLoading } = useQuery({
@@ -183,6 +194,7 @@ const { data, isLoading } = useQuery({
 ```
 
 ### Behavior
+
 - **When sessionId is selected:** All queries refetch every 2 seconds
 - **When no session selected:** Queries don't refetch (disabled polling)
 - **Session change:** All queries reset cache and refetch immediately
@@ -193,9 +205,11 @@ const { data, isLoading } = useQuery({
 ## Phase 6: Security & Access Control
 
 ### Backend Security
+
 **To add:** Role-based middleware in dashboard.ts routes
 
 Add after line 8 in dashboard.ts:
+
 ```typescript
 // Add security middleware
 router.use((req, res, next) => {
@@ -208,12 +222,15 @@ router.use((req, res, next) => {
 ```
 
 ### Frontend Security
+
 ✅ Already implemented:
+
 - Navigation link filtered to ["engineer", "qa"] roles
 - Operators cannot see link in sidebar
 - Route page can add additional check before rendering
 
 **Optional route guard (add before return in real-time-dashboard.tsx):**
+
 ```typescript
 const { user } = useAuth();
 if (!user || !['qa', 'engineer'].includes(user.role)) {
@@ -222,6 +239,7 @@ if (!user || !['qa', 'engineer'].includes(user.role)) {
 ```
 
 ### Testing Checklist
+
 - [ ] Test with QA user → Dashboard loads ✓
 - [ ] Test with Engineer user → Dashboard loads ✓
 - [ ] Test with Operator user → Dashboard hidden, 403 on direct access ✓
@@ -233,6 +251,7 @@ if (!user || !['qa', 'engineer'].includes(user.role)) {
 ## Phase 7: Git Commit & Push
 
 ### Files to Commit
+
 ```bash
 # New files
 - artifacts/api-server/src/routes/dashboard.ts (9 endpoints)
@@ -252,6 +271,7 @@ if (!user || !['qa', 'engineer'].includes(user.role)) {
 ```
 
 ### Commit Command
+
 ```bash
 git add .
 git commit -m "feat: Add industrial-grade real-time analytics dashboard
@@ -271,6 +291,7 @@ git push origin main
 ## Verification Checklist
 
 ### Backend Verification
+
 - [ ] Dashboard routes file created: `/artifacts/api-server/src/routes/dashboard.ts`
 - [ ] Router imported in `routes/index.ts`
 - [ ] All 9 endpoints callable at `http://localhost:3000/api/dashboard/*`
@@ -279,6 +300,7 @@ git push origin main
 - [ ] API gateway redirects `/api/dashboard/` correctly
 
 ### Frontend Verification  
+
 - [ ] Dashboard page created: `/artifacts/feeder-scanner/src/pages/real-time-dashboard.tsx`
 - [ ] Page renders without TypeScript errors
 - [ ] All 7 KPI cards display with correct colors
@@ -290,6 +312,7 @@ git push origin main
 - [ ] Mobile responsive (test with browser DevTools)
 
 ### Navigation Verification
+
 - [ ] Layout.tsx updated with TrendingUp import
 - [ ] Real-Time Dashboard nav item added to NAV_ITEMS
 - [ ] Engineer users see dashboard link in sidebar
@@ -298,12 +321,14 @@ git push origin main
 - [ ] Link navigates to `/real-time-dashboard` page
 
 ### Database Verification
+
 - [ ] All 7 indexes created successfully
 - [ ] Indexes visible in `pg_indexes` view
 - [ ] Query performance improved (use EXPLAIN ANALYZE)
 - [ ] No index conflicts or duplicate indexes
 
 ### Performance Verification
+
 - [ ] Dashboard page loads in < 2 seconds
 - [ ] Each API endpoint response < 500ms
 - [ ] Polling updates metrics smoothly every 2s
@@ -315,6 +340,7 @@ git push origin main
 ## Deployment Checklist
 
 ### Pre-Deployment
+
 - [ ] All changes committed to git
 - [ ] All tests passing
 - [ ] Database indexes applied to production
@@ -322,6 +348,7 @@ git push origin main
 - [ ] CORS configured for frontend domain
 
 ### Deployment Steps
+
 1. Pull code from git
 2. Run `npm install` (if new dependencies)
 3. Run database migration: `psql -f dashboard-indexes.sql`
@@ -334,6 +361,7 @@ git push origin main
 10. Monitor error logs for first hour
 
 ### Post-Deployment Monitoring
+
 - [ ] API response times < 500ms
 - [ ] No 5xx errors in logs
 - [ ] Real-time polling working (check browser DevTools Network tab)
@@ -347,25 +375,30 @@ git push origin main
 ### Common Issues
 
 **Issue: Dashboard endpoints return 404**
+
 - Solution: Verify dashboard router imported in `routes/index.ts`
 - Check: `router.use(dashboardRouter);` on line after other routers
 
 **Issue: Real-time polling not updating**
+
 - Solution: Check browser DevTools Network tab - should see requests every 2s
 - Verify: sessionId is selected in dropdown
 - Check: API endpoints returning new data each call
 
 **Issue: Charts not rendering**
+
 - Solution: Verify Recharts dependency installed: `npm ls recharts`
 - Check: Console for JavaScript errors
 - Browser console should show no 404s for chart rendering
 
 **Issue: Queries returning empty data**
+
 - Solution: Verify session has actual scan records in database
 - Run: `SELECT COUNT(*) FROM scan_records WHERE session_id = X;`
 - Check: Database connections and permissions
 
 **Issue: Index creation fails**
+
 - Solution: Check PostgreSQL version (requires 9.5+)
 - Verify: User has CREATE INDEX permission
 - Try: Running indexes one at a time instead of as script

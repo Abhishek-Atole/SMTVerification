@@ -3,12 +3,14 @@
 ## Problem Identified & Fixed ✅
 
 **Original Issue:**
+
 - Mobile phone IP: `192.168.0.119`
 - Laptop IP: `192.168.0.110`
 - Mobile could load the frontend but **API calls failed** because the proxy was hardcoded to `localhost:3000`
 - When mobile tried to access API, it would try to hit `localhost:3000` **from the mobile device** (which doesn't exist)
 
 **Solution Implemented:**
+
 1. ✅ Updated `vite.config.ts` to use `API_TARGET` environment variable
 2. ✅ Updated `start-servers.sh` to accept and pass `API_TARGET` environment variable
 3. ✅ Restarted servers with `API_TARGET="http://192.168.0.110:3000"`
@@ -17,7 +19,7 @@
 
 ## 📱 Mobile Phone Access (NOW WORKING!)
 
-### Step-by-Step Instructions:
+### Step-by-Step Instructions
 
 1. **Ensure your mobile is on the SAME WiFi network**
    - **Your Laptop IP:** 192.168.0.110
@@ -28,6 +30,7 @@
    - Chrome, Safari, Firefox, Edge, etc.
 
 3. **In the address bar, type:**
+
    ```
    http://192.168.0.110:5173
    ```
@@ -53,6 +56,7 @@
 ## 🔧 Technical Changes Made
 
 ### 1. vite.config.ts
+
 ```typescript
 // Before:
 proxy: {
@@ -73,6 +77,7 @@ proxy: {
 ```
 
 ### 2. start-servers.sh
+
 ```bash
 # Added default API_TARGET
 API_TARGET="${API_TARGET:-http://localhost:3000}"
@@ -88,6 +93,7 @@ nohup npm run dev > "$LOG_DIR/frontend.log" 2>&1 &
 ### 3. How It Works Now
 
 When restarting servers:
+
 ```bash
 API_TARGET="http://192.168.0.110:3000" bash start-servers.sh
 ```
@@ -102,10 +108,10 @@ API_TARGET="http://192.168.0.110:3000" bash start-servers.sh
 
 | Access From | Frontend URL | API Calls Go To | Works? |
 |---|---|---|---|
-| **Laptop (localhost)** | http://localhost:5173 | http://localhost:3000 | ✅ |
-| **Mobile on WiFi** | http://192.168.0.110:5173 | http://192.168.0.110:3000 | ✅ (FIXED!) |
-| **Other PCs on WiFi** | http://192.168.0.110:5173 | http://192.168.0.110:3000 | ✅ |
-| **Internet (ngrok)** | https://nonangling-unspruced-taren.ngrok-free.dev | localhost:3000 | ⚠️ (local API only) |
+| **Laptop (localhost)** | <http://localhost:5173> | <http://localhost:3000> | ✅ |
+| **Mobile on WiFi** | <http://192.168.0.110:5173> | <http://192.168.0.110:3000> | ✅ (FIXED!) |
+| **Other PCs on WiFi** | <http://192.168.0.110:5173> | <http://192.168.0.110:3000> | ✅ |
+| **Internet (ngrok)** | <https://nonangling-unspruced-taren.ngrok-free.dev> | localhost:3000 | ⚠️ (local API only) |
 
 ---
 
@@ -127,6 +133,7 @@ API_TARGET="http://192.168.0.110:3000" bash start-servers.sh
 ### Issue: Still can't access from mobile
 
 **Check 1: Verify WiFi connection**
+
 ```bash
 # On your laptop, verify both devices are on same network
 hostname -I
@@ -137,16 +144,19 @@ hostname -I
 ```
 
 **Check 2: Verify servers are running**
+
 ```bash
 ps aux | grep -E "node|npm run dev" | grep -v grep
 ```
 
 **Check 3: Test connectivity between devices**
 On mobile browser, try:
+
 - `http://192.168.0.110:5173` - Frontend
 - `http://192.168.0.110:3000/api/health` - API Health
 
 **Check 4: Check firewall**
+
 ```bash
 # If ports are blocked, you may need to:
 # - Allow ports 3000, 5173 in firewall
@@ -156,12 +166,14 @@ On mobile browser, try:
 ### Issue: Frontend loads but no data
 
 **Solution:** Make sure you're logged in with QA or Engineer role
+
 - Operators are blocked from accessing the dashboard
 - Check browser console for errors
 
 ### Issue: Page loads empty
 
 **Solution:** Check browser cache
+
 - Clear cache (Ctrl+Shift+Delete / Cmd+Shift+Delete)
 - Or use incognito/private mode
 - Refresh page
@@ -171,12 +183,14 @@ On mobile browser, try:
 ## 📝 How to Restart Servers (If Needed)
 
 **With API_TARGET for mobile access:**
+
 ```bash
 cd /media/abhishek-atole/Courses/Final\ SMT\ MES\ SYSTEM/SMTVerification
 API_TARGET="http://192.168.0.110:3000" bash start-servers.sh
 ```
 
 **Or just use default (localhost only):**
+
 ```bash
 bash start-servers.sh
 ```
@@ -186,7 +200,7 @@ bash start-servers.sh
 ## 🎯 Summary of Changes
 
 - **Commit:** 8ea8432
-- **Files Modified:** 
+- **Files Modified:**
   - `artifacts/feeder-scanner/vite.config.ts` - Added API_TARGET environment variable support
   - `start-servers.sh` - Added API_TARGET parameter
 - **Status:** ✅ Mobile network access is now fully functional
@@ -212,5 +226,4 @@ bash start-servers.sh
 
 Your mobile phone (192.168.0.119) can now access the SMT Dashboard on your laptop (192.168.0.110)
 
-**Try it now:** http://192.168.0.110:5173
-
+**Try it now:** <http://192.168.0.110:5173>
