@@ -939,7 +939,13 @@ export default function SessionActive() {
         <AlertDialogContent 
           className="sm:max-w-md"
           onKeyDown={(e: React.KeyboardEvent) => {
-            // Dismiss on any key press (Enter, Space, Escape, or any character)
+            // Allow Tab and other navigation keys for accessibility
+            const navigationKeys = ['Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'];
+            if (navigationKeys.includes(e.key)) {
+              return; // Allow normal keyboard navigation
+            }
+            
+            // Dismiss on other keys (Enter, Escape, or any character) excluding modifiers
             if (!e.ctrlKey && !e.altKey && !e.metaKey) {
               e.preventDefault();
               setShowNotification(false);
