@@ -30,6 +30,15 @@ configure_runtime_paths() {
     PID_FILE="$LOCK_DIR/server.pid"
     PIDFILE_DATABASE="$LOCK_DIR/database.pid"
     STATUS_FILE="$runtime_root/status.json"
+  else
+    # Root user: use standard system directories
+    LOG_DIR="/var/log/smt-verification"
+    LOCK_DIR="/var/run/smt-verification"
+    LOCK_FILE="$LOCK_DIR/system.lock"
+    RECOVERY_LOG="$LOG_DIR/restart-recovery.log"
+    PID_FILE="$LOCK_DIR/server.pid"
+    PIDFILE_DATABASE="$LOCK_DIR/database.pid"
+    STATUS_FILE="/var/run/smt-verification/status.json"
   fi
 }
 
@@ -252,7 +261,13 @@ wait_for_port_free() {
     
     if [ $((elapsed % 5)) -eq 0 ] && [ $elapsed -gt 0 ]; then
       log_info "Port $port still in use, force-killing lingering processes..."
-      lsof -ti:"$port" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+      local pids
+      pids=$(lsof -ti:"$port" 2>/dev/null)
+      if [ -n "$pids" ]; then
+        printf '%s\n' "$pids" | while IFS= read -r pid; do
+          kill -9 "$pid" 2>/dev/null || true
+        done
+      fi
     fi
     
     sleep 1
@@ -260,9 +275,15 @@ wait_for_port_free() {
   done
   
   log_warning "Timeout waiting for port $port to become free, force-killing remaining processes"
-  lsof -ti:"$port" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+  local pids
+  pids=$(lsof -ti:"$port" 2>/dev/null)
+  if [ -n "$pids" ]; then
+    printf '%s\n' "$pids" | while IFS= read -r pid; do
+      kill -9 "$pid" 2>/dev/null || true
+    done
+  fi
   sleep 2
-  return 0
+  return 1
 }
 
 stop_server() {
@@ -305,22 +326,35 @@ stop_server() {
 
 parse_database_url() {
   local db_url="$1"
-  # Extract user:password from postgresql://user:password@host:port/database
-  local stripped="${db_url#postgresql://}"
-  local userpass_host="${stripped%/*}"
-  local db_name="${stripped#*/}"
-  db_name="${db_name%%\?*}"
+  # Robust parsing of postgresql://user:password@host:port/database
+  # Handles passwords with ':' and '@' by working right-to-left
   
-  local userpass="${userpass_host%@*}"
-  local hostport="${userpass_host#*@}"
-  
-  DB_USER="${userpass%%:*}"
-  DB_PASSWORD="${userpass#*:}"
-  DB_HOST="${hostport%:*}"
-  DB_PORT="${hostport#*:}"
-  
-  [ -z "$DB_PORT" ] || [ "$DB_PORT" = "$hostport" ] && DB_PORT="5432"
-  DB_NAME="$db_name"
+  if [[ $db_url =~ ^postgresql://(.+)@([^/:]+)(?::([0-9]+))?/(.+)$ ]]; then
+    local auth_part="${BASH_REMATCH[1]}"
+    local host_part="${BASH_REMATCH[2]}"
+    local port_part="${BASH_REMATCH[3]:-}"
+    local db_part="${BASH_REMATCH[4]%%\?*}"
+    
+    # Split auth_part on last colon to separate user and password
+    if [[ $auth_part =~ ^(.+):([^:]+)$ ]]; then
+      DB_USER="${BASH_REMATCH[1]}"
+      DB_PASSWORD="${BASH_REMATCH[2]}"
+    else
+      DB_USER="$auth_part"
+      DB_PASSWORD=""
+    fi
+    
+    DB_HOST="$host_part"
+    DB_PORT="${port_part:-5432}"
+    DB_NAME="$db_part"
+  else
+    # Fallback to defaults if regex doesn't match
+    DB_USER="postgres"
+    DB_PASSWORD=""
+    DB_HOST="localhost"
+    DB_PORT="5432"
+    DB_NAME="smt_verification"
+  fi
 }
 
 check_database_connection() {
@@ -332,14 +366,23 @@ check_database_connection() {
   fi
 
   local db_url="${DATABASE_URL:-}"
-  local db_host="${DB_HOST:-localhost}"
-  local db_user="${DB_USER:-postgres}"
-  local db_name="${DB_NAME:-smt_verification}"
-  local db_port="${DB_PORT:-5432}"
-  local db_password="${DB_PASSWORD:-}"
+  
+  # Initialize defaults before parsing
+  local db_host="localhost"
+  local db_user="postgres"
+  local db_name="smt_verification"
+  local db_port="5432"
+  local db_password=""
 
+  # Parse DATABASE_URL if provided, which will update the globals
   if [ -n "$db_url" ]; then
     parse_database_url "$db_url"
+    # Reassign local variables from parsed globals
+    db_host="$DB_HOST"
+    db_user="$DB_USER"
+    db_name="$DB_NAME"
+    db_port="$DB_PORT"
+    db_password="$DB_PASSWORD"
   fi
 
   local psql_error
