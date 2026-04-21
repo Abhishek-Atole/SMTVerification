@@ -110,6 +110,7 @@ export default function SessionActive() {
   const [splicePendingOldSpool, setSplicePendingOldSpool] = useState("");
   const [spliceStartTime, setSpliceStartTime] = useState<number | null>(null);
   const [spliceInput, setSpliceInput] = useState("");
+  const [splicingPhaseActive, setSplicingPhaseActive] = useState(false);
 
   const [elapsed, setElapsed] = useState(0);
   const [lastScanResult, setLastScanResult] = useState<{
@@ -205,6 +206,7 @@ export default function SessionActive() {
         },
       });
       
+      setSplicingPhaseActive(true);
       setLastVerificationTime(Date.now());
       setPendingVerification(null);
       setScanStep("feeder");
@@ -333,6 +335,7 @@ export default function SessionActive() {
       });
 
       if (res.status === "ok") {
+        setSplicingPhaseActive(true);
         setScanInput("");
         setPendingFeeder("");
         setFeederScanTime(null);
@@ -398,7 +401,6 @@ export default function SessionActive() {
           setSplicePendingOldSpool("");
           setSpliceStartTime(null);
           setSpliceStep("feeder");
-          setMode("scan");
           queryClient.invalidateQueries({ queryKey: getListSplicesQueryKey(sessionId) });
           flashBg("splice");
         },
@@ -408,7 +410,6 @@ export default function SessionActive() {
           setSplicePendingFeeder("");
           setSplicePendingOldSpool("");
           setSpliceStep("feeder");
-          setMode("scan");
           flashBg("reject");
         },
       });
@@ -421,7 +422,6 @@ export default function SessionActive() {
     setSplicePendingOldSpool("");
     setSpliceStep("feeder");
     setSpliceStartTime(null);
-    setMode("scan");
   };
 
   const handleEndSession = () => {
@@ -551,47 +551,27 @@ export default function SessionActive() {
 
           {session.status === "active" && (
             <>
-              {/* Mode Tabs - Responsive */}
-              <div className="flex gap-1.5 sm:gap-2 lg:gap-3">
+              {/* Verification Mode Toggle (shown only when in scan mode) */}
+              <div className="flex gap-1.5 sm:gap-2 lg:gap-3 bg-slate-100 dark:bg-slate-900 p-1.5 sm:p-2 lg:p-3 rounded-lg">
                 <Button
-                  variant={mode === "scan" ? "default" : "outline"}
-                  className="flex-1 h-8 sm:h-10 lg:h-12 font-bold tracking-wider text-xs sm:text-sm lg:text-base"
-                  onClick={() => { setMode("scan"); setScanStep("feeder"); setScanInput(""); }}
+                  type="button"
+                  variant={verificationMode === "manual" ? "default" : "outline"}
+                  className="flex-1 h-7 sm:h-9 lg:h-10 font-semibold text-xs sm:text-sm lg:text-base"
+                  onClick={() => setVerificationMode("manual")}
+                  disabled={verificationInProgress}
                 >
-                  <ScanLine className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 mr-0.5 sm:mr-1 lg:mr-2" /> <span className="hidden sm:inline">SCAN</span><span className="sm:hidden">S</span>
+                  <span className="hidden sm:inline">⬜ MANUAL VERIFICATION</span><span className="sm:hidden">⬜ Manual</span>
                 </Button>
                 <Button
-                  variant={mode === "splice" ? "default" : "outline"}
-                  className={`flex-1 h-8 sm:h-10 lg:h-12 font-bold tracking-wider text-xs sm:text-sm lg:text-base ${mode === "splice" ? "bg-amber-500 hover:bg-amber-600 border-amber-500" : "border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950"}`}
-                  onClick={() => { setMode("splice"); setSpliceStep("feeder"); setSpliceInput(""); }}
+                  type="button"
+                  variant={verificationMode === "auto" ? "default" : "outline"}
+                  className="flex-1 h-7 sm:h-9 lg:h-10 font-semibold text-xs sm:text-sm lg:text-base bg-green-600 hover:bg-green-700 border-green-600"
+                  onClick={() => setVerificationMode("auto")}
+                  disabled={verificationInProgress}
                 >
-                  <Scissors className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 mr-0.5 sm:mr-1 lg:mr-2" /> <span className="hidden sm:inline">SPLICE</span><span className="sm:hidden">SP</span>
+                  <span className="hidden sm:inline">⚡ AUTO MODE</span><span className="sm:hidden">⚡ Auto</span>
                 </Button>
               </div>
-
-              {/* Verification Mode Toggle */}
-              {mode === "scan" && (
-                <div className="flex gap-1.5 sm:gap-2 lg:gap-3 bg-slate-100 dark:bg-slate-900 p-1.5 sm:p-2 lg:p-3 rounded-lg">
-                  <Button
-                    type="button"
-                    variant={verificationMode === "manual" ? "default" : "outline"}
-                    className="flex-1 h-7 sm:h-9 lg:h-10 font-semibold text-xs sm:text-sm lg:text-base"
-                    onClick={() => setVerificationMode("manual")}
-                    disabled={verificationInProgress}
-                  >
-                    <span className="hidden sm:inline">⬜ MANUAL</span><span className="sm:hidden">⬜ Man</span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={verificationMode === "auto" ? "default" : "outline"}
-                    className="flex-1 h-7 sm:h-9 lg:h-10 font-semibold text-xs sm:text-sm lg:text-base bg-green-600 hover:bg-green-700 border-green-600"
-                    onClick={() => setVerificationMode("auto")}
-                    disabled={verificationInProgress}
-                  >
-                    <span className="hidden sm:inline">⚡ AUTO</span><span className="sm:hidden">⚡ Auto</span>
-                  </Button>
-                </div>
-              )}
 
               {/* Pending Verification Alert */}
               {pendingVerification && verificationMode === "manual" && (
@@ -633,81 +613,89 @@ export default function SessionActive() {
                 </div>
               )}
 
-              {/* SCAN MODE - Responsive */}
-              {mode === "scan" && (
-                <div className="bg-card border-2 border-primary/50 p-2 sm:p-4 lg:p-8 rounded-xl shadow-[0_0_20px_rgba(var(--primary),0.1)]">
-                  <form onSubmit={handleScanSubmit} className="flex flex-col items-center gap-2 sm:gap-3 lg:gap-6">
-                    <Label className="text-xs sm:text-sm lg:text-lg xl:text-xl tracking-widest text-primary flex items-center gap-1 sm:gap-2 font-black uppercase text-center line-clamp-2">
-                      <ScanLine className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6 flex-shrink-0" />
-                      {getScanStepLabel()}
-                    </Label>
-                    
-                    {/* Alternate Selector */}
-                    {needsAlternateSelection && pendingAvailableOptions && (
-                      <div className="w-full max-w-lg">
-                        <AlternateSelector
-                          feederNumber={pendingFeeder}
-                          primaryOptions={pendingAvailableOptions.primary}
-                          alternateOptions={pendingAvailableOptions.alternates}
-                          selectedId={selectedItemIdForScan || undefined}
-                          onSelect={setSelectedItemIdForScan}
-                          isLoading={scanFeeder.isPending}
-                        />
-                      </div>
-                    )}
-
-                    <div className="w-full flex gap-0.5 sm:gap-1 lg:gap-2 items-center justify-center min-h-12 sm:min-h-14 lg:min-h-16">
-                      {scanStep === "spool" && !needsAlternateSelection && !pendingVerification && (
-                        <Button type="button" variant="ghost" size="icon" className="shrink-0 h-10 sm:h-12 lg:h-14 xl:h-16 w-10 sm:w-12 lg:w-14 xl:w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); setInternalIdInput(""); setCaseConverted(false); }}>
-                          <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6" />
-                        </Button>
-                      )}
-                      {needsAlternateSelection && (
-                        <Button type="button" variant="ghost" size="icon" className="shrink-0 h-10 sm:h-12 lg:h-14 xl:h-16 w-10 sm:w-12 lg:w-14 xl:w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); setInternalIdInput(""); setCaseConverted(false); }}>
-                          <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6" />
-                        </Button>
-                      )}
-                      {!pendingVerification && (
-                        <Input
-                          ref={inputRef}
-                          value={scanInput}
-                          onChange={(e) => setScanInput(e.target.value)}
-                          className="flex-1 text-center text-lg sm:text-2xl lg:text-3xl xl:text-4xl h-10 sm:h-12 lg:h-16 xl:h-20 font-mono tracking-[0.15em] sm:tracking-[0.2em] bg-background border-2 border-border focus-visible:border-primary rounded-lg shadow-inner text-xs sm:text-sm"
-                          placeholder={needsAlternateSelection ? "Press ENTER..." : (scanStep === "feeder" ? "SCAN FEEDER..." : verificationMode === "auto" ? "SCAN MPN/ID" : "SCAN MPN/ID...")}
-                          autoFocus
-                          autoComplete="off"
-                        />
-                      )}
+              {/* SCAN MODE - Primary Section */}
+              <div className="bg-card border-2 border-primary/50 p-2 sm:p-4 lg:p-8 rounded-xl shadow-[0_0_20px_rgba(var(--primary),0.1)]">
+                <form onSubmit={handleScanSubmit} className="flex flex-col items-center gap-2 sm:gap-3 lg:gap-6">
+                  <Label className="text-xs sm:text-sm lg:text-lg xl:text-xl tracking-widest text-primary flex items-center gap-1 sm:gap-2 font-black uppercase text-center line-clamp-2">
+                    <ScanLine className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6 flex-shrink-0" />
+                    {getScanStepLabel()}
+                  </Label>
+                  
+                  {/* Alternate Selector */}
+                  {needsAlternateSelection && pendingAvailableOptions && (
+                    <div className="w-full max-w-lg">
+                      <AlternateSelector
+                        feederNumber={pendingFeeder}
+                        primaryOptions={pendingAvailableOptions.primary}
+                        alternateOptions={pendingAvailableOptions.alternates}
+                        selectedId={selectedItemIdForScan || undefined}
+                        onSelect={setSelectedItemIdForScan}
+                        isLoading={scanFeeder.isPending}
+                      />
                     </div>
-                    {scanStep === "spool" && !needsAlternateSelection && !pendingVerification && (
-                      <div className="w-full space-y-1 sm:space-y-2">
-                        <div className="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 p-1.5 sm:p-2 lg:p-3 rounded text-center">
-                          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">Feeder <strong className="text-foreground font-mono">{pendingFeeder}</strong> selected</p>
-                        </div>
-                        
-                        <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 p-2 sm:p-3 rounded-lg">
-                          <p className="text-xs font-bold text-blue-900 dark:text-blue-100 mb-2">📝 STEP 2: MPN/INTERNAL ID</p>
-                          <p className="text-xs text-blue-800 dark:text-blue-200">
-                            • Scan the MPN or Internal ID for verification
-                          </p>
-                          <p className="text-xs text-blue-800 dark:text-blue-200">
-                            • Press <strong>ENTER</strong> to skip verification
-                          </p>
-                          <p className="text-xs text-blue-700 dark:text-blue-300 mt-2 italic">
-                            ⓘ Required MPN/Internal ID is enforced in both AUTO and MANUAL modes
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </form>
-                </div>
-              )}
+                  )}
 
-              {/* SPLICE MODE - Responsive */}
-              {mode === "splice" && (
-                <div className="bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-400 p-2 sm:p-4 lg:p-8 rounded-xl">
+                  <div className="w-full flex gap-0.5 sm:gap-1 lg:gap-2 items-center justify-center min-h-12 sm:min-h-14 lg:min-h-16">
+                    {scanStep === "spool" && !needsAlternateSelection && !pendingVerification && (
+                      <Button type="button" variant="ghost" size="icon" className="shrink-0 h-10 sm:h-12 lg:h-14 xl:h-16 w-10 sm:w-12 lg:w-14 xl:w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); setInternalIdInput(""); setCaseConverted(false); }}>
+                        <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6" />
+                      </Button>
+                    )}
+                    {needsAlternateSelection && (
+                      <Button type="button" variant="ghost" size="icon" className="shrink-0 h-10 sm:h-12 lg:h-14 xl:h-16 w-10 sm:w-12 lg:w-14 xl:w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); setInternalIdInput(""); setCaseConverted(false); }}>
+                        <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6" />
+                      </Button>
+                    )}
+                    {!pendingVerification && (
+                      <Input
+                        ref={inputRef}
+                        value={scanInput}
+                        onChange={(e) => setScanInput(e.target.value)}
+                        className="flex-1 text-center text-lg sm:text-2xl lg:text-3xl xl:text-4xl h-10 sm:h-12 lg:h-16 xl:h-20 font-mono tracking-[0.15em] sm:tracking-[0.2em] bg-background border-2 border-border focus-visible:border-primary rounded-lg shadow-inner text-xs sm:text-sm"
+                        placeholder={needsAlternateSelection ? "Press ENTER..." : (scanStep === "feeder" ? "SCAN FEEDER..." : verificationMode === "auto" ? "SCAN MPN/ID" : "SCAN MPN/ID...")}
+                        autoFocus
+                        autoComplete="off"
+                      />
+                    )}
+                  </div>
+                  {scanStep === "spool" && !needsAlternateSelection && !pendingVerification && (
+                    <div className="w-full space-y-1 sm:space-y-2">
+                      <div className="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 p-1.5 sm:p-2 lg:p-3 rounded text-center">
+                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">Feeder <strong className="text-foreground font-mono">{pendingFeeder}</strong> selected</p>
+                      </div>
+                      
+                      <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 p-2 sm:p-3 rounded-lg">
+                        <p className="text-xs font-bold text-blue-900 dark:text-blue-100 mb-2">📝 STEP 2: MPN/INTERNAL ID</p>
+                        <p className="text-xs text-blue-800 dark:text-blue-200">
+                          • Scan the MPN or Internal ID for verification
+                        </p>
+                        <p className="text-xs text-blue-800 dark:text-blue-200">
+                          • Press <strong>ENTER</strong> to skip verification
+                        </p>
+                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-2 italic">
+                          ⓘ Required MPN/Internal ID is enforced in both AUTO and MANUAL modes
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </form>
+              </div>
+
+              {/* SEPARATE SPLICING SECTION - Appears after first scan */}
+              {splicingPhaseActive && (
+                <div className="bg-amber-50 dark:bg-amber-950/30 border-2 border-amber-400 p-2 sm:p-4 lg:p-8 rounded-xl shadow-[0_0_20px_rgba(217,119,6,0.1)]">
+                  <div className="mb-4 pb-4 border-b border-amber-200 dark:border-amber-800">
+                    <h3 className="text-sm lg:text-base font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+                      <Scissors className="w-5 h-5" />
+                      Splicing Section
+                    </h3>
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      All new spool loadings are recorded here. Start a new splice operation when components need replacement.
+                    </p>
+                  </div>
+                  
                   <form onSubmit={handleSpliceSubmit} className="flex flex-col items-center gap-2 sm:gap-3 lg:gap-6">
-                    <Label className="text-xs sm:text-sm lg:text-base xl:text-lg tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1 sm:gap-2 font-black uppercase text-center line-clamp-2">
+                    <Label className="text-xs sm:text-sm lg:text-lg xl:text-xl tracking-widest text-amber-600 dark:text-amber-400 flex items-center gap-1 sm:gap-2 font-black uppercase text-center line-clamp-2">
                       <Scissors className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6 flex-shrink-0" />
                       {spliceStepLabels[spliceStep]}
                     </Label>
@@ -717,11 +705,11 @@ export default function SessionActive() {
                       onChange={(e) => setSpliceInput(e.target.value)}
                       className="w-full max-w-2xl text-center text-lg sm:text-2xl lg:text-3xl xl:text-4xl h-10 sm:h-12 lg:h-16 xl:h-20 font-mono tracking-[0.15em] sm:tracking-[0.2em] bg-background border-2 border-amber-300 focus-visible:border-amber-500 rounded-lg shadow-inner text-xs sm:text-sm"
                       placeholder={
-                        spliceStep === "feeder" ? "SCAN NO..." :
-                        spliceStep === "oldSpool" ? "SCAN OLD..." :
-                        "SCAN NEW..."
+                        spliceStep === "feeder" ? "SCAN FEEDER NO..." :
+                        spliceStep === "oldSpool" ? "SCAN OLD SPOOL..." :
+                        "SCAN NEW SPOOL..."
                       }
-                      autoFocus
+                      autoFocus={mode === "splice"}
                       autoComplete="off"
                     />
                     {spliceStep !== "feeder" && spliceStartTime && (
@@ -729,8 +717,8 @@ export default function SessionActive() {
                         ⏱️ {Math.round((Date.now() - spliceStartTime) / 1000)}s
                       </p>
                     )}
-                    <Button type="button" variant="ghost" className="text-muted-foreground text-xs sm:text-sm" onClick={cancelSplice}>
-                      Cancel
+                    <Button type="button" variant="outline" className="text-muted-foreground text-xs sm:text-sm border-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30" onClick={cancelSplice}>
+                      Cancel Splice
                     </Button>
                   </form>
                 </div>
