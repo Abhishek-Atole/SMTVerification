@@ -15,11 +15,35 @@ LOG_DIR="/var/log/smt-verification"
 LOCK_DIR="/var/run/smt-verification"
 LOCK_FILE="$LOCK_DIR/system.lock"
 RECOVERY_LOG="$LOG_DIR/restart-recovery.log"
-STATUS_FILE="/tmp/smt-verification-status.json"
 PID_FILE="$LOCK_DIR/server.pid"
 PIDFILE_DATABASE="$LOCK_DIR/database.pid"
 STARTUP_TIMEOUT=60
 HEALTH_CHECK_RETRIES=5
+
+configure_runtime_paths() {
+  if [ "${EUID:-0}" -ne 0 ]; then
+    local runtime_root="${TMPDIR:-/tmp}/smt-verification"
+    LOG_DIR="$runtime_root/logs"
+    LOCK_DIR="$runtime_root/run"
+    LOCK_FILE="$LOCK_DIR/system.lock"
+    RECOVERY_LOG="$LOG_DIR/restart-recovery.log"
+    PID_FILE="$LOCK_DIR/server.pid"
+    PIDFILE_DATABASE="$LOCK_DIR/database.pid"
+    STATUS_FILE="$runtime_root/status.json"
+  fi
+}
+
+load_project_env() {
+  if [ -f "$PROJECT_ROOT/.env" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$PROJECT_ROOT/.env"
+    set +a
+  fi
+}
+
+configure_runtime_paths
+load_project_env
 
 # Colors for output
 RED='\033[0;31m'
@@ -37,6 +61,7 @@ log() {
   shift
   local message="$@"
   local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+  mkdir -p "$LOG_DIR" "$LOCK_DIR" 2>/dev/null || true
   echo "[$timestamp] [$level] $message" | tee -a "$RECOVERY_LOG"
 }
 
@@ -165,13 +190,23 @@ acquire_lock() {
   # Try graceful unlock first
   if ! handle_stale_lock; then
     log_warning "Could not acquire lock gracefully"
-    read -p "Force unlock? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-      force_unlock
+    if [ -n "${SYSTEMD_SERVICE:-}" ] || [ ! -t 0 ]; then
+      if [ "${FORCE_UNLOCK_ON_LOCK:-0}" = "1" ]; then
+        log_warning "Non-interactive mode with force unlock enabled"
+        force_unlock
+      else
+        log_error "Cannot prompt for lock override in non-interactive mode"
+        return 1
+      fi
     else
-      log_error "Cannot proceed without lock"
-      return 1
+      read -p "Force unlock? (y/n) " -n 1 -r
+      echo
+      if [[ $REPLY =~ ^[Yy]$ ]]; then
+        force_unlock
+      else
+        log_error "Cannot proceed without lock"
+        return 1
+      fi
     fi
   fi
   
@@ -202,24 +237,32 @@ is_port_in_use() {
   fi
 }
 
-wait_for_port() {
+wait_for_port_free() {
   local port=$1
   local timeout=$2
   local elapsed=0
   
-  log_info "Waiting for port $port to be available (timeout: ${timeout}s)..."
+  log_info "Waiting for port $port to become free (timeout: ${timeout}s)..."
   
   while [ $elapsed -lt $timeout ]; do
-    if is_port_in_use "$port"; then
-      log_success "Port $port is now available"
+    if ! is_port_in_use "$port"; then
+      log_success "Port $port is now free"
       return 0
     fi
+    
+    if [ $((elapsed % 5)) -eq 0 ] && [ $elapsed -gt 0 ]; then
+      log_info "Port $port still in use, force-killing lingering processes..."
+      lsof -ti:"$port" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+    fi
+    
     sleep 1
     elapsed=$((elapsed + 1))
   done
   
-  log_error "Timeout waiting for port $port"
-  return 1
+  log_warning "Timeout waiting for port $port to become free, force-killing remaining processes"
+  lsof -ti:"$port" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+  sleep 2
+  return 0
 }
 
 stop_server() {
@@ -230,27 +273,55 @@ stop_server() {
     if kill -0 "$pid" 2>/dev/null; then
       log_info "Sending SIGTERM to process $pid..."
       kill "$pid" 2>/dev/null || true
-      sleep 2
+      sleep 1
       
       # Force kill if still running
       if kill -0 "$pid" 2>/dev/null; then
         log_warning "Process still running, sending SIGKILL..."
         kill -9 "$pid" 2>/dev/null || true
+        sleep 1
       fi
     fi
     rm -f "$PID_FILE"
   fi
   
-  # Clean up any lingering node processes
-  pkill -f "node.*api-server" 2>/dev/null || true
+  # Clean up any lingering node processes with dist/index.mjs pattern
+  pkill -9 -f "node.*dist/index.mjs" 2>/dev/null || true
+  # Also clean up generic node api-server processes
+  pkill -9 -f "node.*api-server" 2>/dev/null || true
+  
+  # Force-kill any remaining processes on port 3000
+  if command -v lsof &>/dev/null; then
+    lsof -ti:3000 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+  fi
   
   log_success "Server stopped"
-  sleep 1
+  sleep 2
 }
 
 ################################################################################
 # DATABASE FUNCTIONS
 ################################################################################
+
+parse_database_url() {
+  local db_url="$1"
+  # Extract user:password from postgresql://user:password@host:port/database
+  local stripped="${db_url#postgresql://}"
+  local userpass_host="${stripped%/*}"
+  local db_name="${stripped#*/}"
+  db_name="${db_name%%\?*}"
+  
+  local userpass="${userpass_host%@*}"
+  local hostport="${userpass_host#*@}"
+  
+  DB_USER="${userpass%%:*}"
+  DB_PASSWORD="${userpass#*:}"
+  DB_HOST="${hostport%:*}"
+  DB_PORT="${hostport#*:}"
+  
+  [ -z "$DB_PORT" ] || [ "$DB_PORT" = "$hostport" ] && DB_PORT="5432"
+  DB_NAME="$db_name"
+}
 
 check_database_connection() {
   log_info "Checking database connection..."
@@ -259,17 +330,24 @@ check_database_connection() {
     log_warning "PostgreSQL client not available - skipping connection check"
     return 0
   fi
-  
+
+  local db_url="${DATABASE_URL:-}"
   local db_host="${DB_HOST:-localhost}"
   local db_user="${DB_USER:-postgres}"
   local db_name="${DB_NAME:-smt_verification}"
   local db_port="${DB_PORT:-5432}"
-  
-  if psql -h "$db_host" -U "$db_user" -d "$db_name" -p "$db_port" -c "SELECT 1" &>/dev/null; then
+  local db_password="${DB_PASSWORD:-}"
+
+  if [ -n "$db_url" ]; then
+    parse_database_url "$db_url"
+  fi
+
+  local psql_error
+  if psql_error=$(PGPASSWORD="$db_password" psql -w -h "$db_host" -U "$db_user" -d "$db_name" -p "$db_port" -c "SELECT 1" 2>&1); then
     log_success "Database connection successful"
     return 0
   else
-    log_error "Cannot connect to database"
+    log_error "Cannot connect to database: $psql_error"
     return 1
   fi
 }
@@ -299,7 +377,7 @@ wait_for_database() {
 
 check_api_health() {
   local port=${1:-3000}
-  local endpoint="${2:-/health}"
+  local endpoint="${2:-/api/health}"
   local retry=0
   
   log_info "Checking API health at localhost:$port$endpoint..."
@@ -361,11 +439,27 @@ start_api_server() {
     log_info "Installing API dependencies..."
     pnpm install || npm install
   fi
+
+  log_info "Building API server production assets..."
+  if ! npm run build >> "$LOG_DIR/api-server.log" 2>&1; then
+    log_error "API build failed"
+    return 1
+  fi
   
   # Start the server in background
   log_info "Launching API server process..."
-  PORT=3000 nohup node build/index.js >> "$LOG_DIR/api-server.log" 2>&1 &
-  local server_pid=$!
+  PORT=3000 nohup node --enable-source-maps ./dist/index.mjs >> "$LOG_DIR/api-server.log" 2>&1 &
+  local candidate_pid=$!
+  sleep 2
+  local server_pid
+  server_pid=$(pgrep -f "node --enable-source-maps ./dist/index.mjs" | head -n 1 || true)
+  if [ -z "$server_pid" ]; then
+    server_pid="$candidate_pid"
+  fi
+  if ! kill -0 "$server_pid" 2>/dev/null; then
+    log_error "API server did not stay running after launch"
+    return 1
+  fi
   echo "$server_pid" > "$PID_FILE"
   
   log_info "API server started with PID $server_pid"
@@ -392,12 +486,21 @@ start_app_server() {
     log_info "Installing app dependencies..."
     pnpm install || npm install
   fi
-  
-  # Start the dev server in background (for development)
-  # For production, use: npm run build && serve -s dist
-  log_info "Launching frontend server process..."
-  PORT=5173 BASE_PATH=/api nohup npm run dev >> "$LOG_DIR/app-server.log" 2>&1 &
+
+  log_info "Building frontend production assets..."
+  if ! PORT=5173 BASE_PATH=/api npm run build >> "$LOG_DIR/app-server.log" 2>&1; then
+    log_error "Frontend build failed"
+    return 1
+  fi
+
+  log_info "Launching production frontend server..."
+  PORT=5173 BASE_PATH=/api nohup npm run serve -- --port 5173 --host 0.0.0.0 >> "$LOG_DIR/app-server.log" 2>&1 &
   local app_pid=$!
+  sleep 2
+  if ! kill -0 "$app_pid" 2>/dev/null; then
+    log_error "Frontend process did not stay running after launch"
+    return 1
+  fi
   
   log_info "Frontend app started with PID $app_pid"
   
@@ -495,8 +598,8 @@ perform_full_recovery() {
   stop_server
   
   # Wait for ports to be free
-  wait_for_port 3000 30 || true
-  wait_for_port 5173 30 || true
+  wait_for_port_free 3000 30 || true
+  wait_for_port_free 5173 30 || true
   
   # Start services
   if ! start_api_server; then
@@ -518,6 +621,48 @@ perform_full_recovery() {
   log_success "System Recovery Complete!"
   log_success "=========================================="
   
+  return 0
+}
+
+start_system() {
+  log_info "=========================================="
+  log_info "Starting System"
+  log_info "=========================================="
+
+  setup_directories
+  check_prerequisites || exit 1
+
+  if ! acquire_lock; then
+    log_error "Failed to acquire system lock"
+    write_status_file "ERROR" "Failed to acquire lock"
+    exit 1
+  fi
+
+  trap "release_lock" EXIT
+
+  stop_server
+
+  wait_for_port_free 3000 30 || true
+  wait_for_port_free 5173 30 || true
+
+  if ! start_api_server; then
+    log_error "Failed to start API server"
+    write_status_file "ERROR" "API server failed to start"
+    exit 1
+  fi
+
+  if ! start_app_server; then
+    log_warning "Frontend app failed to start, but API is running"
+  fi
+
+  sleep 2
+  show_status
+
+  write_status_file "SUCCESS" "System started and operational"
+  log_success "=========================================="
+  log_success "System Start Complete!"
+  log_success "=========================================="
+
   return 0
 }
 
@@ -557,7 +702,7 @@ EOF
 main() {
   case "${1:-start}" in
     start)
-      perform_full_recovery
+      start_system
       ;;
     stop)
       log_info "Stopping system..."
@@ -566,9 +711,10 @@ main() {
       log_success "System stopped"
       ;;
     restart)
-      $0 stop
+      stop_server
+      release_lock
       sleep 2
-      $0 start
+      start_system
       ;;
     recover)
       log_info "Performing full recovery..."
