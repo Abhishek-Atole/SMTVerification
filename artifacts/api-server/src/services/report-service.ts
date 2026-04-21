@@ -133,9 +133,9 @@ export class ReportService {
         SELECT 
           DATE(sr.scanned_at) as date,
           COUNT(*) as total_feeders,
-          COUNT(CASE WHEN sr.validation_result = 'pass' OR sr.validation_result = 'pass_free_scan' THEN 1 END) as pass_feeders,
+          COUNT(CASE WHEN sr.validation_result = 'pass' OR sr.validation_result = 'pass_free_scan' OR sr.validation_result = 'alternate_pass' THEN 1 END) as pass_feeders,
           COUNT(CASE WHEN sr.validation_result NOT IN ('pass', 'pass_free_scan', 'alternate_pass') THEN 1 END) as fail_feeders,
-          ROUND(100.0 * COUNT(CASE WHEN sr.validation_result = 'pass' OR sr.validation_result = 'pass_free_scan' THEN 1 END) / COUNT(*), 2) as fpy
+          ROUND(100.0 * COUNT(CASE WHEN sr.validation_result = 'pass' OR sr.validation_result = 'pass_free_scan' OR sr.validation_result = 'alternate_pass' THEN 1 END) / COUNT(*), 2) as fpy
         FROM scan_records sr
         JOIN sessions s ON sr.session_id = s.id
         WHERE sr.scanned_at BETWEEN ${startDate} AND ${endDate}

@@ -1,5 +1,3 @@
-import { sql } from "drizzle-orm";
-
 export interface ReportFilters {
   startDate?: Date | string;
   endDate?: Date | string;
@@ -57,9 +55,26 @@ export class FilterService {
         if (!customDates) {
           throw new Error("Custom date filter requires startDate and endDate");
         }
+        
+        const startDate = new Date(customDates.startDate);
+        const endDate = new Date(customDates.endDate);
+        
+        // Validate dates are valid
+        if (isNaN(startDate.getTime())) {
+          throw new Error("Invalid startDate format");
+        }
+        if (isNaN(endDate.getTime())) {
+          throw new Error("Invalid endDate format");
+        }
+        
+        // Validate date range
+        if (startDate > endDate) {
+          throw new Error("startDate cannot be after endDate");
+        }
+        
         return {
-          startDate: new Date(customDates.startDate),
-          endDate: new Date(customDates.endDate),
+          startDate,
+          endDate,
         };
       default:
         throw new Error(`Unknown date filter: ${filterType}`);
@@ -99,19 +114,30 @@ export class FilterService {
    * Validate filter object
    */
   static validateFilters(filters: ReportFilters): void {
-    if (filters.startDate && filters.endDate) {
+    // Check for ambiguous combinations
+    if (filters.dateFilter && (filters.startDate || filters.endDate)) {
+      throw new Error("Cannot use dateFilter with startDate/endDate; choose one");
+    }
+
+    // If startDate or endDate is provided, both must be provided
+    if ((filters.startDate || filters.endDate)) {
+      if (!filters.startDate || !filters.endDate) {
+        throw new Error("Both startDate and endDate must be provided together");
+      }
+
       const start = new Date(filters.startDate);
       const end = new Date(filters.endDate);
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        throw new Error("Invalid date format");
+      }
+      
       if (start > end) {
         throw new Error("startDate cannot be after endDate");
       }
-    }
-
-    // Check that at least one date parameter is provided
-    if (!filters.startDate || !filters.endDate) {
-      if (!filters.dateFilter) {
-        throw new Error("Either provide startDate/endDate or dateFilter");
-      }
+    } else if (!filters.dateFilter) {
+      // Either provide startDate/endDate or dateFilter
+      throw new Error("Either provide startDate/endDate or dateFilter");
     }
   }
 }

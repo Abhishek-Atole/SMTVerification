@@ -20,6 +20,25 @@ function validateDateFilters(req: any, res: any, next: any) {
     });
   }
 
+  // Validate date format if provided
+  if (startDate && typeof startDate === "string") {
+    const date = new Date(startDate);
+    if (isNaN(date.getTime())) {
+      return res.status(400).json({
+        error: "Invalid startDate format. Use ISO 8601 (YYYY-MM-DD) or valid date string",
+      });
+    }
+  }
+
+  if (endDate && typeof endDate === "string") {
+    const date = new Date(endDate);
+    if (isNaN(date.getTime())) {
+      return res.status(400).json({
+        error: "Invalid endDate format. Use ISO 8601 (YYYY-MM-DD) or valid date string",
+      });
+    }
+  }
+
   next();
 }
 
@@ -100,7 +119,7 @@ router.get("/reports/operator", validateDateFilters, async (req, res) => {
       dateFilter: req.query.dateFilter as any,
       lineId: req.query.line as string,
       pcbId: req.query.pcb as string,
-      operatorId: req.query.operatorName as string,
+      operatorId: req.query.operator as string,
       shiftId: req.query.shift as string,
     };
 

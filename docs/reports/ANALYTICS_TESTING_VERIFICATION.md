@@ -393,12 +393,15 @@ Overall Status:
 
 1. **Start Servers:**
    ```bash
-   # Terminal 1: API Server
-   cd /media/abhishek-atole/Courses/Final\ SMT\ MES\ SYSTEM/SMTVerification
-   DATABASE_URL="postgresql://smtverify:smtverify@localhost:5432/smtverify" PORT=3000 pnpm --filter @workspace/api-server run dev
+   # Terminal 1: API Server (run from repo root)
+   # Load DATABASE_URL from .env file or set it directly
+   DATABASE_URL="postgresql://<DB_USER>:<DB_PASS>@<HOST>:<PORT>/<DB_NAME>" PORT=3000 pnpm --filter @workspace/api-server run dev
 
    # Terminal 2: Frontend
    PORT=5173 BASE_PATH="/" pnpm --filter @workspace/feeder-scanner run dev
+   
+   # Note: Replace <DB_USER>, <DB_PASS>, <HOST>, <PORT>, <DB_NAME> with actual values
+   # or source from your .env file in the repo root
    ```
 
 2. **Access Application:**

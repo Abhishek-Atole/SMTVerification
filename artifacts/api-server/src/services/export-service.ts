@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { createWriteStream, mkdirSync } from "fs";
 import { join, resolve } from "path";
 import { db } from "@workspace/db";
 import { reportExportsTable } from "@workspace/db/schema";
@@ -18,9 +18,16 @@ interface ExportOptions {
 export class ExportService {
   private static readonly EXPORT_DIR = resolve(process.cwd(), "exports", "reports");
 
-  constructor() {
-    // Ensure export directory exists
+  /**
+   * Ensure export directory exists (static initializer)
+   */
+  private static ensureExportDir(): void {
     mkdirSync(ExportService.EXPORT_DIR, { recursive: true });
+  }
+
+  constructor() {
+    // Instance constructor for compatibility, but all methods are static
+    ExportService.ensureExportDir();
   }
 
   /**
@@ -31,6 +38,8 @@ export class ExportService {
     options: ExportOptions,
     generatedBy: string
   ): Promise<string> {
+    ExportService.ensureExportDir();
+    
     return new Promise((resolve, reject) => {
       try {
         const filename = `${options.reportType}-${Date.now()}.pdf`;
@@ -41,7 +50,15 @@ export class ExportService {
           bufferPages: true,
         });
 
-        const stream = doc.pipe(writeFileSync(filepath, ""));
+        const stream = createWriteStream(filepath);
+
+        // Attach event listeners to the stream, not the document
+        stream.on("finish", () => resolve(filepath));
+        stream.on("error", (err) => reject(err));
+        
+        doc.on("error", (err) => reject(err));
+
+        doc.pipe(stream);
 
         // Header
         doc.fontSize(20).font("Helvetica-Bold").text("SMT Verification System", { align: "center" });
@@ -96,8 +113,6 @@ export class ExportService {
         doc.fontSize(8).text(`Total records: ${reportData.length}`, { align: "center" });
 
         doc.end();
-        doc.on("finish", () => resolve(filepath));
-        doc.on("error", (err) => reject(err));
       } catch (error) {
         reject(new Error(`Failed to export PDF: ${error instanceof Error ? error.message : String(error)}`));
       }
@@ -171,16 +186,28 @@ export class ExportService {
       // Get all keys from first object
       const headers = Object.keys(reportData[0]);
       const csvContent = [
-        headers.join(","),
+        headers.map(h => `\"${h.replace(/\"/g, '\"\"')}\"}`).join(","),
         ...reportData.map((row) =>
           headers
             .map((header) => {
               const value = row[header];
-              // Quote and escape strings
-              if (typeof value === "string") {
-                return `"${value.replace(/"/g, '""')}"`;
+              // Always serialize and quote values to prevent CSV injection and data loss
+              let serialized: string;
+              
+              if (value == null) {
+                serialized = "";
+              } else if (typeof value === "string") {
+                serialized = value;
+              } else if (typeof value === "object") {
+                // Convert objects/arrays to JSON string representation
+                serialized = JSON.stringify(value);
+              } else {
+                // Numbers, booleans, etc.
+                serialized = String(value);
               }
-              return value ?? "";
+              
+              // Escape double quotes by doubling them, then wrap in quotes
+              return `\"${serialized.replace(/\"/g, '\"\"')}\"`;
             })
             .join(",")
         ),
@@ -218,10 +245,20 @@ export class ExportService {
   }
 
   /**
-   * Get file path for exported report
+   * Get file path for exported report (with path traversal validation)
    */
   static getExportPath(filename: string): string {
-    return join(ExportService.EXPORT_DIR, filename);
+    ExportService.ensureExportDir();
+    
+    // Security: validate that filename doesn't attempt path traversal
+    const fullPath = resolve(join(ExportService.EXPORT_DIR, filename));
+    const normalizedExportDir = resolve(ExportService.EXPORT_DIR);
+    
+    if (!fullPath.startsWith(normalizedExportDir)) {
+      throw new Error("Invalid file path: path traversal detected");
+    }
+    
+    return fullPath;
   }
 
   /**

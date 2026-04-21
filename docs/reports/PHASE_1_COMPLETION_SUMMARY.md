@@ -203,10 +203,10 @@ Generated: April 21, 2026
 ## Deployment Status
 
 ### Environment Setup
-- ✅ DATABASE_URL configured: `postgresql://smtverify:smtverify@localhost:5432/smtverify`
+- ✅ DATABASE_URL configured: `postgresql://<DB_USER>:<DB_PASS>@localhost:5432/<DB_NAME>` (loaded from .env)
 - ✅ PORT configured: `3000` (API), `5173` (Frontend)
 - ✅ VITE_API_URL configured: `http://localhost:3000`
-- ✅ Export directory created: `/artifacts/api-server/exports/reports/`
+- ✅ Export directory created: `./artifacts/api-server/exports/reports/` (relative path)
 
 ### Server Status
 - ✅ API Server: Running on http://localhost:3000

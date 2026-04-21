@@ -19,7 +19,7 @@ export const reportsTable = pgTable(
       .default("fpy"), // fpy, oee, operator, operator_comparison, feeder, feeder_reliability, alarm, error_analysis, component, lot_traceability
     sessionId: integer("session_id"), // Optional: specific session
     bomId: integer("bom_id"), // Optional: specific BOM
-    filters: jsonb("filters").default({}), // { startDate, endDate, line, pcb, operator, shift }
+    filters: jsonb("filters").$defaultFn(() => ({})), // { startDate, endDate, line, pcb, operator, shift }
     format: text("format").notNull().default("pdf"), // pdf, xlsx, csv
     filePath: text("file_path"), // Path where report is stored
     recordCount: integer("record_count").default(0), // Number of records in report
@@ -58,9 +58,31 @@ export const reportExportsTable = pgTable(
   ]
 );
 
+// Valid report types enum
+const REPORT_TYPES = [
+  "fpy",
+  "oee",
+  "operator",
+  "operator-comparison",
+  "feeder",
+  "feeder-reliability",
+  "alarm",
+  "error-analysis",
+  "component",
+  "lot-traceability",
+  "trend",
+] as const;
+
 // Zod schemas for validation
-export const insertReportSchema = createInsertSchema(reportsTable);
-export const insertReportExportSchema = createInsertSchema(reportExportsTable);
+const baseInsertReportSchema = createInsertSchema(reportsTable);
+export const insertReportSchema = baseInsertReportSchema
+  .omit({ id: true }) // Omit auto-generated serial ID
+  .extend({
+    reportType: z.enum(REPORT_TYPES), // Validate against allowed types
+  });
+
+const baseInsertReportExportSchema = createInsertSchema(reportExportsTable);
+export const insertReportExportSchema = baseInsertReportExportSchema.omit({ id: true }); // Omit auto-generated serial ID
 
 export type InsertReport = z.infer<typeof insertReportSchema>;
 export type Report = typeof reportsTable.$inferSelect;
