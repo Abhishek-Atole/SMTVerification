@@ -1,0 +1,34 @@
+[Unit]
+Description=SMT Verification System Auto-Start & Recovery
+Documentation=file:///media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/docs/SYSTEM_RESTART_GUIDE.md
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=forking
+User=root
+Group=root
+WorkingDirectory=/media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification
+ExecStartPre=/bin/sleep 5
+ExecStart=/media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/scripts/system-restart-recovery.sh start
+ExecStop=/media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/scripts/system-restart-recovery.sh stop
+ExecReload=/media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/scripts/system-restart-recovery.sh restart
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=smt-verification
+Restart=on-failure
+RestartSec=10
+
+# Environment variables for database connection
+Environment="DB_HOST=localhost"
+Environment="DB_USER=postgres"
+Environment="DB_NAME=smt_verification"
+Environment="DB_PORT=5432"
+
+# Recovery behavior
+StartLimitInterval=300
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target

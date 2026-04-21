@@ -146,34 +146,6 @@ paths:
                 $ref: "#/components/schemas/BomItem"
 
   /bom/{bomId}/items/{itemId}:
-    patch:
-      operationId: updateBomItem
-      tags: [bom]
-      summary: Update a BOM item
-      parameters:
-        - name: bomId
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: itemId
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateBomItemRequest"
-      responses:
-        "200":
-          description: Item updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BomItem"
     delete:
       operationId: deleteBomItem
       tags: [bom]
@@ -266,21 +238,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Session"
-    delete:
-      operationId: deleteSession
-      tags: [sessions]
-      summary: Delete a session and all related records
-      parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "204":
-          description: Session deleted successfully
-        "404":
-          description: Session not found
 
   /sessions/{sessionId}/scans:
     post:
@@ -436,44 +393,6 @@ paths:
                 items:
                   $ref: "#/components/schemas/SessionTrend"
 
-  /sessions/trash/all:
-    get:
-      operationId: listDeletedSessions
-      tags: [sessions]
-      summary: Get all deleted sessions from trash bin
-      responses:
-        "200":
-          description: List of deleted sessions
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Session"
-
-  /sessions/{sessionId}/recover:
-    patch:
-      operationId: recoverSession
-      tags: [sessions]
-      summary: Recover a deleted session from trash
-      parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Session recovered
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Session"
-        "404":
-          description: Session not found
-        "400":
-          description: Session is not deleted
-
 components:
   schemas:
     HealthStatus:
@@ -567,20 +486,6 @@ components:
         quantity:
           type: integer
       required: [feederNumber, partNumber, quantity]
-
-    UpdateBomItemRequest:
-      type: object
-      properties:
-        feederNumber:
-          type: string
-        partNumber:
-          type: string
-        description:
-          type: string
-        location:
-          type: string
-        quantity:
-          type: integer
 
     Session:
       type: object
@@ -749,7 +654,7 @@ components:
           type: string
         productionCount:
           type: integer
-      required: [companyName, panelName, supervisorName, operatorName, shiftName, shiftDate]
+      required: [bomId, companyName, panelName, supervisorName, operatorName, shiftName, shiftDate]
 
     UpdateSessionRequest:
       type: object
@@ -770,25 +675,9 @@ components:
       properties:
         feederNumber:
           type: string
-          description: "Feeder number (e.g., YSM-020). Auto-converted to UPPERCASE."
-        mpnOrInternalId:
-          type: string
-          description: "MPN or Internal ID. Optional in manual mode, required for auto validation in auto mode."
-        internalIdType:
-          type: string
-          enum: [mpn, internal_id]
-          description: "Type of ID scanned: 'mpn' for Part Number, 'internal_id' for alternative ID"
-        verificationMode:
-          type: string
-          enum: [manual, auto]
-          description: "manual=requires ENTER after each field + VERIFY button, auto=auto-submits after each field"
         spoolBarcode:
           type: string
-          description: "[LEGACY] Spool barcode"
-        selectedItemId:
-          type: integer
-          description: "[OPTIONAL] BOM item ID if alternate selection needed"
-      required: [feederNumber, verificationMode]
+      required: [feederNumber]
 
     ScanResult:
       type: object
@@ -798,31 +687,8 @@ components:
         status:
           type: string
           enum: [ok, reject]
-          description: "Scan status: ok (passed validation), reject (failed or duplicate)"
         message:
           type: string
-          description: "Detailed message with validation results"
-        isDuplicate:
-          type: boolean
-          description: "True if this is a duplicate feeder entry in session"
-        validationDetails:
-          type: object
-          description: "Detailed validation information"
-          properties:
-            isDuplicate:
-              type: boolean
-            feederNumberMatched:
-              type: boolean
-              description: "Feeder number found in BOM"
-            mpnMatched:
-              type: boolean
-              description: "MPN matched BOM expected component"
-            internalIdMatched:
-              type: boolean
-              description: "Internal ID matched (if provided)"
-            caseConverted:
-              type: boolean
-              description: "True if input was converted from lowercase to UPPERCASE"
       required: [scan, status, message]
 
     SessionSummary:
