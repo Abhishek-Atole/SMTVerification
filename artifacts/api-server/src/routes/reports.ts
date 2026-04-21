@@ -1,104 +1,90 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { Router, type IRouter, type Request, type Response } from "express";
+import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { insertReportSchema, reportsTable, reportExportsTable } from "@workspace/db/schema";
-import { sql, eq, desc, and, lte } from "drizzle-orm";
+import { reportsTable, reportExportsTable } from "@workspace/db/schema";
+import { eq, desc } from "drizzle-orm";
 import { ReportService } from "../services/report-service";
-import { FilterService } from "../services/filter-service";
+import { FilterService, ReportFilters } from "../services/filter-service";
 import { ExportService } from "../services/export-service";
 
 const router: IRouter = Router();
 
 /**
- * Shared middleware to validate date filters
+ * Middleware to validate date filters
  */
-const validateDateFilter = (req: Request, res: Response, next: any) => {
-  try {
-    const { dateFilter = "today", ...otherFilters } = req.query;
-    const parsedDateFilter =
-      dateFilter === "today" || dateFilter === "yesterday" || dateFilter === "last7" || dateFilter === "last30"
-        ? dateFilter
-        : { start: String(req.query.startDate), end: String(req.query.endDate) };
+function validateDateFilters(req: any, res: any, next: any) {
+  const { startDate, endDate, dateFilter } = req.query;
 
-    const dateRange = FilterService.parseDateFilter(parsedDateFilter);
-    (req as any).filters = {
-      dateFilter: parsedDateFilter,
-      ...dateRange,
-      lineId: req.query.lineId ? String(req.query.lineId) : undefined,
-      pcbId: req.query.pcbId ? String(req.query.pcbId) : undefined,
-      operatorId: req.query.operatorId ? String(req.query.operatorId) : undefined,
-      shiftId: req.query.shiftId ? String(req.query.shiftId) : undefined,
-    };
-    next();
-  } catch (error) {
-    req.log.error(error);
-    return res.status(400).json({ error: "Invalid date filter" });
+  if (!dateFilter && (!startDate || !endDate)) {
+    return res.status(400).json({
+      error: "Either dateFilter (today/yesterday/last7/last30) or both startDate and endDate are required",
+    });
   }
-};
 
-/**
- * Role-based access control middleware (only QA/Engineer can export)
- */
-const requireExportRole = (req: Request, res: Response, next: any) => {
-  const userRole = (req.headers["x-user-role"] as string) || "operator";
-  if (!["qa", "engineer", "admin"].includes(userRole.toLowerCase())) {
-    return res.status(403).json({ error: "Only QA and Engineer roles can export reports" });
-  }
   next();
-};
-
-// ============================================================================
-// REPORT GENERATION ENDPOINTS
-// ============================================================================
+}
 
 /**
  * GET /api/reports/fpy - First Pass Yield Report
  */
-router.get("/reports/fpy", validateDateFilter, async (req: Request, res: Response) => {
+router.get("/reports/fpy", validateDateFilters, async (req, res) => {
   try {
+    const filters: ReportFilters = {
+      startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+      endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      dateFilter: req.query.dateFilter as any,
+      lineId: req.query.line as string,
+      pcbId: req.query.pcb as string,
+      operatorId: req.query.operator as string,
+      shiftId: req.query.shift as string,
+    };
+
     const startTime = Date.now();
-    const filters = (req as any).filters;
-
-    const reportData = await ReportService.generateFPYReport(filters);
-
+    const data = await ReportService.generateFPYReport(filters);
     const queryTime = Date.now() - startTime;
-    res.json({
-      report: reportData,
+
+    return res.json({
+      report: data,
       metadata: {
-        reportType: "fpy",
         generatedAt: new Date(),
-        queryTime,
-        recordCount: reportData.length,
+        queryTimeMs: queryTime,
+        recordCount: data.length,
       },
     });
-  } catch (error) {
-    req.log.error(error);
+  } catch (err) {
+    req.log.error(err);
     return res.status(500).json({ error: "Failed to generate FPY report" });
   }
 });
 
 /**
- * GET /api/reports/oee - Overall Equipment Effectiveness Report
+ * GET /api/reports/oee - OEE Report
  */
-router.get("/reports/oee", validateDateFilter, async (req: Request, res: Response) => {
+router.get("/reports/oee", validateDateFilters, async (req, res) => {
   try {
+    const filters: ReportFilters = {
+      startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+      endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      dateFilter: req.query.dateFilter as any,
+      lineId: req.query.line as string,
+      pcbId: req.query.pcb as string,
+      operatorId: req.query.operator as string,
+      shiftId: req.query.shift as string,
+    };
+
     const startTime = Date.now();
-    const filters = (req as any).filters;
-
-    const reportData = await ReportService.generateOEEReport(filters);
-
+    const data = await ReportService.generateOEEReport(filters);
     const queryTime = Date.now() - startTime;
-    res.json({
-      report: reportData,
+
+    return res.json({
+      report: data,
       metadata: {
-        reportType: "oee",
         generatedAt: new Date(),
-        queryTime,
-        recordCount: reportData.length,
+        queryTimeMs: queryTime,
+        recordCount: data.length,
       },
     });
-  } catch (error) {
-    req.log.error(error);
+  } catch (err) {
+    req.log.error(err);
     return res.status(500).json({ error: "Failed to generate OEE report" });
   }
 });
@@ -106,52 +92,63 @@ router.get("/reports/oee", validateDateFilter, async (req: Request, res: Respons
 /**
  * GET /api/reports/operator - Operator Performance Report
  */
-router.get("/reports/operator", validateDateFilter, async (req: Request, res: Response) => {
+router.get("/reports/operator", validateDateFilters, async (req, res) => {
   try {
+    const filters: ReportFilters = {
+      startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+      endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      dateFilter: req.query.dateFilter as any,
+      lineId: req.query.line as string,
+      pcbId: req.query.pcb as string,
+      operatorId: req.query.operatorName as string,
+      shiftId: req.query.shift as string,
+    };
+
     const startTime = Date.now();
-    const filters = (req as any).filters;
-    filters.operatorName = req.query.operatorName ? String(req.query.operatorName) : undefined;
-
-    const reportData = await ReportService.generateOperatorReport(filters);
-
+    const data = await ReportService.generateOperatorReport(filters);
     const queryTime = Date.now() - startTime;
-    res.json({
-      report: reportData,
+
+    return res.json({
+      report: data,
       metadata: {
-        reportType: "operator",
         generatedAt: new Date(),
-        queryTime,
-        recordCount: reportData.length,
+        queryTimeMs: queryTime,
+        recordCount: data.length,
       },
     });
-  } catch (error) {
-    req.log.error(error);
-    return res.status(500).json({ error: "Failed to generate operator report" });
+  } catch (err) {
+    req.log.error(err);
+    return res.status(500).json({ error: "Failed to generate operator performance report" });
   }
 });
 
 /**
  * GET /api/reports/operator-comparison - Operator Comparison Report
  */
-router.get("/reports/operator-comparison", validateDateFilter, async (req: Request, res: Response) => {
+router.get("/reports/operator-comparison", validateDateFilters, async (req, res) => {
   try {
+    const filters: ReportFilters = {
+      startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+      endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      dateFilter: req.query.dateFilter as any,
+      lineId: req.query.line as string,
+      pcbId: req.query.pcb as string,
+    };
+
     const startTime = Date.now();
-    const filters = (req as any).filters;
-
-    const reportData = await ReportService.generateOperatorComparisonReport(filters);
-
+    const data = await ReportService.generateOperatorComparisonReport(filters);
     const queryTime = Date.now() - startTime;
-    res.json({
-      report: reportData,
+
+    return res.json({
+      report: data,
       metadata: {
-        reportType: "operator_comparison",
         generatedAt: new Date(),
-        queryTime,
-        recordCount: reportData.operators.length,
+        queryTimeMs: queryTime,
+        recordCount: data.operators.length,
       },
     });
-  } catch (error) {
-    req.log.error(error);
+  } catch (err) {
+    req.log.error(err);
     return res.status(500).json({ error: "Failed to generate operator comparison report" });
   }
 });
@@ -159,51 +156,59 @@ router.get("/reports/operator-comparison", validateDateFilter, async (req: Reque
 /**
  * GET /api/reports/feeder - Feeder Performance Report
  */
-router.get("/reports/feeder", validateDateFilter, async (req: Request, res: Response) => {
+router.get("/reports/feeder", validateDateFilters, async (req, res) => {
   try {
+    const filters: ReportFilters = {
+      startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+      endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      dateFilter: req.query.dateFilter as any,
+      lineId: req.query.line as string,
+      pcbId: req.query.pcb as string,
+    };
+
     const startTime = Date.now();
-    const filters = (req as any).filters;
-
-    const reportData = await ReportService.generateFeederReport(filters);
-
+    const data = await ReportService.generateFeederReport(filters);
     const queryTime = Date.now() - startTime;
-    res.json({
-      report: reportData,
+
+    return res.json({
+      report: data,
       metadata: {
-        reportType: "feeder",
         generatedAt: new Date(),
-        queryTime,
-        recordCount: reportData.length,
+        queryTimeMs: queryTime,
+        recordCount: data.length,
       },
     });
-  } catch (error) {
-    req.log.error(error);
-    return res.status(500).json({ error: "Failed to generate feeder report" });
+  } catch (err) {
+    req.log.error(err);
+    return res.status(500).json({ error: "Failed to generate feeder performance report" });
   }
 });
 
 /**
  * GET /api/reports/feeder-reliability - Feeder Reliability Report
  */
-router.get("/reports/feeder-reliability", validateDateFilter, async (req: Request, res: Response) => {
+router.get("/reports/feeder-reliability", validateDateFilters, async (req, res) => {
   try {
+    const filters: ReportFilters = {
+      startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+      endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      dateFilter: req.query.dateFilter as any,
+    };
+
     const startTime = Date.now();
-    const filters = (req as any).filters;
-
-    const reportData = await ReportService.generateFeederReliabilityReport(filters);
-
+    const data = await ReportService.generateFeederReliabilityReport(filters);
     const queryTime = Date.now() - startTime;
-    res.json({
-      report: reportData,
+
+    return res.json({
+      report: data,
       metadata: {
-        reportType: "feeder_reliability",
         generatedAt: new Date(),
-        queryTime,
-        recordCount: reportData.length,
+        queryTimeMs: queryTime,
+        recordCount: data.length,
       },
     });
-  } catch (error) {
-    req.log.error(error);
+  } catch (err) {
+    req.log.error(err);
     return res.status(500).json({ error: "Failed to generate feeder reliability report" });
   }
 });
@@ -211,25 +216,28 @@ router.get("/reports/feeder-reliability", validateDateFilter, async (req: Reques
 /**
  * GET /api/reports/alarm - Alarm Report
  */
-router.get("/reports/alarm", validateDateFilter, async (req: Request, res: Response) => {
+router.get("/reports/alarm", validateDateFilters, async (req, res) => {
   try {
+    const filters: ReportFilters = {
+      startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+      endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      dateFilter: req.query.dateFilter as any,
+    };
+
     const startTime = Date.now();
-    const filters = (req as any).filters;
-
-    const reportData = await ReportService.generateAlarmReport(filters);
-
+    const data = await ReportService.generateAlarmReport(filters);
     const queryTime = Date.now() - startTime;
-    res.json({
-      report: reportData,
+
+    return res.json({
+      report: data,
       metadata: {
-        reportType: "alarm",
         generatedAt: new Date(),
-        queryTime,
-        recordCount: reportData.length,
+        queryTimeMs: queryTime,
+        recordCount: data.length,
       },
     });
-  } catch (error) {
-    req.log.error(error);
+  } catch (err) {
+    req.log.error(err);
     return res.status(500).json({ error: "Failed to generate alarm report" });
   }
 });
@@ -237,25 +245,28 @@ router.get("/reports/alarm", validateDateFilter, async (req: Request, res: Respo
 /**
  * GET /api/reports/error-analysis - Error Analysis Report
  */
-router.get("/reports/error-analysis", validateDateFilter, async (req: Request, res: Response) => {
+router.get("/reports/error-analysis", validateDateFilters, async (req, res) => {
   try {
+    const filters: ReportFilters = {
+      startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+      endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      dateFilter: req.query.dateFilter as any,
+    };
+
     const startTime = Date.now();
-    const filters = (req as any).filters;
-
-    const reportData = await ReportService.generateErrorAnalysisReport(filters);
-
+    const data = await ReportService.generateErrorAnalysisReport(filters);
     const queryTime = Date.now() - startTime;
-    res.json({
-      report: reportData,
+
+    return res.json({
+      report: data,
       metadata: {
-        reportType: "error_analysis",
         generatedAt: new Date(),
-        queryTime,
-        recordCount: Object.keys(reportData).length,
+        queryTimeMs: queryTime,
+        recordCount: data.length,
       },
     });
-  } catch (error) {
-    req.log.error(error);
+  } catch (err) {
+    req.log.error(err);
     return res.status(500).json({ error: "Failed to generate error analysis report" });
   }
 });
@@ -263,52 +274,57 @@ router.get("/reports/error-analysis", validateDateFilter, async (req: Request, r
 /**
  * GET /api/reports/component - Component Usage Report
  */
-router.get("/reports/component", validateDateFilter, async (req: Request, res: Response) => {
+router.get("/reports/component", validateDateFilters, async (req, res) => {
   try {
+    const filters: ReportFilters = {
+      startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+      endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      dateFilter: req.query.dateFilter as any,
+    };
+
     const startTime = Date.now();
-    const filters = (req as any).filters;
-
-    const reportData = await ReportService.generateComponentUsageReport(filters);
-
+    const data = await ReportService.generateComponentReport(filters);
     const queryTime = Date.now() - startTime;
-    res.json({
-      report: reportData,
+
+    return res.json({
+      report: data,
       metadata: {
-        reportType: "component",
         generatedAt: new Date(),
-        queryTime,
-        recordCount: reportData.length,
+        queryTimeMs: queryTime,
+        recordCount: data.length,
       },
     });
-  } catch (error) {
-    req.log.error(error);
-    return res.status(500).json({ error: "Failed to generate component report" });
+  } catch (err) {
+    req.log.error(err);
+    return res.status(500).json({ error: "Failed to generate component usage report" });
   }
 });
 
 /**
  * GET /api/reports/lot-traceability - Lot Traceability Report
  */
-router.get("/reports/lot-traceability", validateDateFilter, async (req: Request, res: Response) => {
+router.get("/reports/lot-traceability", validateDateFilters, async (req, res) => {
   try {
+    const filters: ReportFilters = {
+      startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+      endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      dateFilter: req.query.dateFilter as any,
+    };
+
     const startTime = Date.now();
-    const filters = (req as any).filters;
-    filters.lotNumber = req.query.lotNumber ? String(req.query.lotNumber) : undefined;
-
-    const reportData = await ReportService.generateLotTraceabilityReport(filters);
-
+    const data = await ReportService.generateLotTraceabilityReport(filters);
     const queryTime = Date.now() - startTime;
-    res.json({
-      report: reportData,
+
+    return res.json({
+      report: data,
       metadata: {
-        reportType: "lot_traceability",
         generatedAt: new Date(),
-        queryTime,
-        recordCount: reportData.length,
+        queryTimeMs: queryTime,
+        recordCount: data.length,
       },
     });
-  } catch (error) {
-    req.log.error(error);
+  } catch (err) {
+    req.log.error(err);
     return res.status(500).json({ error: "Failed to generate lot traceability report" });
   }
 });
@@ -316,46 +332,67 @@ router.get("/reports/lot-traceability", validateDateFilter, async (req: Request,
 /**
  * GET /api/reports/trend - Trend Report
  */
-router.get("/reports/trend", validateDateFilter, async (req: Request, res: Response) => {
+router.get("/reports/trend", validateDateFilters, async (req, res) => {
   try {
+    const filters: ReportFilters = {
+      startDate: req.query.startDate ? new Date(req.query.startDate as string) : undefined,
+      endDate: req.query.endDate ? new Date(req.query.endDate as string) : undefined,
+      dateFilter: req.query.dateFilter as any,
+    };
+
     const startTime = Date.now();
-    const filters = (req as any).filters;
-    filters.interval = (req.query.interval as "daily" | "weekly" | "monthly") || "daily";
-
-    const reportData = await ReportService.generateTrendReport(filters);
-
+    const data = await ReportService.generateTrendReport(filters);
     const queryTime = Date.now() - startTime;
-    res.json({
-      report: reportData,
+
+    return res.json({
+      report: data,
       metadata: {
-        reportType: "trend",
         generatedAt: new Date(),
-        queryTime,
-        recordCount: reportData.length,
+        queryTimeMs: queryTime,
+        recordCount: data.length,
       },
     });
-  } catch (error) {
-    req.log.error(error);
+  } catch (err) {
+    req.log.error(err);
     return res.status(500).json({ error: "Failed to generate trend report" });
   }
 });
 
-// ============================================================================
-// EXPORT ENDPOINTS
-// ============================================================================
-
 /**
- * POST /api/reports/export/:reportType - Export a report
+ * POST /api/reports/export/:reportType - Export report to PDF/Excel/CSV
  */
-router.post("/reports/export/:reportType", requireExportRole, validateDateFilter, async (req: Request, res: Response) => {
+router.post("/reports/export/:reportType", async (req, res) => {
   try {
     const { reportType } = req.params;
-    const format = (req.query.format as "pdf" | "xlsx" | "csv") || "pdf";
-    const filters = (req as any).filters;
-    const userId = (req.headers["x-user-id"] as string) || "system";
+    const { format = "pdf", filters } = req.body;
 
-    // Generate report data
-    let reportData: any;
+    // Validate report type
+    const validReportTypes = [
+      "fpy",
+      "oee",
+      "operator",
+      "operator-comparison",
+      "feeder",
+      "feeder-reliability",
+      "alarm",
+      "error-analysis",
+      "component",
+      "lot-traceability",
+      "trend",
+    ];
+
+    if (!validReportTypes.includes(reportType)) {
+      return res.status(400).json({ error: "Invalid report type" });
+    }
+
+    if (!["pdf", "xlsx", "csv"].includes(format)) {
+      return res.status(400).json({ error: "Invalid export format. Use: pdf, xlsx, or csv" });
+    }
+
+    // Generate the report data based on type
+    let reportData: any = [];
+    const startTime = Date.now();
+
     switch (reportType) {
       case "fpy":
         reportData = await ReportService.generateFPYReport(filters);
@@ -368,6 +405,7 @@ router.post("/reports/export/:reportType", requireExportRole, validateDateFilter
         break;
       case "operator-comparison":
         reportData = await ReportService.generateOperatorComparisonReport(filters);
+        reportData = reportData.operators; // Flatten operators array
         break;
       case "feeder":
         reportData = await ReportService.generateFeederReport(filters);
@@ -382,7 +420,7 @@ router.post("/reports/export/:reportType", requireExportRole, validateDateFilter
         reportData = await ReportService.generateErrorAnalysisReport(filters);
         break;
       case "component":
-        reportData = await ReportService.generateComponentUsageReport(filters);
+        reportData = await ReportService.generateComponentReport(filters);
         break;
       case "lot-traceability":
         reportData = await ReportService.generateLotTraceabilityReport(filters);
@@ -390,119 +428,87 @@ router.post("/reports/export/:reportType", requireExportRole, validateDateFilter
       case "trend":
         reportData = await ReportService.generateTrendReport(filters);
         break;
-      default:
-        return res.status(400).json({ error: "Unknown report type" });
     }
 
-    // Export to file
-    let exportResult: { filePath: string; filename: string };
+    const queryTime = Date.now() - startTime;
+
+    // Export based on format
+    let filePath: string;
+    const exportOptions = {
+      reportType,
+      format: format as "pdf" | "xlsx" | "csv",
+    };
+
     switch (format) {
       case "pdf":
-        exportResult = await ExportService.exportToPdf(reportType, reportData, filters);
+        filePath = await ExportService.exportToPdf(reportData, exportOptions, req.user?.id || "system");
         break;
       case "xlsx":
-        exportResult = await ExportService.exportToExcel(reportType, reportData, filters);
+        filePath = await ExportService.exportToExcel(reportData, exportOptions, req.user?.id || "system");
         break;
       case "csv":
-        exportResult = await ExportService.exportToCsv(reportType, reportData, filters);
+        filePath = await ExportService.exportToCsv(reportData, exportOptions, req.user?.id || "system");
         break;
       default:
-        return res.status(400).json({ error: "Unknown export format" });
+        throw new Error("Invalid export format");
     }
 
-    // Save report metadata to database (non-blocking)
-    let reportId = 1;
-    try {
-      const report = await db.insert(reportsTable).values({
+    // Save report metadata to database
+    const [reportRecord] = await db
+      .insert(reportsTable)
+      .values({
         reportType,
-        // sessionId intentionally omitted to leave as NULL
+        sessionId: null,
+        bomId: null,
         format,
-        filePath: exportResult.filePath,
-        filters: filters,
-        generatedBy: userId,
+        filePath,
+        filters: filters ?? {},
         recordCount: Array.isArray(reportData) ? reportData.length : 0,
-      });
-      reportId = report[0]?.id || 1;
+        queryTimeMs: queryTime,
+        generatedBy: req.user?.id || "system",
+      })
+      .returning({ id: reportsTable.id });
 
-      // Log export (non-blocking)
-      await db.insert(reportExportsTable).values({
-        reportId,
-        userId,
-        format,
-        ipAddress: (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress,
-        userAgent: req.headers["user-agent"],
-      }).catch(() => {
-        // Silently fail if export logging fails
-      });
-    } catch (dbError) {
-      // Log error but continue with export
-      req.log.warn({ dbError }, "Failed to log export to database");
+    // Record export in audit table
+    if (reportRecord?.id) {
+      await ExportService.recordExport(
+        reportRecord.id,
+        req.user?.id || "system",
+        format as "pdf" | "xlsx" | "csv",
+        req.ip,
+        req.get("user-agent")
+      );
     }
 
     return res.json({
-      filename: exportResult.filename,
-      downloadUrl: `/api/reports/exports/${reportId}/download`,
+      success: true,
+      filePath,
       format,
+      recordCount: Array.isArray(reportData) ? reportData.length : 0,
+      queryTimeMs: queryTime,
+      generatedAt: new Date(),
     });
-  } catch (error) {
-    req.log.error(error);
+  } catch (err) {
+    req.log.error(err);
     return res.status(500).json({ error: "Failed to export report" });
   }
 });
 
 /**
- * GET /api/reports/exports/:reportId/download - Download exported report
+ * GET /api/reports/exports/history - Get user's export history
  */
-router.get("/reports/exports/:reportId/download", async (req: Request, res: Response) => {
+router.get("/reports/exports/history", async (req, res) => {
   try {
-    const { reportId } = req.params;
+    const userId = req.user?.id || "system";
 
-    // Fetch report metadata
-    const report = await db.select().from(reportsTable).where(eq(reportsTable.id, Number(reportId)));
+    const exports = await db.select().from(reportExportsTable).where(eq(reportExportsTable.userId, userId));
 
-    if (!report || report.length === 0) {
-      return res.status(404).json({ error: "Report not found" });
-    }
-
-    const reportRecord = report[0];
-
-    // Get file stream and send
-    const filename = reportRecord.filePath?.split("/").pop() || "report";
-    res.setHeader("Content-Type", `application/${reportRecord.format}`);
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-
-    const stream = ExportService.getFileStream(filename);
-    stream.pipe(res);
-  } catch (error) {
-    req.log.error(error);
-    return res.status(500).json({ error: "Failed to download report" });
-  }
-});
-
-/**
- * GET /api/reports/exports/user/history - Get user's export history
- */
-router.get("/reports/exports/user/history", async (req: Request, res: Response) => {
-  try {
-    const userId = (req.headers["x-user-id"] as string) || "system";
-
-    const exports = await db
-      .select({
-        id: reportExportsTable.id,
-        reportType: reportsTable.reportType,
-        format: reportExportsTable.format,
-        downloadedAt: reportExportsTable.downloadedAt,
-        recordCount: reportsTable.recordCount,
-      })
-      .from(reportExportsTable)
-      .innerJoin(reportsTable, eq(reportExportsTable.reportId, reportsTable.id))
-      .where(eq(reportExportsTable.userId, userId))
-      .orderBy(desc(reportExportsTable.downloadedAt))
-      .limit(50);
-
-    return res.json({ exports });
-  } catch (error) {
-    req.log.error(error);
+    return res.json({
+      exports: exports,
+      count: exports.length,
+    });
+  } catch (err) {
+    req.log.error(err);
     return res.status(500).json({ error: "Failed to get export history" });
   }
 });

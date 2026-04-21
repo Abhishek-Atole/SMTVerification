@@ -217,6 +217,8 @@ router.post("/bom/:bomId/items", async (req, res) => {
       cost,
       isAlternate,
       parentItemId,
+      expectedMpn,
+      internalId,
     } = req.body;
 
     // Require at least feederNumber and either itemName or partNumber
@@ -266,6 +268,8 @@ router.post("/bom/:bomId/items", async (req, res) => {
         cost: cost ? String(cost) : null,
         isAlternate: isAlternate ?? false,
         parentItemId: parentItemId || null,
+        expectedMpn: expectedMpn || null,
+        internalId: internalId || null,
       })
       .returning() as any[];
     
@@ -312,6 +316,8 @@ router.patch("/bom/:bomId/items/:itemId", async (req, res) => {
       cost,
       isAlternate,
       parentItemId,
+      expectedMpn,
+      internalId,
     } = req.body;
 
     const existingItems = await db.select().from(bomItemsTable).where(eq(bomItemsTable.id, itemId));
@@ -361,6 +367,8 @@ router.patch("/bom/:bomId/items/:itemId", async (req, res) => {
     if (cost !== undefined) updateData.cost = cost ? String(cost) : null;
     if (isAlternate !== undefined) updateData.isAlternate = isAlternate;
     if (parentItemId !== undefined) updateData.parentItemId = parentItemId;
+    if (expectedMpn !== undefined) updateData.expectedMpn = expectedMpn;
+    if (internalId !== undefined) updateData.internalId = internalId;
 
     const updatedItemsResult = await db
       .update(bomItemsTable)

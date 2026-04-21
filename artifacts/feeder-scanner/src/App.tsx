@@ -19,6 +19,7 @@ import Login from "@/pages/login";
 import Analytics from "@/pages/analytics";
 import TrashBin from "@/pages/trash-bin";
 import RealTimeDashboard from "@/pages/real-time-dashboard";
+import Reports from "@/pages/reports";
 import { AuthProvider, useAuth } from "@/context/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -80,6 +81,9 @@ function Router() {
               </Route>
               <Route path="/real-time-dashboard">
                 {() => <ProtectedRoute component={RealTimeDashboard} allowedRoles={["engineer", "qa"]} />}
+              </Route>
+              <Route path="/reports">
+                {() => <ProtectedRoute component={Reports} allowedRoles={["engineer", "qa"]} />}
               </Route>
               <Route component={NotFound} />
             </Switch>

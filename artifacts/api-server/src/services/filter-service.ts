@@ -1,133 +1,117 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { sql, and, gte, lte, eq, inArray, like } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+
+export interface ReportFilters {
+  startDate?: Date | string;
+  endDate?: Date | string;
+  lineId?: string;
+  pcbId?: string;
+  operatorId?: string;
+  shiftId?: string;
+  dateFilter?: "today" | "yesterday" | "last7" | "last30" | "custom";
+}
 
 /**
- * FilterService - Utility for building database queries with common filters
+ * FilterService - Builds SQL WHERE clauses and validates filters
  */
 export class FilterService {
   /**
-   * Parse a date filter string and return { startDate, endDate }
-   * @example 'today' -> { startDate: Date, endDate: Date }
-   * @example 'last7' -> { startDate: Date, endDate: Date }
-   * @example { start: '2026-04-01', end: '2026-04-20' } -> { startDate: Date, endDate: Date }
+   * Convert date filter string to start/end dates
    */
-  static parseDateFilter(filter: "today" | "yesterday" | "last7" | "last30" | { start: string; end: string }): {
-    startDate: Date;
-    endDate: Date;
-  } {
+  static buildDateQuery(
+    filterType: "today" | "yesterday" | "last7" | "last30" | "custom",
+    customDates?: { startDate: string | Date; endDate: string | Date }
+  ): { startDate: Date; endDate: Date } {
     const now = new Date();
-    now.setUTCHours(0, 0, 0, 0);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-    if (filter === "today") {
-      const endDate = new Date(now);
-      endDate.setUTCHours(23, 59, 59, 999);
-      return { startDate: now, endDate };
+    switch (filterType) {
+      case "today":
+        return {
+          startDate: today,
+          endDate: tomorrow,
+        };
+      case "yesterday":
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        return {
+          startDate: yesterday,
+          endDate: today,
+        };
+      case "last7":
+        const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        return {
+          startDate: sevenDaysAgo,
+          endDate: tomorrow,
+        };
+      case "last30":
+        const thirtyDaysAgo = new Date(today);
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        return {
+          startDate: thirtyDaysAgo,
+          endDate: tomorrow,
+        };
+      case "custom":
+        if (!customDates) {
+          throw new Error("Custom date filter requires startDate and endDate");
+        }
+        return {
+          startDate: new Date(customDates.startDate),
+          endDate: new Date(customDates.endDate),
+        };
+      default:
+        throw new Error(`Unknown date filter: ${filterType}`);
     }
-
-    if (filter === "yesterday") {
-      const startDate = new Date(now);
-      startDate.setUTCDate(startDate.getUTCDate() - 1);
-      const endDate = new Date(startDate);
-      endDate.setUTCHours(23, 59, 59, 999);
-      return { startDate, endDate };
-    }
-
-    if (filter === "last7") {
-      const startDate = new Date(now);
-      startDate.setUTCDate(startDate.getUTCDate() - 7);
-      const endDate = new Date(now);
-      endDate.setUTCHours(23, 59, 59, 999);
-      return { startDate, endDate };
-    }
-
-    if (filter === "last30") {
-      const startDate = new Date(now);
-      startDate.setUTCDate(startDate.getUTCDate() - 30);
-      const endDate = new Date(now);
-      endDate.setUTCHours(23, 59, 59, 999);
-      return { startDate, endDate };
-    }
-
-    // Custom date range
-    const startDate = new Date(filter.start);
-    startDate.setUTCHours(0, 0, 0, 0);
-    const endDate = new Date(filter.end);
-    endDate.setUTCHours(23, 59, 59, 999);
-    return { startDate, endDate };
   }
 
   /**
-   * Build date range WHERE clause for scan_records
+   * Build multi-filter WHERE clause
    */
-  static buildDateWhereClause(
-    scanRecordsTable: any,
-    dateRange: { startDate: Date; endDate: Date }
-  ): any {
-    return and(
-      gte(scanRecordsTable.scannedAt, dateRange.startDate),
-      lte(scanRecordsTable.scannedAt, dateRange.endDate)
-    );
-  }
+  static buildMultiFilterClause(filters: ReportFilters): string {
+    const clauses: string[] = [];
 
-  /**
-   * Build WHERE clause for sessions table with date range
-   */
-  static buildSessionDateWhereClause(
-    sessionsTable: any,
-    dateRange: { startDate: Date; endDate: Date }
-  ): any {
-    return and(
-      gte(sessionsTable.startTime, dateRange.startDate),
-      lte(sessionsTable.startTime, dateRange.endDate)
-    );
-  }
-
-  /**
-   * Validate and parse query filters (basic validation without Zod)
-   */
-  static validateFilters(filters: any): {
-    dateFilter: "today" | "yesterday" | "last7" | "last30" | { start: string; end: string };
-    lineId?: string;
-    pcbId?: string;
-    operatorId?: string;
-    shiftId?: string;
-  } {
-    const dateFilter = filters.dateFilter || "today";
-    if (!["today", "yesterday", "last7", "last30"].includes(dateFilter) && typeof dateFilter !== "object") {
-      throw new Error("Invalid dateFilter");
+    if (filters.lineId) {
+      clauses.push(`s.supervisor_name = '${this.escapeSql(filters.lineId)}'`);
+    }
+    if (filters.pcbId) {
+      clauses.push(`s.panel_name = '${this.escapeSql(filters.pcbId)}'`);
+    }
+    if (filters.operatorId) {
+      clauses.push(`s.operator_name = '${this.escapeSql(filters.operatorId)}'`);
+    }
+    if (filters.shiftId) {
+      clauses.push(`s.shift_name = '${this.escapeSql(filters.shiftId)}'`);
     }
 
-    return {
-      dateFilter: dateFilter as any,
-      lineId: filters.lineId,
-      pcbId: filters.pcbId,
-      operatorId: filters.operatorId,
-      shiftId: filters.shiftId,
-    };
+    return clauses.length > 0 ? "AND " + clauses.join(" AND ") : "";
   }
 
   /**
-   * Build query string helper for API params
+   * Escape SQL strings to prevent injection
    */
-  static buildQueryString(params: Record<string, any>): string {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        query.append(key, String(value));
+  static escapeSql(value: string): string {
+    return value.replace(/'/g, "''");
+  }
+
+  /**
+   * Validate filter object
+   */
+  static validateFilters(filters: ReportFilters): void {
+    if (filters.startDate && filters.endDate) {
+      const start = new Date(filters.startDate);
+      const end = new Date(filters.endDate);
+      if (start > end) {
+        throw new Error("startDate cannot be after endDate");
       }
-    });
-    return query.toString();
-  }
+    }
 
-  /**
-   * Parse query string to filters object
-   */
-  static parseQueryString(queryString: string): Record<string, string | undefined> {
-    const params = new URLSearchParams(queryString);
-    const result: Record<string, string | undefined> = {};
-    params.forEach((value, key) => {
-      result[key] = value;
-    });
-    return result;
+    // Check that at least one date parameter is provided
+    if (!filters.startDate || !filters.endDate) {
+      if (!filters.dateFilter) {
+        throw new Error("Either provide startDate/endDate or dateFilter");
+      }
+    }
   }
 }

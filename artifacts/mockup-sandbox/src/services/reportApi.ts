@@ -1,257 +1,225 @@
 /**
- * Report API Service - Handles all API calls to report endpoints
+ * Report API Service - Handles all calls to the reporting API
  */
 
 export interface ReportFilters {
-  dateFilter?: "today" | "yesterday" | "last7" | "last30" | "custom";
   startDate?: Date;
   endDate?: Date;
-  lineId?: string;
-  pcbId?: string;
-  operatorId?: string;
-  operatorName?: string;
-  shiftId?: string;
-  lotNumber?: string;
+  dateFilter?: "today" | "yesterday" | "last7" | "last30" | "custom";
+  line?: string;
+  pcb?: string;
+  operator?: string;
+  shift?: string;
 }
 
-interface ReportResponse {
-  report: any[];
-  metadata: {
-    reportType: string;
-    generatedAt: string;
-    queryTime: number;
-    recordCount: number;
-  };
+export interface ReportMetadata {
+  generatedAt: string;
+  queryTimeMs: number;
+  recordCount: number;
 }
 
-/**
- * Build query string from filters
- */
-function buildQueryString(filters: ReportFilters): string {
-  const params = new URLSearchParams();
+export interface ReportResponse<T> {
+  report: T;
+  metadata: ReportMetadata;
+}
 
-  if (filters.dateFilter && filters.dateFilter !== "custom") {
-    params.append("dateFilter", filters.dateFilter);
-  }
+const API_BASE = "/api";
 
-  if (filters.dateFilter === "custom") {
+export class ReportApi {
+  /**
+   * Build query string from filters
+   */
+  static buildQueryString(filters: ReportFilters): string {
+    const params = new URLSearchParams();
+
+    if (filters.dateFilter) {
+      params.append("dateFilter", filters.dateFilter);
+    }
     if (filters.startDate) {
       params.append("startDate", filters.startDate.toISOString());
     }
     if (filters.endDate) {
       params.append("endDate", filters.endDate.toISOString());
     }
+    if (filters.line) {
+      params.append("line", filters.line);
+    }
+    if (filters.pcb) {
+      params.append("pcb", filters.pcb);
+    }
+    if (filters.operator) {
+      params.append("operator", filters.operator);
+    }
+    if (filters.shift) {
+      params.append("shift", filters.shift);
+    }
+
+    return params.toString();
   }
 
-  if (filters.lineId) params.append("lineId", filters.lineId);
-  if (filters.pcbId) params.append("pcbId", filters.pcbId);
-  if (filters.operatorId) params.append("operatorId", filters.operatorId);
-  if (filters.operatorName) params.append("operatorName", filters.operatorName);
-  if (filters.shiftId) params.append("shiftId", filters.shiftId);
-  if (filters.lotNumber) params.append("lotNumber", filters.lotNumber);
-
-  return params.toString();
-}
-
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:3000/api";
-
-/**
- * Fetch FPY Report
- */
-export async function fetchFPYReport(filters: ReportFilters): Promise<ReportResponse> {
-  const queryString = buildQueryString(filters);
-  const response = await fetch(`${API_BASE}/reports/fpy?${queryString}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch FPY report: ${response.statusText}`);
+  /**
+   * Fetch FPY Report
+   */
+  static async fetchFPYReport(filters: ReportFilters): Promise<ReportResponse<any>> {
+    const queryString = this.buildQueryString(filters);
+    const response = await fetch(`${API_BASE}/reports/fpy?${queryString}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch FPY report");
+    }
+    return response.json();
   }
 
-  return response.json();
-}
-
-/**
- * Fetch OEE Report
- */
-export async function fetchOEEReport(filters: ReportFilters): Promise<ReportResponse> {
-  const queryString = buildQueryString(filters);
-  const response = await fetch(`${API_BASE}/reports/oee?${queryString}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch OEE report: ${response.statusText}`);
+  /**
+   * Fetch OEE Report
+   */
+  static async fetchOEEReport(filters: ReportFilters): Promise<ReportResponse<any>> {
+    const queryString = this.buildQueryString(filters);
+    const response = await fetch(`${API_BASE}/reports/oee?${queryString}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch OEE report");
+    }
+    return response.json();
   }
 
-  return response.json();
-}
-
-/**
- * Fetch Operator Performance Report
- */
-export async function fetchOperatorReport(filters: ReportFilters): Promise<ReportResponse> {
-  const queryString = buildQueryString(filters);
-  const response = await fetch(`${API_BASE}/reports/operator?${queryString}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch operator report: ${response.statusText}`);
+  /**
+   * Fetch Operator Performance Report
+   */
+  static async fetchOperatorReport(filters: ReportFilters): Promise<ReportResponse<any>> {
+    const queryString = this.buildQueryString(filters);
+    const response = await fetch(`${API_BASE}/reports/operator?${queryString}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch operator report");
+    }
+    return response.json();
   }
 
-  return response.json();
-}
-
-/**
- * Fetch Operator Comparison Report
- */
-export async function fetchOperatorComparisonReport(filters: ReportFilters): Promise<ReportResponse> {
-  const queryString = buildQueryString(filters);
-  const response = await fetch(`${API_BASE}/reports/operator-comparison?${queryString}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch operator comparison report: ${response.statusText}`);
+  /**
+   * Fetch Operator Comparison Report
+   */
+  static async fetchOperatorComparisonReport(filters: ReportFilters): Promise<ReportResponse<any>> {
+    const queryString = this.buildQueryString(filters);
+    const response = await fetch(`${API_BASE}/reports/operator-comparison?${queryString}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch operator comparison report");
+    }
+    return response.json();
   }
 
-  return response.json();
-}
-
-/**
- * Fetch Feeder Performance Report
- */
-export async function fetchFeederReport(filters: ReportFilters): Promise<ReportResponse> {
-  const queryString = buildQueryString(filters);
-  const response = await fetch(`${API_BASE}/reports/feeder?${queryString}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch feeder report: ${response.statusText}`);
+  /**
+   * Fetch Feeder Performance Report
+   */
+  static async fetchFeederReport(filters: ReportFilters): Promise<ReportResponse<any>> {
+    const queryString = this.buildQueryString(filters);
+    const response = await fetch(`${API_BASE}/reports/feeder?${queryString}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch feeder report");
+    }
+    return response.json();
   }
 
-  return response.json();
-}
-
-/**
- * Fetch Feeder Reliability Report
- */
-export async function fetchFeederReliabilityReport(filters: ReportFilters): Promise<ReportResponse> {
-  const queryString = buildQueryString(filters);
-  const response = await fetch(`${API_BASE}/reports/feeder-reliability?${queryString}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch feeder reliability report: ${response.statusText}`);
+  /**
+   * Fetch Feeder Reliability Report
+   */
+  static async fetchFeederReliabilityReport(filters: ReportFilters): Promise<ReportResponse<any>> {
+    const queryString = this.buildQueryString(filters);
+    const response = await fetch(`${API_BASE}/reports/feeder-reliability?${queryString}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch feeder reliability report");
+    }
+    return response.json();
   }
 
-  return response.json();
-}
-
-/**
- * Fetch Alarm Report
- */
-export async function fetchAlarmReport(filters: ReportFilters): Promise<ReportResponse> {
-  const queryString = buildQueryString(filters);
-  const response = await fetch(`${API_BASE}/reports/alarm?${queryString}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch alarm report: ${response.statusText}`);
+  /**
+   * Fetch Alarm Report
+   */
+  static async fetchAlarmReport(filters: ReportFilters): Promise<ReportResponse<any>> {
+    const queryString = this.buildQueryString(filters);
+    const response = await fetch(`${API_BASE}/reports/alarm?${queryString}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch alarm report");
+    }
+    return response.json();
   }
 
-  return response.json();
-}
-
-/**
- * Fetch Error Analysis Report
- */
-export async function fetchErrorAnalysisReport(filters: ReportFilters): Promise<ReportResponse> {
-  const queryString = buildQueryString(filters);
-  const response = await fetch(`${API_BASE}/reports/error-analysis?${queryString}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch error analysis report: ${response.statusText}`);
+  /**
+   * Fetch Error Analysis Report
+   */
+  static async fetchErrorAnalysisReport(filters: ReportFilters): Promise<ReportResponse<any>> {
+    const queryString = this.buildQueryString(filters);
+    const response = await fetch(`${API_BASE}/reports/error-analysis?${queryString}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch error analysis report");
+    }
+    return response.json();
   }
 
-  return response.json();
-}
-
-/**
- * Fetch Component Usage Report
- */
-export async function fetchComponentReport(filters: ReportFilters): Promise<ReportResponse> {
-  const queryString = buildQueryString(filters);
-  const response = await fetch(`${API_BASE}/reports/component?${queryString}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch component report: ${response.statusText}`);
+  /**
+   * Fetch Component Usage Report
+   */
+  static async fetchComponentReport(filters: ReportFilters): Promise<ReportResponse<any>> {
+    const queryString = this.buildQueryString(filters);
+    const response = await fetch(`${API_BASE}/reports/component?${queryString}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch component report");
+    }
+    return response.json();
   }
 
-  return response.json();
-}
-
-/**
- * Fetch Lot Traceability Report
- */
-export async function fetchLotTraceabilityReport(filters: ReportFilters): Promise<ReportResponse> {
-  const queryString = buildQueryString(filters);
-  const response = await fetch(`${API_BASE}/reports/lot-traceability?${queryString}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch lot traceability report: ${response.statusText}`);
+  /**
+   * Fetch Lot Traceability Report
+   */
+  static async fetchLotTraceabilityReport(filters: ReportFilters): Promise<ReportResponse<any>> {
+    const queryString = this.buildQueryString(filters);
+    const response = await fetch(`${API_BASE}/reports/lot-traceability?${queryString}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch lot traceability report");
+    }
+    return response.json();
   }
 
-  return response.json();
-}
-
-/**
- * Fetch Trend Report
- */
-export async function fetchTrendReport(filters: ReportFilters): Promise<ReportResponse> {
-  const queryString = buildQueryString(filters);
-  const response = await fetch(`${API_BASE}/reports/trend?${queryString}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch trend report: ${response.statusText}`);
+  /**
+   * Fetch Trend Report
+   */
+  static async fetchTrendReport(filters: ReportFilters): Promise<ReportResponse<any>> {
+    const queryString = this.buildQueryString(filters);
+    const response = await fetch(`${API_BASE}/reports/trend?${queryString}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch trend report");
+    }
+    return response.json();
   }
 
-  return response.json();
-}
+  /**
+   * Export report to PDF/Excel/CSV
+   */
+  static async exportReport(
+    reportType: string,
+    format: "pdf" | "xlsx" | "csv",
+    filters: ReportFilters
+  ): Promise<{ filePath: string; format: string; recordCount: number; queryTimeMs: number }> {
+    const response = await fetch(`${API_BASE}/reports/export/${reportType}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ format, filters }),
+    });
 
-/**
- * Export a report to file
- */
-export async function exportReport(
-  reportType: string,
-  format: "pdf" | "xlsx" | "csv",
-  filters: ReportFilters
-): Promise<{ filename: string; downloadUrl: string; format: string }> {
-  const queryString = buildQueryString(filters);
-  const response = await fetch(`${API_BASE}/reports/export/${reportType}?format=${format}&${queryString}`, {
-    method: "POST",
-  });
+    if (!response.ok) {
+      throw new Error("Failed to export report");
+    }
 
-  if (!response.ok) {
-    throw new Error(`Failed to export report: ${response.statusText}`);
+    return response.json();
   }
 
-  return response.json();
-}
-
-/**
- * Download a file from the server
- */
-export async function downloadFile(filePath: string): Promise<Blob> {
-  const response = await fetch(filePath);
-
-  if (!response.ok) {
-    throw new Error(`Failed to download file: ${response.statusText}`);
+  /**
+   * Get export history
+   */
+  static async getExportHistory(): Promise<{ exports: any[]; count: number }> {
+    const response = await fetch(`${API_BASE}/reports/exports/history`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch export history");
+    }
+    return response.json();
   }
-
-  return response.blob();
-}
-
-/**
- * Get export history for current user
- */
-export async function getExportHistory(): Promise<any[]> {
-  const response = await fetch(`${API_BASE}/reports/exports/user/history`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch export history: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  return data.exports || [];
 }

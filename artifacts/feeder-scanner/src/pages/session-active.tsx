@@ -688,7 +688,7 @@ export default function SessionActive() {
                             • Press <strong>ENTER</strong> to skip verification
                           </p>
                           <p className="text-xs text-blue-700 dark:text-blue-300 mt-2 italic">
-                            ⓘ In AUTO mode: Invalid ID = REJECT • In MANUAL mode: Any ID = ACCEPT
+                            ⓘ Required MPN/Internal ID is enforced in both AUTO and MANUAL modes
                           </p>
                         </div>
                       </div>
@@ -846,12 +846,27 @@ export default function SessionActive() {
                     status === "reject" ? "bg-destructive/5 border-destructive/30" :
                     "bg-background border-border"
                   }`}>
-                    <div className="flex flex-col min-w-0 flex-1">
+                    <div className="flex flex-col min-w-0 flex-1 gap-1">
+                      {/* Row 1: Feeder Number & Part Number */}
                       <div className="flex items-center gap-1 sm:gap-2">
                         <span className="font-bold font-mono text-xs sm:text-sm truncate">{item.feederNumber}</span>
                         {hasSplice && <Scissors className="w-3 h-3 text-amber-500 shrink-0" />}
                       </div>
-                      <span className="text-xs text-muted-foreground truncate font-medium mt-0.5">{item.partNumber}</span>
+                      <span className="text-xs text-muted-foreground truncate font-medium">{item.partNumber}</span>
+                      
+                      {/* Row 2: Expected MPN (if exists) */}
+                      {item.expectedMpn && (
+                        <div className="text-xs text-muted-foreground font-mono">
+                          <span className="font-bold text-foreground">MPN:</span> {item.expectedMpn}
+                        </div>
+                      )}
+                      
+                      {/* Row 3: Internal ID (if exists) */}
+                      {item.internalId && (
+                        <div className="text-xs text-muted-foreground font-mono">
+                          <span className="font-bold text-foreground">ID:</span> {item.internalId}
+                        </div>
+                      )}
                     </div>
                     <div className="shrink-0 ml-2 flex items-center gap-1 sm:gap-2">
                       {canRescan && (
@@ -921,13 +936,22 @@ export default function SessionActive() {
 
       {/* Notification Alert Dialog */}
       <AlertDialog open={showNotification} onOpenChange={setShowNotification}>
-        <AlertDialogContent className="sm:max-w-md">
+        <AlertDialogContent 
+          className="sm:max-w-md"
+          onKeyDown={(e: React.KeyboardEvent) => {
+            // Dismiss on any key press (Enter, Space, Escape, or any character)
+            if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+              e.preventDefault();
+              setShowNotification(false);
+            }
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               {notificationType === "duplicate" && <AlertCircle className="w-5 h-5 text-orange-600" />}
               {notificationType === "error" && <AlertCircle className="w-5 h-5 text-red-600" />}
               {notificationType === "warning" && <AlertCircle className="w-5 h-5 text-yellow-600" />}
-              {notificationType === "duplicate" ? "⚠️ DUPLICATE DETECTED" : notificationType === "error" ? "❌ ERROR" : "⚡ WARNING"}
+              {notificationType === "duplicate" ? "⚠️ DUPLICATE" : notificationType === "error" ? "❌ ERROR" : "⚡ WARNING"}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm sm:text-base font-mono mt-4">
               {notificationMessage}
@@ -936,6 +960,7 @@ export default function SessionActive() {
           <AlertDialogFooter className="mt-6">
             <AlertDialogAction 
               onClick={() => setShowNotification(false)}
+              autoFocus
               className={`w-full font-bold text-lg sm:text-xl py-6 ${
                 notificationType === "duplicate" ? "bg-orange-600 hover:bg-orange-700" : 
                 notificationType === "error" ? "bg-red-600 hover:bg-red-700" : 

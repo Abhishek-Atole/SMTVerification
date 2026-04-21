@@ -179,8 +179,8 @@ importers:
         specifier: ^7.0.0
         version: 7.3.0
       pdfkit:
-        specifier: ^0.15.0
-        version: 0.15.2
+        specifier: ^0.13.0
+        version: 0.13.0
       pino:
         specifier: ^9
         version: 9.14.0
@@ -204,7 +204,7 @@ importers:
         specifier: 'catalog:'
         version: 25.6.0
       '@types/pdfkit':
-        specifier: ^0.12.12
+        specifier: ^0.12.11
         version: 0.12.12
       esbuild:
         specifier: 0.27.3
@@ -2566,10 +2566,6 @@ packages:
     resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
     engines: {node: '>=10'}
 
-  jpeg-exif@1.1.4:
-    resolution: {integrity: sha512-a+bKEcCjtuW5WTdgeXFzswSrdqi0jk4XlEtZlx5A94wCoBpFjfFTbo/Tra5SpNCl/YFZPvcV1dJc+TAYeg6ROQ==}
-    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
-
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -2810,8 +2806,8 @@ packages:
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
 
-  pdfkit@0.15.2:
-    resolution: {integrity: sha512-s3GjpdBFSCaeDSX/v73MI5UsPqH1kjKut2AXCgxQ5OH10lPVOu5q5vLAG0OCpz/EYqKsTSw1WHpENqMvp43RKg==}
+  pdfkit@0.13.0:
+    resolution: {integrity: sha512-AW79eHU5eLd2vgRDS9z3bSoi0FA+gYm+100LLosrQQMLUzOBGVOhG7ABcMFpJu7Bpg+MT74XYHi4k9EuU/9EZw==}
 
   performance-now@2.1.0:
     resolution: {integrity: sha512-7EAHlyLHI56VEIdK57uwHdHKIaAGbnXPiw0yWbarQZOKaKpvUIgW0jWRVLiatnM+XXlSwsanIBH/hzGMJulMow==}
@@ -5513,8 +5509,6 @@ snapshots:
 
   joycon@3.1.1: {}
 
-  jpeg-exif@1.1.4: {}
-
   js-tokens@4.0.0: {}
 
   js-yaml@4.1.1:
@@ -5752,11 +5746,10 @@ snapshots:
 
   pathe@2.0.3: {}
 
-  pdfkit@0.15.2:
+  pdfkit@0.13.0:
     dependencies:
       crypto-js: 4.2.0
       fontkit: 1.9.0
-      jpeg-exif: 1.1.4
       linebreak: 1.1.0
       png-js: 1.1.0
 

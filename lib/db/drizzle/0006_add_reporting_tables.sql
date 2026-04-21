@@ -1,42 +1,38 @@
--- Create reporting tables for analytics and report generation
-
-CREATE TABLE "reports" (
-    "id" serial PRIMARY KEY NOT NULL,
-    "report_type" text NOT NULL,
-    "session_id" integer,
-    "bom_id" integer,
-    "filters" jsonb NOT NULL,
-    "format" text NOT NULL,
-    "file_path" text,
-    "generated_at" timestamp DEFAULT now() NOT NULL,
-    "generated_by" text NOT NULL,
-    "expires_at" timestamp,
-    "query_time" integer,
-    "record_count" integer,
-    "created_at" timestamp DEFAULT now() NOT NULL,
-    "deleted_at" timestamp,
-    "deleted_by" text,
-    FOREIGN KEY ("session_id") REFERENCES "sessions"("id") ON DELETE set null,
-    FOREIGN KEY ("bom_id") REFERENCES "boms"("id") ON DELETE set null
+-- Create reports table
+CREATE TABLE IF NOT EXISTS reports (
+  id SERIAL PRIMARY KEY,
+  report_type TEXT NOT NULL DEFAULT 'fpy',
+  session_id INTEGER,
+  bom_id INTEGER,
+  filters JSONB DEFAULT '{}',
+  format TEXT NOT NULL DEFAULT 'pdf',
+  file_path TEXT,
+  record_count INTEGER DEFAULT 0,
+  query_time_ms INTEGER DEFAULT 0,
+  generated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  generated_by TEXT NOT NULL,
+  expires_at TIMESTAMP,
+  deleted_at TIMESTAMP,
+  deleted_by TEXT
 );
 
-CREATE INDEX "reports_report_type_idx" on "reports" ("report_type");
-CREATE INDEX "reports_generated_at_idx" on "reports" ("generated_at");
-CREATE INDEX "reports_generated_by_idx" on "reports" ("generated_by");
-CREATE INDEX "reports_created_at_idx" on "reports" ("created_at");
+-- Create indexes for reports table
+CREATE INDEX idx_reports_type_date ON reports(report_type, generated_at);
+CREATE INDEX idx_reports_generated_by ON reports(generated_by);
+CREATE INDEX idx_reports_session_id ON reports(session_id);
 
-CREATE TABLE "report_exports" (
-    "id" serial PRIMARY KEY NOT NULL,
-    "report_id" integer NOT NULL,
-    "user_id" text NOT NULL,
-    "format" text NOT NULL,
-    "downloaded_at" timestamp DEFAULT now() NOT NULL,
-    "ip_address" text,
-    "user_agent" text,
-    "created_at" timestamp DEFAULT now() NOT NULL,
-    FOREIGN KEY ("report_id") REFERENCES "reports"("id") ON DELETE cascade
+-- Create report_exports table
+CREATE TABLE IF NOT EXISTS report_exports (
+  id SERIAL PRIMARY KEY,
+  report_id INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  format TEXT NOT NULL,
+  downloaded_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  ip_address TEXT,
+  user_agent TEXT
 );
 
-CREATE INDEX "report_exports_report_id_idx" on "report_exports" ("report_id");
-CREATE INDEX "report_exports_user_id_idx" on "report_exports" ("user_id");
-CREATE INDEX "report_exports_downloaded_at_idx" on "report_exports" ("downloaded_at");
+-- Create indexes for report_exports table
+CREATE INDEX idx_report_exports_report_id ON report_exports(report_id);
+CREATE INDEX idx_report_exports_user_id ON report_exports(user_id);
+CREATE INDEX idx_report_exports_downloaded_at ON report_exports(downloaded_at);

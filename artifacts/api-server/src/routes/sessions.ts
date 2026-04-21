@@ -264,7 +264,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
       return res.status(400).json({
         status: "reject",
         isDuplicate: true,
-        message: `❌ DUPLICATE ENTRY: Feeder ${normalizedFeeder} already scanned and PASSED in this session. Cannot re-scan.`,
+        message: `⚠️ Feeder ${normalizedFeeder} already scanned`,
         validationDetails: {
           isDuplicate: true,
           feederNumberMatched: true,
@@ -327,37 +327,72 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
         scanStatus = "reject";
         message = `❌ FEEDER NOT FOUND: ${normalizedFeeder} NOT in BOM — REJECTED`;
       } else {
+        const expectedMpn =
+          selectedItem.expectedMpn?.trim().toUpperCase() ||
+          selectedItem.mpn?.trim().toUpperCase() ||
+          "";
+        const expectedPartNumber = selectedItem.partNumber?.trim().toUpperCase() || "";
+        const expectedInternalId = selectedItem.internalId?.trim().toUpperCase() || "";
+
         // Check if BOM item has expected validation requirements
-        const hasExpectedMpn = !!selectedItem.expectedMpn?.trim();
-        const hasExpectedInternalId = !!selectedItem.internalId?.trim();
+        const hasExpectedMpn = !!expectedMpn;
+        const hasExpectedPartNumber = !!expectedPartNumber;
+        const hasExpectedInternalId = !!expectedInternalId;
 
         // Step 2: Validate MPN/Internal ID based on what's provided and required
         if (normalizedMpnId) {
           // User provided an MPN or Internal ID
-          const expectedMpn = selectedItem.expectedMpn?.trim().toUpperCase();
-          const expectedInternalId = selectedItem.internalId?.trim().toUpperCase();
-          
           let userInputMatches = false;
           
           if (internalIdType === "mpn") {
-            // User provided an MPN - compare to expectedMpn with fuzzy matching
-            expectedValue = expectedMpn || "";
+            // User provided an MPN - compare to BOTH expectedMpn AND partNumber with fuzzy matching
+            // Try matching against MPN first
             if (hasExpectedMpn && expectedMpn) {
-              // Use fuzzy matching instead of exact match
               fuzzyMatchResult = ValidationService.fuzzyMatchValue(
                 normalizedMpnId,
                 expectedMpn,
                 0.95 // 95% threshold
               );
-              userInputMatches = fuzzyMatchResult.matches;
-              matchingAlgorithm = fuzzyMatchResult.score === 100 ? "exact" : "fuzzy";
-              if (fuzzyMatchResult.suggestions && fuzzyMatchResult.suggestions.length > 0) {
-                suggestions = fuzzyMatchResult.suggestions;
+              if (fuzzyMatchResult.matches) {
+                userInputMatches = true;
+                expectedValue = expectedMpn;
+                matchingAlgorithm = fuzzyMatchResult.score === 100 ? "exact" : "fuzzy";
+                if (fuzzyMatchResult.suggestions && fuzzyMatchResult.suggestions.length > 0) {
+                  suggestions = fuzzyMatchResult.suggestions;
+                }
               }
-            } else {
-              // No fuzzy match needed, accept as provided
+            }
+            
+            // If MPN didn't match, try matching against Part Number as alternative
+            if (!userInputMatches && hasExpectedPartNumber && expectedPartNumber) {
+              fuzzyMatchResult = ValidationService.fuzzyMatchValue(
+                normalizedMpnId,
+                expectedPartNumber,
+                0.95 // 95% threshold
+              );
+              if (fuzzyMatchResult.matches) {
+                userInputMatches = true;
+                expectedValue = expectedPartNumber;
+                matchingAlgorithm = fuzzyMatchResult.score === 100 ? "exact" : "fuzzy";
+                if (fuzzyMatchResult.suggestions && fuzzyMatchResult.suggestions.length > 0) {
+                  suggestions = fuzzyMatchResult.suggestions;
+                }
+              }
+            }
+            
+            // If no matches found but we have expected values, track best score for error message
+            if (!userInputMatches && (hasExpectedMpn || hasExpectedPartNumber)) {
+              // Keep the last fuzzy result for error message
+              if (!expectedValue) {
+                expectedValue = expectedMpn || expectedPartNumber || "";
+              }
+            }
+            
+            // If no expected values at all, accept as provided
+            if (!userInputMatches && !hasExpectedMpn && !hasExpectedPartNumber) {
               userInputMatches = true;
             }
+            
             mpnMatched = userInputMatches;
           } else if (internalIdType === "internal_id") {
             // User provided an Internal ID - compare to expectedInternalId with fuzzy matching
@@ -384,10 +419,10 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
           // Determine scan status based on mode
           if (verificationMode === "auto") {
             // AUTO mode: MUST match if BOM has expected value
-            if (hasExpectedMpn || hasExpectedInternalId) {
+            if (hasExpectedMpn || hasExpectedPartNumber || hasExpectedInternalId) {
               if (!userInputMatches) {
                 scanStatus = "reject";
-                message = `❌ AUTO MODE REJECTED: ${internalIdType === "mpn" ? "MPN" : "Internal ID"} '${normalizedMpnId}' (${fuzzyMatchResult.score}% match) does NOT meet 95% threshold. Expected: '${expectedValue}'${suggestions.length > 0 ? ` — Did you mean: ${suggestions.join(", ")}?` : ""}`;
+                message = `❌ AUTO MODE REJECTED: ${internalIdType === "mpn" ? "MPN/PART#" : "Internal ID"} '${normalizedMpnId}' (${fuzzyMatchResult.score}% match) does NOT meet 95% threshold. Expected: '${expectedValue}'${suggestions.length > 0 ? ` — Did you mean: ${suggestions.join(", ")}?` : ""}`;
               } else {
                 scanStatus = "ok";
                 const matchType = matchingAlgorithm === "exact" ? "VERIFIED (EXACT)" : `VERIFIED (${fuzzyMatchResult.score}% MATCH)`;
@@ -406,9 +441,9 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
               message = `✅ ${matchType}: Feeder ${normalizedFeeder} with ${internalIdType} ${normalizedMpnId} PASSED`;
             } else {
               // STRICT: Reject if user provided insufficient/incorrect MPN/ID but BOM requires validation
-              if (hasExpectedMpn || hasExpectedInternalId) {
+              if (hasExpectedMpn || hasExpectedPartNumber || hasExpectedInternalId) {
                 scanStatus = "reject";
-                message = `❌ VALIDATION FAILED: Feeder ${normalizedFeeder} - ${internalIdType === "mpn" ? "MPN" : "Internal ID"} '${normalizedMpnId}' (${fuzzyMatchResult.score}% match) does NOT meet 95% threshold. Required: '${expectedValue}'${suggestions.length > 0 ? ` — Did you mean: ${suggestions.join(", ")}?` : ""}`;
+                message = `❌ VALIDATION FAILED: Feeder ${normalizedFeeder} - ${internalIdType === "mpn" ? "MPN/PART#" : "Internal ID"} '${normalizedMpnId}' (${fuzzyMatchResult.score}% match) does NOT meet 95% threshold. Expected: '${expectedValue}'${suggestions.length > 0 ? ` — Did you mean: ${suggestions.join(", ")}?` : ""}`;
               } else {
                 // BOM doesn't require validation, so accept the provided value
                 scanStatus = "ok";
@@ -418,18 +453,20 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
           }
         } else {
           // No MPN/Internal ID provided - check if validation was required
-          if (hasExpectedMpn || hasExpectedInternalId) {
+          if (hasExpectedMpn || hasExpectedPartNumber || hasExpectedInternalId) {
             // BOM requires validation but user didn't provide it
             if (verificationMode === "auto") {
               // AUTO mode: REJECT if required but not provided
               scanStatus = "reject";
-              const expectedLabel = hasExpectedMpn ? "MPN" : "Internal ID";
-              message = `❌ AUTO MODE REJECTED: ${expectedLabel} REQUIRED for feeder ${normalizedFeeder} but not provided. Expected: ${hasExpectedMpn ? selectedItem.expectedMpn : selectedItem.internalId}`;
+              const expectedLabel = (hasExpectedMpn || hasExpectedPartNumber) ? "MPN/PART#" : "Internal ID";
+              const expectedVal = expectedMpn || expectedPartNumber || expectedInternalId;
+              message = `❌ AUTO MODE REJECTED: ${expectedLabel} REQUIRED for feeder ${normalizedFeeder} but not provided. Expected: ${expectedVal}`;
             } else if (verificationMode === "manual") {
-              // MANUAL mode: WARN and record for operator review
-              scanStatus = "ok";
-              const expectedLabel = hasExpectedMpn ? "MPN" : "Internal ID";
-              message = `⚠️ WARNING: Feeder ${normalizedFeeder} - ${expectedLabel} NOT provided but required. Expected: ${hasExpectedMpn ? selectedItem.expectedMpn : selectedItem.internalId}. OPERATOR REVIEW REQUIRED.`;
+              // MANUAL mode: also enforce required validation input
+              scanStatus = "reject";
+              const expectedLabel = (hasExpectedMpn || hasExpectedPartNumber) ? "MPN/PART#" : "Internal ID";
+              const expectedVal = expectedMpn || expectedPartNumber || expectedInternalId;
+              message = `❌ MANUAL MODE REJECTED: ${expectedLabel} REQUIRED for feeder ${normalizedFeeder} but not provided. Expected: ${expectedVal}`;
             }
           } else {
             // No expected validation in BOM for this feeder - accept as is
