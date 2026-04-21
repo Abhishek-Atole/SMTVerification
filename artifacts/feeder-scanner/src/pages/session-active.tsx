@@ -15,7 +15,8 @@ import { format, differenceInSeconds } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlternateSelector } from "@/components/alternate-selector";
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter, AlertDialogTitle, AlertDialogDescription, AlertDialogAction } from "@/components/ui/alert-dialog";
+import { useNotification } from "@/hooks/use-notification";
+import { AlertNotificationDialog } from "@/components/alert-notification-dialog";
 
 type ScanStep = "feeder" | "spool";
 type SpliceStep = "feeder" | "oldSpool" | "newSpool";
@@ -51,6 +52,18 @@ export default function SessionActive() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
+  // Use the new notification system with buzzer sounds
+  const {
+    notification,
+    showNotification,
+    showAlert,
+    showErrorAlert,
+    showDuplicateAlert,
+    showWarningAlert,
+    showSuccessAlert,
+    clearNotification,
+  } = useNotification();
+
   const { data: session, isLoading: sessionLoading } = useGetSession(sessionId, {
     query: { enabled: !!sessionId, queryKey: getGetSessionQueryKey(sessionId) },
   });
@@ -77,11 +90,6 @@ export default function SessionActive() {
   const [internalIdType, setInternalIdType] = useState<"mpn" | "internal_id">("mpn");
   const [caseConverted, setCaseConverted] = useState(false);
   const [isDuplicate, setIsDuplicate] = useState(false);
-  
-  // Notification dialog state
-  const [showNotification, setShowNotification] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState("");
-  const [notificationType, setNotificationType] = useState<"error" | "duplicate" | "warning">("error");
   
   // Alternate selection state
   const [pendingAvailableOptions, setPendingAvailableOptions] = useState<{
@@ -147,16 +155,14 @@ export default function SessionActive() {
     if (lastScanResult && lastScanResult.status === "reject") {
       const msgLower = lastScanResult.msg.toLowerCase();
       if (msgLower.includes("duplicate") || msgLower.includes("already") || msgLower.includes("violation")) {
-        setNotificationType("duplicate");
-        setNotificationMessage(lastScanResult.msg);
-        setShowNotification(true);
+        showDuplicateAlert(lastScanResult.msg);
       } else if (msgLower.includes("error") || msgLower.includes("failed")) {
-        setNotificationType("error");
-        setNotificationMessage(lastScanResult.msg);
-        setShowNotification(true);
+        showErrorAlert(lastScanResult.msg);
+      } else if (msgLower.includes("warning")) {
+        showWarningAlert(lastScanResult.msg);
       }
     }
-  }, [lastScanResult]);
+  }, [lastScanResult, showDuplicateAlert, showErrorAlert, showWarningAlert]);
 
   const flashBg = (status: "ok" | "reject" | "splice") => {
     const bg = document.getElementById("scan-flash-bg");
@@ -935,49 +941,18 @@ export default function SessionActive() {
       </div>
 
       {/* Notification Alert Dialog */}
-      <AlertDialog open={showNotification} onOpenChange={setShowNotification}>
-        <AlertDialogContent 
-          className="sm:max-w-md"
-          onKeyDown={(e: React.KeyboardEvent) => {
-            // Allow Tab and other navigation keys for accessibility
-            const navigationKeys = ['Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown'];
-            if (navigationKeys.includes(e.key)) {
-              return; // Allow normal keyboard navigation
-            }
-            
-            // Dismiss on other keys (Enter, Escape, or any character) excluding modifiers
-            if (!e.ctrlKey && !e.altKey && !e.metaKey) {
-              e.preventDefault();
-              setShowNotification(false);
-            }
-          }}
-        >
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              {notificationType === "duplicate" && <AlertCircle className="w-5 h-5 text-orange-600" />}
-              {notificationType === "error" && <AlertCircle className="w-5 h-5 text-red-600" />}
-              {notificationType === "warning" && <AlertCircle className="w-5 h-5 text-yellow-600" />}
-              {notificationType === "duplicate" ? "⚠️ DUPLICATE" : notificationType === "error" ? "❌ ERROR" : "⚡ WARNING"}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-sm sm:text-base font-mono mt-4">
-              {notificationMessage}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="mt-6">
-            <AlertDialogAction 
-              onClick={() => setShowNotification(false)}
-              autoFocus
-              className={`w-full font-bold text-lg sm:text-xl py-6 ${
-                notificationType === "duplicate" ? "bg-orange-600 hover:bg-orange-700" : 
-                notificationType === "error" ? "bg-red-600 hover:bg-red-700" : 
-                "bg-blue-600 hover:bg-blue-700"
-              }`}
-            >
-              ✓ OK
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <AlertNotificationDialog
+        notification={notification}
+        open={showNotification}
+        onOpenChange={(open) => {
+          if (!open) {
+            clearNotification();
+          }
+        }}
+        onDismiss={() => {
+          clearNotification();
+        }}
+      />
     </div>
   );
 }
