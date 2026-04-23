@@ -149,23 +149,145 @@
   }
   body {
     @apply font-sans antialiased bg-background text-foreground selection:bg-primary selection:text-primary-foreground;
+    background-image:
+      radial-gradient(circle at top left, hsl(var(--primary) / 0.08), transparent 28%),
+      radial-gradient(circle at bottom right, hsl(var(--success) / 0.08), transparent 24%),
+      linear-gradient(180deg, hsl(var(--background)), hsl(var(--background)));
   }
 }
 
+.app-noise {
+  background-image:
+    linear-gradient(135deg, hsl(var(--background) / 0.92), hsl(var(--background) / 0.98)),
+    radial-gradient(circle at 20% 20%, hsl(var(--primary) / 0.08), transparent 22%),
+    radial-gradient(circle at 80% 0%, hsl(var(--success) / 0.06), transparent 20%),
+    radial-gradient(circle at 100% 100%, hsl(var(--destructive) / 0.05), transparent 18%);
+}
+
+.panel-pop {
+  animation: panelPop 480ms ease-out both;
+}
+
+.scan-surface {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.scan-surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(120deg, transparent 0%, hsl(var(--primary) / 0.14) 50%, transparent 100%);
+  transform: translateX(-120%);
+  animation: scanSweep 7s linear infinite;
+  mix-blend-mode: screen;
+}
+
+.scan-surface::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(180deg, hsl(var(--foreground) / 0.02), transparent 28%);
+}
+
+.scan-input-surface {
+  transition: box-shadow 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.scan-input-surface:focus-visible {
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.4), 0 0 0 6px hsl(var(--primary) / 0.12);
+  transform: translateY(-1px);
+}
+
+.progress-ring {
+  animation: ringPulse 2.8s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px hsl(var(--primary) / 0.18));
+}
+
+.recent-log-highlight {
+  animation: recentLogHighlight 1.6s ease-out both;
+}
+
 .flash-green {
-  animation: flashGreen 1s ease-out;
+  animation: flashGreen 900ms ease-out 1;
 }
 
 .flash-red {
-  animation: flashRed 1s ease-out;
+  animation: flashRed 900ms ease-out 1;
 }
 
 @keyframes flashGreen {
-  0% { background-color: hsl(var(--success)); }
+  0% { background-color: hsl(var(--success) / 0.75); }
+  18% { background-color: hsl(var(--success) / 0.45); }
+  42% { background-color: hsl(var(--success) / 0.7); }
   100% { background-color: hsl(var(--background)); }
 }
 
 @keyframes flashRed {
-  0% { background-color: hsl(var(--destructive)); }
+  0% { background-color: hsl(var(--destructive) / 0.82); }
+  16% { background-color: hsl(var(--destructive) / 0.42); }
+  36% { background-color: hsl(var(--destructive) / 0.78); }
+  58% { background-color: hsl(var(--destructive) / 0.45); }
   100% { background-color: hsl(var(--background)); }
+}
+
+@keyframes panelPop {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes scanSweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes ringPulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px hsl(var(--primary) / 0.18));
+    opacity: 0.92;
+  }
+  50% {
+    filter: drop-shadow(0 0 14px hsl(var(--primary) / 0.3));
+    opacity: 1;
+  }
+}
+
+@keyframes recentLogHighlight {
+  0% {
+    background-color: hsl(var(--secondary) / 0.95);
+    transform: translateY(-2px);
+  }
+  100% {
+    background-color: transparent;
+    transform: translateY(0);
+  }
+}
+
+@keyframes logEntryFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-logEntryFadeIn {
+  animation: logEntryFadeIn 0.3s ease-out;
 }
