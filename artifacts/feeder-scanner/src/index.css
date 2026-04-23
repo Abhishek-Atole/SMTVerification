@@ -291,3 +291,127 @@
 .animate-logEntryFadeIn {
   animation: logEntryFadeIn 0.3s ease-out;
 }
+
+/* ============================================================================
+ * RESPONSIVE DESIGN — Mobile-First Approach
+ * ============================================================================ */
+
+/* Minimum font size for input fields on mobile (prevents iOS zoom) */
+@media (max-width: 640px) {
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="search"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 18px !important;
+  }
+
+  /* Scan input surface maintains large, touchable size */
+  .scan-input-surface {
+    font-size: 20px !important;
+    min-height: 56px;
+    padding: 12px;
+  }
+
+  /* Tables and list containers never cause horizontal scroll */
+  table,
+  [role="grid"],
+  .overflow-table {
+    overflow-x: auto;
+    display: block;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Stack scan card and progress side-by-side on small screens */
+  .verification-layout {
+    flex-direction: column;
+  }
+
+  /* Progress panel moves above scan card on mobile */
+  .progress-panel {
+    order: -1;
+  }
+
+  /* Log panel becomes a collapsible drawer on mobile */
+  .log-panel-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 40vh;
+    border-radius: 12px 12px 0 0;
+    z-index: 40;
+    box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Notification stack centers on mobile instead of top-right */
+  .notification-stack {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translate(-50%, -50%) !important;
+    max-width: calc(100vw - 32px);
+  }
+}
+
+/* Tablet/Medium screens (768px and above) */
+@media (min-width: 768px) {
+  /* Log panel becomes a sidebar */
+  .log-panel-container {
+    position: relative;
+    max-height: 100%;
+  }
+
+  /* Notification stack top-right on larger screens */
+  .notification-stack {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+  }
+}
+
+/* Ensure no horizontal scroll on any viewport */
+html,
+body,
+.app-container {
+  overflow-x: hidden;
+}
+
+/* Active Scan Card responsive width */
+.scan-card {
+  min-width: 320px;
+  max-width: 600px;
+  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .scan-card {
+    max-width: 100%;
+  }
+}
+
+/* Table responsive columns */
+@media (max-width: 768px) {
+  .table-column-mpn,
+  .table-column-lot {
+    display: none;
+  }
+
+  .table-show-more {
+    display: inline-block;
+  }
+}
+
+@media (min-width: 768px) {
+  .table-column-mpn,
+  .table-column-lot {
+    display: table-cell;
+  }
+
+  .table-show-more {
+    display: none;
+  }
+}
