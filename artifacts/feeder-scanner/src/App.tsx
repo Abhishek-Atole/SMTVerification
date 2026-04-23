@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
 import NotFound from "@/pages/not-found";
 import { Layout } from "@/components/layout";
+import { AppShell } from "@/components/AppShell";
 
 import Dashboard from "@/pages/dashboard";
 import Boms from "@/pages/boms";
@@ -20,8 +21,11 @@ import Analytics from "@/pages/analytics";
 import TrashBin from "@/pages/trash-bin";
 import RealTimeDashboard from "@/pages/real-time-dashboard";
 import Reports from "@/pages/reports";
+import VerificationPage from "@/pages/verification";
+import SplicingPage from "@/pages/splicing";
 import { AuthProvider, useAuth } from "@/context/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
+import { NotificationProvider } from "@/components/NotificationSystem";
 
 const queryClient = new QueryClient();
 
@@ -45,49 +49,70 @@ function ProtectedRoute({ component: Component, allowedRoles }: { component: any
 
 function Router() {
   const { user } = useAuth();
+  const [location, setLocation] = useLocation();
+  
+  // Redirect "/" to "/verification" on mount
+  useEffect(() => {
+    if (user && location === "/") {
+      setLocation("/verification");
+    }
+  }, [user, location, setLocation]);
   
   return (
     <Switch>
       <Route path="/login" component={Login} />
       <Route>
         {user ? (
-          <Layout>
-            <Switch>
-              <Route path="/" component={Dashboard} />
-              <Route path="/bom">
-                {() => <ProtectedRoute component={Boms} allowedRoles={["engineer"]} />}
-              </Route>
-              <Route path="/bom/:id">
-                {() => <ProtectedRoute component={BomDetail} allowedRoles={["engineer"]} />}
-              </Route>
-              <Route path="/bom/:id/report">
-                {() => <ProtectedRoute component={BomReport} allowedRoles={["engineer"]} />}
-              </Route>
-              <Route path="/session/new">
-                {() => <ProtectedRoute component={SessionNew} allowedRoles={["engineer", "operator"]} />}
-              </Route>
-              <Route path="/session/:id">
-                {() => <ProtectedRoute component={SessionActive} allowedRoles={["engineer", "operator", "qa"]} />}
-              </Route>
-              <Route path="/session/:id/report">
-                {() => <ProtectedRoute component={SessionReport} allowedRoles={["engineer", "operator", "qa"]} />}
-              </Route>
-              <Route path="/sessions" component={SessionHistory} />
-              <Route path="/analytics">
-                {() => <ProtectedRoute component={Analytics} allowedRoles={["engineer", "qa"]} />}
-              </Route>
-              <Route path="/trash">
-                {() => <ProtectedRoute component={TrashBin} allowedRoles={["engineer"]} />}
-              </Route>
-              <Route path="/real-time-dashboard">
-                {() => <ProtectedRoute component={RealTimeDashboard} allowedRoles={["engineer", "qa"]} />}
-              </Route>
-              <Route path="/reports">
-                {() => <ProtectedRoute component={Reports} allowedRoles={["engineer", "qa"]} />}
-              </Route>
-              <Route component={NotFound} />
-            </Switch>
-          </Layout>
+          <AppShell jobId="SMT-JOB-001">
+            <Layout>
+              <Switch>
+                <Route path="/">
+                  {() => {
+                    setLocation("/verification");
+                    return null;
+                  }}
+                </Route>
+                <Route path="/bom">
+                  {() => <ProtectedRoute component={Boms} allowedRoles={["engineer"]} />}
+                </Route>
+                <Route path="/bom/:id">
+                  {() => <ProtectedRoute component={BomDetail} allowedRoles={["engineer"]} />}
+                </Route>
+                <Route path="/bom/:id/report">
+                  {() => <ProtectedRoute component={BomReport} allowedRoles={["engineer"]} />}
+                </Route>
+                <Route path="/session/new">
+                  {() => <ProtectedRoute component={SessionNew} allowedRoles={["engineer", "operator"]} />}
+                </Route>
+                <Route path="/verification">
+                  {() => <ProtectedRoute component={VerificationPage} allowedRoles={["engineer", "operator", "qa"]} />}
+                </Route>
+                <Route path="/splicing">
+                  {() => <ProtectedRoute component={SplicingPage} allowedRoles={["engineer", "operator", "qa"]} />}
+                </Route>
+                <Route path="/session/:id">
+                  {() => <ProtectedRoute component={SessionActive} allowedRoles={["engineer", "operator", "qa"]} />}
+                </Route>
+                <Route path="/session/:id/report">
+                  {() => <ProtectedRoute component={SessionReport} allowedRoles={["engineer", "operator", "qa"]} />}
+                </Route>
+                <Route path="/sessions" component={SessionHistory} />
+                <Route path="/analytics">
+                  {() => <ProtectedRoute component={Analytics} allowedRoles={["engineer", "qa"]} />}
+                </Route>
+                <Route path="/trash">
+                  {() => <ProtectedRoute component={TrashBin} allowedRoles={["engineer"]} />}
+                </Route>
+                <Route path="/real-time-dashboard">
+                  {() => <ProtectedRoute component={RealTimeDashboard} allowedRoles={["engineer", "qa"]} />}
+                </Route>
+                <Route path="/reports">
+                  {() => <ProtectedRoute component={Reports} allowedRoles={["engineer", "qa"]} />}
+                </Route>
+                <Route component={NotFound} />
+              </Switch>
+            </Layout>
+          </AppShell>
         ) : (
           <Login />
         )}
@@ -102,10 +127,12 @@ function App() {
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
           <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
-              <Router />
-            </WouterRouter>
-            <Toaster />
+            <NotificationProvider>
+              <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
+                <Router />
+              </WouterRouter>
+              <Toaster />
+            </NotificationProvider>
           </TooltipProvider>
         </QueryClientProvider>
       </AuthProvider>
