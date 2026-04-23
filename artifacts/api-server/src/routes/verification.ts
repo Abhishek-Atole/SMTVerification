@@ -3,8 +3,16 @@ import { db } from "@workspace/db";
 import { changeoverSessionsTable, feederScansTable } from "@workspace/db/schema";
 import { and, desc, eq } from "drizzle-orm";
 import { getSessionProgress, verifyFeederScan } from "../services/verificationService";
+import {
+  attachActor,
+  requireOperatorSessionOwnership,
+  requireSessionReadAccess,
+  type AuthRequest,
+} from "../middleware/auth";
 
 const router: IRouter = Router();
+
+router.use(attachActor);
 
 function toNumber(value: unknown): number {
   return Number(value);
@@ -36,7 +44,56 @@ router.post("/verification/sessions", async (req, res) => {
   }
 });
 
-router.get("/verification/sessions/:sessionId/progress", async (req, res) => {
+router.get("/verification/sessions", async (req: AuthRequest, res) => {
+  try {
+    const actor = req.actor!;
+    const requestedRole = String(req.query.role ?? "").trim().toLowerCase();
+
+    if (requestedRole === "qa" || requestedRole === "engineer") {
+      if (actor.role !== "qa" && actor.role !== "engineer") {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+
+      const sessions = await db
+        .select()
+        .from(changeoverSessionsTable)
+        .orderBy(desc(changeoverSessionsTable.startedAt));
+
+      res.json(sessions);
+      return;
+    }
+
+    const sessions = await db
+      .select()
+      .from(changeoverSessionsTable)
+      .where(and(eq(changeoverSessionsTable.operatorId, actor.id), eq(changeoverSessionsTable.status, "active")))
+      .orderBy(desc(changeoverSessionsTable.startedAt));
+
+    res.json(sessions);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to list verification sessions" });
+  }
+});
+
+router.get("/verification/sessions/mine", async (req: AuthRequest, res) => {
+  try {
+    const actor = req.actor!;
+    const sessions = await db
+      .select()
+      .from(changeoverSessionsTable)
+      .where(and(eq(changeoverSessionsTable.operatorId, actor.id), eq(changeoverSessionsTable.status, "active")))
+      .orderBy(desc(changeoverSessionsTable.startedAt));
+
+    res.json(sessions);
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to list operator sessions" });
+  }
+});
+
+router.get("/verification/sessions/:sessionId/progress", requireSessionReadAccess, async (req, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
     if (!Number.isFinite(sessionId)) {
@@ -76,7 +133,7 @@ router.get("/verification/sessions/:sessionId/progress", async (req, res) => {
   }
 });
 
-router.post("/verification/scan", async (req, res) => {
+router.post("/verification/scan", requireOperatorSessionOwnership, async (req, res) => {
   try {
     const sessionId = toNumber(req.body?.sessionId);
     const feederNumber = String(req.body?.feederNumber ?? "").trim();
@@ -126,7 +183,7 @@ router.post("/verification/scan", async (req, res) => {
   }
 });
 
-router.get("/verification/sessions/:sessionId/scans", async (req, res) => {
+router.get("/verification/sessions/:sessionId/scans", requireSessionReadAccess, async (req, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
     if (!Number.isFinite(sessionId)) {
