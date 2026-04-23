@@ -415,3 +415,176 @@ body,
     display: none;
   }
 }
+
+/* ============================================================================
+ * UI MICRO-POLISH — Animations & Effects (Step 11)
+ * ============================================================================ */
+
+/* Progress ring animation on load */
+@keyframes progressRingDraw {
+  from {
+    stroke-dashoffset: var(--ring-circumference, 264);
+  }
+}
+
+.progress-ring {
+  animation: progressRingDraw 1.2s ease-out forwards;
+  transition: stroke-dashoffset 0.6s ease-in-out;
+}
+
+/* Feeder list dot animations */
+@keyframes dotPulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.feeder-dot {
+  animation: dotPulse 2s ease-in-out infinite;
+}
+
+.feeder-dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.feeder-dot:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+.feeder-dot:nth-child(3) {
+  animation-delay: 0.6s;
+}
+
+/* Scanning gradient animation on input */
+@keyframes scanGradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.scan-input-surface:focus {
+  animation: scanGradient 2s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(var(--primary-rgb, 59, 130, 246), 0.1),
+    transparent
+  );
+  background-size: 200% 100%;
+}
+
+/* Error state card border flash red twice */
+@keyframes errorFlashBorder {
+  0%, 100% {
+    border-color: hsl(var(--destructive));
+  }
+  25%, 75% {
+    border-color: transparent;
+  }
+}
+
+.scan-surface.error-state {
+  animation: errorFlashBorder 0.6s ease-out;
+  border-color: hsl(var(--destructive));
+}
+
+/* Confetti animation for completion */
+@keyframes confetti {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+.confetti {
+  animation: confetti 2s ease-out forwards;
+  position: fixed;
+  pointer-events: none;
+}
+
+/* Completion state celebration */
+@keyframes completionPop {
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.completion-celebration {
+  animation: completionPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Input focus animation with subtle glow */
+@keyframes inputGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(var(--primary-rgb, 59, 130, 246), 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(var(--primary-rgb, 59, 130, 246), 0);
+  }
+}
+
+input:focus,
+textarea:focus {
+  animation: inputGlow 1.5s ease-out;
+}
+
+/* Grid/dot background texture */
+.app-noise::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    radial-gradient(
+      circle,
+      rgba(var(--foreground-rgb, 15, 23, 42), 0.03) 1px,
+      transparent 1px
+    );
+  background-size: 20px 20px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.app-noise {
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Dynamic page title effect (handled via JavaScript, but add CSS support) */
+@keyframes titlePulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Scan entry highlight with fade-out */
+.scan-entry-highlight {
+  animation: recentLogHighlight 1.6s ease-out forwards;
+  background-color: rgba(34, 197, 94, 0.1);
+}
