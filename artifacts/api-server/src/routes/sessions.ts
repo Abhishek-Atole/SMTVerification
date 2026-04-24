@@ -346,6 +346,8 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
     let message = "";
     let mpnMatched = false;
     let internalIdMatched = false;
+    let verificationMatch: ReturnType<typeof verifyMPN> | null = null;
+    let expectedMpnValues: string[] = [];
 
     if (isFreeScanMode) {
       // Free Scan Mode: Accept any feeder, no BOM validation
@@ -385,9 +387,9 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
         scanStatus = "reject";
         message = `❌ FEEDER NOT FOUND: ${normalizedFeeder} NOT in BOM — REJECTED`;
       } else {
-        const expectedMpnValues = buildExpectedMpnValues(selectedItem);
+        expectedMpnValues = buildExpectedMpnValues(selectedItem);
         const hasExpectedMpn = expectedMpnValues.length > 0;
-        const verificationMatch = normalizedMpnId ? verifyMPN(normalizedMpnId, selectedItem) : null;
+        verificationMatch = normalizedMpnId ? verifyMPN(normalizedMpnId, selectedItem) : null;
 
         // Step 2: Validate MPN/Internal ID using strict exact matching only
         if (normalizedMpnId) {
@@ -719,16 +721,117 @@ router.get("/sessions/:sessionId/summary", async (req, res) => {
 router.get("/sessions/:sessionId/report", async (req, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
+    const changeoverJoinResult = await db.execute(sql`
+      SELECT
+        cs.id,
+        cs.started_at AS "startedAt",
+        cs.completed_at AS "completedAt",
+        cs.status,
+        COALESCE(to_jsonb(cs)->>'verification_mode', 'manual') AS "verificationMode",
+        COALESCE(to_jsonb(bh)->>'panel_id', bh.name) AS "panelId",
+        to_jsonb(bh)->>'shift' AS shift,
+        to_jsonb(bh)->>'customer' AS customer,
+        to_jsonb(bh)->>'machine' AS machine,
+        COALESCE(to_jsonb(bh)->>'pcb_part_number', to_jsonb(bh)->>'pcbPartNumber') AS "pcbPartNumber",
+        to_jsonb(bh)->>'line' AS line,
+        COALESCE(to_jsonb(bh)->>'bom_version', bh.name) AS "bomVersion",
+        operator_user.display_name AS "operatorName",
+        qa_user.display_name AS "qaName",
+        supervisor_user.display_name AS "supervisorName",
+        fs.feeder_number AS "feederNumber",
+        fs.scanned_value AS "scannedValue",
+        fs.matched_field AS "matchedField",
+        fs.matched_make AS "matchedMake",
+        fs.lot_code AS "lotCode",
+        fs.status::text AS "scanStatus",
+        fs.scanned_at AS "scannedAt",
+        bi.reference_location AS "referenceLocation",
+        bi.description,
+        bi.package_description AS "packageDescription",
+        bi.internal_part_number AS "internalPartNumber",
+        bi.make_1 AS make1,
+        bi.mpn_1 AS mpn1,
+        bi.make_2 AS make2,
+        bi.mpn_2 AS mpn2,
+        bi.make_3 AS make3,
+        bi.mpn_3 AS mpn3
+      FROM changeover_sessions cs
+      LEFT JOIN boms bh ON cs.bom_id = bh.id
+      LEFT JOIN users operator_user ON cs.operator_id = operator_user.id
+      LEFT JOIN users qa_user ON qa_user.id = NULLIF(to_jsonb(cs)->>'qa_id', '')::int
+      LEFT JOIN users supervisor_user ON supervisor_user.id = NULLIF(to_jsonb(cs)->>'supervisor_id', '')::int
+      LEFT JOIN feeder_scans fs ON fs.session_id = cs.id
+      LEFT JOIN bom_items bi ON bi.feeder_number = fs.feeder_number AND bi.bom_id = cs.bom_id
+      WHERE cs.id = ${sessionId}
+      ORDER BY fs.scanned_at ASC NULLS LAST
+    `);
+
+    const joinedRows: any[] = Array.isArray(changeoverJoinResult?.rows)
+      ? changeoverJoinResult.rows
+      : (Array.isArray(changeoverJoinResult) ? changeoverJoinResult : []);
+
+    if (joinedRows.length > 0) {
+      const first = joinedRows[0];
+      const scansOnly = joinedRows.filter((r) => r.feederNumber != null);
+      const passCount = scansOnly.filter((r) => String(r.scanStatus).toLowerCase() === "verified").length;
+      const failCount = scansOnly.filter((r) => String(r.scanStatus).toLowerCase() === "failed").length;
+      const warnCount = scansOnly.filter((r) => String(r.scanStatus).toLowerCase() === "duplicate").length;
+      const durationMinutes = first.completedAt
+        ? Math.round((new Date(first.completedAt).getTime() - new Date(first.startedAt).getTime()) / 60000)
+        : 0;
+
+      res.json({
+        session: {
+          id: first.id,
+          startedAt: first.startedAt,
+          completedAt: first.completedAt,
+          status: first.status,
+          verificationMode: first.verificationMode,
+          panelId: first.panelId,
+          shift: first.shift,
+          customer: first.customer,
+          machine: first.machine,
+          pcbPartNumber: first.pcbPartNumber,
+          line: first.line,
+          bomVersion: first.bomVersion,
+          operatorName: first.operatorName,
+          qaName: first.qaName,
+          supervisorName: first.supervisorName,
+          durationMinutes,
+        },
+        summary: {
+          sessionId,
+          totalBomItems: scansOnly.length,
+          scannedCount: scansOnly.length,
+          okCount: passCount,
+          rejectCount: failCount,
+          warningCount: warnCount,
+          missingCount: 0,
+          completionPercent: scansOnly.length > 0 ? Math.round((passCount / scansOnly.length) * 100) : 0,
+          durationMinutes,
+        },
+        reportRows: scansOnly,
+      });
+      return;
+    }
+
     const sessions = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
     const [session] = sessions;
-    
+
     if (!session) {
       res.status(404).json({ error: "Session not found" });
       return;
     }
 
-    const scans = await db.select().from(scanRecordsTable).where(eq(scanRecordsTable.sessionId, sessionId)).orderBy(scanRecordsTable.scannedAt);
-    const bomItems = await db.select().from(bomItemsTable).where(eq(bomItemsTable.bomId, session.bomId!));
+    const scans = await db
+      .select()
+      .from(scanRecordsTable)
+      .where(eq(scanRecordsTable.sessionId, sessionId))
+      .orderBy(scanRecordsTable.scannedAt);
+    const bomItems = await db
+      .select()
+      .from(bomItemsTable)
+      .where(eq(bomItemsTable.bomId, session.bomId!));
     const boms = await db.select().from(bomsTable).where(eq(bomsTable.id, session.bomId!));
     const [bom] = boms;
 
@@ -742,86 +845,75 @@ router.get("/sessions/:sessionId/report", async (req, res) => {
     const end = session.endTime ? new Date(session.endTime) : new Date();
     const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60000);
 
-    // Map scans to serializable format
-    const mappedScans = scans.map((scan: any) => ({
-      id: scan.id,
-      sessionId: scan.sessionId,
-      feederNumber: scan.feederNumber,
-      spoolBarcode: scan.spoolBarcode,
-      status: scan.status,
-      message: scan.message,
-      scannedAt: scan.scannedAt,
-      processedAt: scan.processedAt,
-    }));
-
-    // Map BOM items to serializable format
-    const mappedBomItems = bomItems.map((item: any) => ({
-      id: item.id,
-      bomId: item.bomId,
-      srNo: item.srNo,
-      feederNumber: item.feederNumber,
-      itemName: item.itemName,
-      rdeplyPartNo: item.rdeplyPartNo,
-      referenceDesignator: item.referenceDesignator,
-      values: item.values,
-      packageDescription: item.packageDescription,
-      dnpParts: item.dnpParts,
-      supplier1: item.supplier1,
-      partNo1: item.partNo1,
-      supplier2: item.supplier2,
-      partNo2: item.partNo2,
-      supplier3: item.supplier3,
-      partNo3: item.partNo3,
-      remarks: item.remarks,
-      partNumber: item.partNumber,
-      feederId: item.feederId,
-      componentId: item.componentId,
-      mpn: item.mpn,
-      manufacturer: item.manufacturer,
-      packageSize: item.packageSize,
-      expectedMpn: item.expectedMpn,
-      description: item.description,
-      location: item.location,
-      quantity: item.quantity,
-      leadTime: item.leadTime,
-      cost: item.cost ? String(item.cost) : null,
-      isAlternate: item.isAlternate,
-      parentItemId: item.parentItemId,
-    }));
-
-    // Map session to serializable format
-    const mappedSession = {
-      id: session.id,
-      bomId: session.bomId,
-      bomName: bom?.name ?? "",
-      machineId: session.machineId,
-      machineName: session.machineName,
-      operatorName: session.operatorName,
-      supervisorName: session.supervisorName,
-      qaOfficerName: session.qaOfficerName,
-      productionLineId: session.productionLineId,
-      verificationMode: session.verificationMode,
-      startTime: session.startTime,
-      endTime: session.endTime,
-      createdAt: session.createdAt,
-      updatedAt: session.updatedAt,
-      deletedAt: session.deletedAt,
-      scans: mappedScans,
-    };
+    const reportRows = bomItems.map((item: any) => {
+      const feederScan = scans.find((s: any) => s.feederNumber?.trim()?.toUpperCase() === item.feederNumber?.trim()?.toUpperCase());
+      return {
+        id: sessionId,
+        startedAt: session.startTime,
+        completedAt: session.endTime,
+        status: session.status,
+        verificationMode: session.verificationMode ?? "manual",
+        panelId: session.panelName,
+        shift: session.shiftName,
+        customer: session.customerName,
+        machine: session.machineName ?? null,
+        pcbPartNumber: session.panelName,
+        line: session.supervisorName,
+        bomVersion: bom?.name ?? null,
+        operatorName: session.operatorName,
+        qaName: session.qaName ?? null,
+        supervisorName: session.supervisorName,
+        feederNumber: item.feederNumber,
+        scannedValue: feederScan?.spoolBarcode ?? feederScan?.scannedMpn ?? null,
+        matchedField: null,
+        matchedMake: null,
+        lotCode: feederScan?.lotNumber ?? null,
+        scanStatus: feederScan?.status === "ok" ? "verified" : feederScan?.status === "reject" ? "failed" : null,
+        scannedAt: feederScan?.scannedAt ?? null,
+        referenceLocation: item.referenceLocation,
+        description: item.description ?? item.itemName,
+        packageDescription: item.packageDescription,
+        internalPartNumber: item.internalPartNumber,
+        make1: item.make1,
+        mpn1: item.mpn1,
+        make2: item.make2,
+        mpn2: item.mpn2,
+        make3: item.make3,
+        mpn3: item.mpn3,
+      };
+    });
 
     res.json({
-      session: mappedSession,
+      session: {
+        id: session.id,
+        startedAt: session.startTime,
+        completedAt: session.endTime,
+        status: session.status,
+        verificationMode: session.verificationMode ?? "manual",
+        panelId: session.panelName,
+        shift: session.shiftName,
+        customer: session.customerName,
+        machine: session.machineName,
+        pcbPartNumber: session.panelName,
+        line: session.supervisorName,
+        bomVersion: bom?.name ?? null,
+        operatorName: session.operatorName,
+        qaName: session.qaName ?? null,
+        supervisorName: session.supervisorName,
+        durationMinutes,
+      },
       summary: {
         sessionId,
         totalBomItems,
         scannedCount: scans.length,
         okCount,
         rejectCount,
+        warningCount: 0,
         missingCount,
         completionPercent,
         durationMinutes,
       },
-      bomItems: mappedBomItems,
+      reportRows,
     });
   } catch (err) {
     req.log.error(err);

@@ -25,6 +25,41 @@ cd ../../artifacts/api-server
 # Server should be running on http://localhost:3000
 ```
 
+### Company Logo
+
+Configure the report branding values in `.env`:
+
+```bash
+COMPANY_NAME=UCAL Fuel Systems Limited
+COMPANY_LOGO_PATH=./assets/company-logo.png
+```
+
+For frontend PDF rendering, place the logo file at:
+
+```text
+artifacts/feeder-scanner/public/assets/company-logo.png
+```
+
+## Default User Accounts
+
+Run once after database migration:
+
+```bash
+pnpm --filter @workspace/api-server run seed:users
+```
+
+Default credentials (change after first login in production):
+
+| Username | Password | Role |
+|---|---|---|
+| operator1 | Operator@123 | operator |
+| operator2 | Operator@123 | operator |
+| qa1 | QA@123456 | qa |
+| engineer1 | Engineer@123 | engineer |
+
+IMPORTANT: Change all default passwords before production deployment.
+Use POST /api/auth/change-password after first login.
+
 ---
 
 ## 🎯 First Steps
