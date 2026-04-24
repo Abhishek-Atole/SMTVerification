@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -23,6 +24,29 @@ const cspDirectives = [
   "base-uri 'self'",
   "form-action 'self'",
 ].join("; ");
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many login attempts. Try again in 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const scanLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: "Scan rate limit exceeded." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 app.use(
   pinoHttp({
@@ -76,8 +100,12 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "10kb" }));
+app.use(express.urlencoded({ extended: true, limit: "10kb" }));
+
+app.use("/api/auth/login", loginLimiter);
+app.use("/api/verification/scan", scanLimiter);
+app.use("/api/", apiLimiter);
 
 // Root route - explains API structure
 app.get("/", (req, res) => {
