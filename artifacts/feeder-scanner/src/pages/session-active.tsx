@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import {
