@@ -51,10 +51,16 @@ function formatDateTime(value: unknown): string {
 }
 
 function getColWidths(pageWidth: number): Record<number, { cellWidth: number }> {
-  const usable = pageWidth - 20;
-  const ratios = [0.09, 0.09, 0.15, 0.09, 0.13, 0.17, 0.11, 0.07, 0.06, 0.04, 0.1];
+  const margin = 10;
+  const usable = pageWidth - margin * 2;
+  // Normalized ratios that sum to 1.0 for 11 columns
+  const ratios = [0.08, 0.08, 0.13, 0.08, 0.12, 0.15, 0.10, 0.07, 0.05, 0.04, 0.10];
+  const total = ratios.reduce((a, b) => a + b, 0);
+  
   return ratios.reduce((acc, ratio, index) => {
-    acc[index] = { cellWidth: Math.round(usable * ratio * 100) / 100 };
+    const normalized = ratio / total;
+    const width = usable * normalized;
+    acc[index] = { cellWidth: Math.round(width * 100) / 100 };
     return acc;
   }, {} as Record<number, { cellWidth: number }>);
 }
