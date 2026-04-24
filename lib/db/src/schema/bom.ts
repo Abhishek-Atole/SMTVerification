@@ -24,6 +24,8 @@ export const bomItemsTable = pgTable(
     itemName: text("item_name").notNull(),
     rdeplyPartNo: text("rdeply_part_no"),
     referenceDesignator: text("reference_designator"),
+    requiredQty: text("required_qty"),
+    referenceLocation: text("reference_location"),
     
     // CSV Fields - Optional
     values: text("values"),
@@ -35,6 +37,12 @@ export const bomItemsTable = pgTable(
     partNo2: text("part_no_2"),
     supplier3: text("supplier_3"),
     partNo3: text("part_no_3"),
+    make1: text("make_1"),
+    mpn1: text("mpn_1"),
+    make2: text("make_2"),
+    mpn2: text("mpn_2"),
+    make3: text("make_3"),
+    mpn3: text("mpn_3"),
     remarks: text("remarks"),
     
     // Legacy Fields (for backward compatibility)
