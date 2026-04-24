@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { changeoverSessionsTable, feederScansTable } from "@workspace/db/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { getSessionProgress, verifyFeederScan } from "../services/verificationService";
 import {
   attachActor,
@@ -155,9 +155,13 @@ router.post("/verification/scan", requireOperatorSessionOwnership, async (req, r
       return;
     }
 
-    const verifyResult = await verifyFeederScan(feederNumber, scannedValue, sessionId);
+    let verifyResult: Awaited<ReturnType<typeof verifyFeederScan>>;
 
     await db.transaction(async (tx) => {
+      await tx.execute(sql`SELECT 1 FROM changeover_sessions WHERE id = ${sessionId} FOR UPDATE`);
+
+      verifyResult = await verifyFeederScan(feederNumber, scannedValue, sessionId);
+
       await tx.insert(feederScansTable).values({
         sessionId,
         feederNumber: verifyResult.feederNumber,
@@ -165,10 +169,15 @@ router.post("/verification/scan", requireOperatorSessionOwnership, async (req, r
         matchedField: verifyResult.matchedField,
         matchedMake: verifyResult.matchedMake,
         lotCode,
-        status: verifyResult.valid ? "verified" : "failed",
+        status: verifyResult.valid ? "verified" : verifyResult.errorCode === "ALREADY_SCANNED" ? "duplicate" : "failed",
         operatorId: session.operatorId,
       });
     });
+
+    if (!verifyResult) {
+      res.status(500).json({ error: "Failed to process feeder scan" });
+      return;
+    }
 
     if (!verifyResult.valid) {
       res.json(verifyResult);

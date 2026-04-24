@@ -1,0 +1,102 @@
+[
+  {
+    "type": "success",
+    "message": "Feeder \"YSM-001\" found in BOM",
+    "details": {
+      "priority": "low",
+      "notificationType": "success"
+    },
+    "id": "moc9uzh1-cewp0l0r",
+    "timestamp": "2026-04-24T02:09:02.485Z"
+  },
+  {
+    "type": "error",
+    "message": "MPN mismatch for feeder YSM-001. ❌ AUTO MODE REJECTED: MPN/PART# 'CC0603KRX7R9BB472' (0% match) does NOT meet 95% threshold. Expected: 'RDSCAP0353 RDSCAP0312 YAGEO'",
+    "details": {
+      "priority": "high",
+      "notificationType": "error"
+    },
+    "id": "moc9v2k2-yo618zmx",
+    "timestamp": "2026-04-24T02:09:06.482Z"
+  },
+  {
+    "type": "error",
+    "message": "MPN mismatch for feeder YSM-001. ❌ AUTO MODE REJECTED: MPN/PART# 'CC0603KRX7R9BB472' (0% match) does NOT meet 95% threshold. Expected: 'RDSCAP0353 RDSCAP0312 YAGEO'",
+    "details": {
+      "priority": "high",
+      "notificationType": "error"
+    },
+    "id": "moc9vxnx-z1def447",
+    "timestamp": "2026-04-24T02:09:46.797Z"
+  },
+  {
+    "type": "error",
+    "message": "MPN mismatch for feeder YSM-001. ❌ AUTO MODE REJECTED: MPN/PART# 'C0603C472K5RACAUTO' (0% match) does NOT meet 95% threshold. Expected: 'RDSCAP0353 RDSCAP0312 YAGEO'",
+    "details": {
+      "priority": "high",
+      "notificationType": "error"
+    },
+    "id": "moc9wksl-jypfddtq",
+    "timestamp": "2026-04-24T02:10:16.773Z"
+  },
+  {
+    "type": "error",
+    "message": "MPN mismatch for feeder YSM-001. ❌ AUTO MODE REJECTED: MPN/PART# 'C0603C472K5RACAUTO' (0% match) does NOT meet 95% threshold. Expected: 'RDSCAP0353 RDSCAP0312 YAGEO'",
+    "details": {
+      "priority": "high",
+      "notificationType": "error"
+    },
+    "id": "moc9x8ot-s6v4f5sq",
+    "timestamp": "2026-04-24T02:10:47.741Z"
+  },
+  {
+    "type": "error",
+    "message": "MPN mismatch for feeder YSM-001. ❌ AUTO MODE REJECTED: MPN/PART# 'C0603C472K5RACAUTO' (0% match) does NOT meet 95% threshold. Expected: 'RDSCAP0353 RDSCAP0312 YAGEO'",
+    "details": {
+      "priority": "high",
+      "notificationType": "error"
+    },
+    "id": "moc9xfr5-bjiz3gco",
+    "timestamp": "2026-04-24T02:10:56.897Z"
+  },
+  {
+    "type": "success",
+    "message": "MPN matched successfully for feeder YSM-001.",
+    "details": {
+      "priority": "low",
+      "notificationType": "success"
+    },
+    "id": "moc9xop2-a0fn7adt",
+    "timestamp": "2026-04-24T02:11:08.486Z"
+  },
+  {
+    "type": "error",
+    "message": "Feeder \"YSM-001\" has already been successfully scanned and verified.\n\nTo re-scan, please reject the existing scan first.",
+    "details": {
+      "priority": "medium",
+      "notificationType": "duplicate"
+    },
+    "id": "moca0zwm-38ov5hk3",
+    "timestamp": "2026-04-24T02:13:42.982Z"
+  },
+  {
+    "type": "success",
+    "message": "Feeder \"YSM-002\" found in BOM",
+    "details": {
+      "priority": "low",
+      "notificationType": "success"
+    },
+    "id": "moca145p-o9h4o4pi",
+    "timestamp": "2026-04-24T02:13:48.493Z"
+  },
+  {
+    "type": "success",
+    "message": "MPN matched successfully for feeder YSM-002.",
+    "details": {
+      "priority": "low",
+      "notificationType": "success"
+    },
+    "id": "moca1ymn-jw3rr7ts",
+    "timestamp": "2026-04-24T02:14:27.983Z"
+  }
+]

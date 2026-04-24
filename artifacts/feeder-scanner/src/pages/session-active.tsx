@@ -20,6 +20,7 @@ import { useNotification as useToastNotification } from "@/components/Notificati
 import { useScanner } from "@/hooks/useScanner";
 import { ScanNotification } from "@/components/notifications/ScanNotification";
 import { LogPanel } from "@/components/LogPanel";
+import { useAuth } from "@/context/auth-context";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -73,6 +74,7 @@ export default function SessionActive() {
   const sessionId = Number(params?.id);
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   // Use the new notification system with buzzer sounds
   const {
@@ -670,6 +672,7 @@ export default function SessionActive() {
         sessionId,
         data: {
           feederNumber: splicePendingFeeder,
+          operatorId: user?.name || "unknown",
           oldSpoolBarcode: splicePendingOldSpool,
           newSpoolBarcode: val,
           durationSeconds,

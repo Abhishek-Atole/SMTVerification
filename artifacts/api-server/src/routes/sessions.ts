@@ -3,10 +3,69 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { sessionsTable, scanRecordsTable, spliceRecordsTable, bomItemsTable, bomsTable, auditLogsTable } from "@workspace/db/schema";
 import { eq, and, sql, isNull, isNotNull } from "drizzle-orm";
-import { ValidationService } from "../services/validation-service";
 import { TimestampService } from "../services/timestamp-service";
 
 const router: IRouter = Router();
+
+type BomRowForMPN = {
+  internalPartNumber?: string | null;
+  mpn1?: string | null;
+  mpn2?: string | null;
+  mpn3?: string | null;
+  make1?: string | null;
+  make2?: string | null;
+  make3?: string | null;
+};
+
+type MatchResult = {
+  matchedField: "internalPartNumber" | "mpn1" | "mpn2" | "mpn3";
+  matchedMake: string | null;
+} | null;
+
+function normalizeExact(value: string | null | undefined): string {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function tokenizeInternalPartNumber(value: string | null | undefined): string[] {
+  return String(value ?? "")
+    .split(/\s+/)
+    .map((token) => token.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function verifyMPN(scanned: string, bomRow: BomRowForMPN): MatchResult {
+  const s = scanned.trim().toUpperCase();
+
+  const internalTokens = tokenizeInternalPartNumber(bomRow.internalPartNumber);
+  if (internalTokens.includes(s)) {
+    return { matchedField: "internalPartNumber", matchedMake: null };
+  }
+
+  if (normalizeExact(bomRow.mpn1) === s) {
+    return { matchedField: "mpn1", matchedMake: bomRow.make1 ?? null };
+  }
+
+  if (normalizeExact(bomRow.mpn2) === s) {
+    return { matchedField: "mpn2", matchedMake: bomRow.make2 ?? null };
+  }
+
+  if (normalizeExact(bomRow.mpn3) === s) {
+    return { matchedField: "mpn3", matchedMake: bomRow.make3 ?? null };
+  }
+
+  return null;
+}
+
+function buildExpectedMpnValues(bomRow: BomRowForMPN): string[] {
+  const values = [
+    ...tokenizeInternalPartNumber(bomRow.internalPartNumber),
+    normalizeExact(bomRow.mpn1),
+    normalizeExact(bomRow.mpn2),
+    normalizeExact(bomRow.mpn3),
+  ].filter(Boolean);
+
+  return Array.from(new Set(values));
+}
 
 // Static routes
 router.get("/sessions", async (req, res) => {
@@ -287,10 +346,6 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
     let message = "";
     let mpnMatched = false;
     let internalIdMatched = false;
-    let fuzzyMatchResult: any = { score: 0, matches: false };
-    let matchingAlgorithm = "exact";
-    let expectedValue = "";
-    let suggestions: any[] = [];
 
     if (isFreeScanMode) {
       // Free Scan Mode: Accept any feeder, no BOM validation
@@ -330,106 +385,25 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
         scanStatus = "reject";
         message = `❌ FEEDER NOT FOUND: ${normalizedFeeder} NOT in BOM — REJECTED`;
       } else {
-        const expectedMpn =
-          selectedItem.expectedMpn?.trim().toUpperCase() ||
-          selectedItem.mpn?.trim().toUpperCase() ||
-          "";
-        const expectedPartNumber = selectedItem.partNumber?.trim().toUpperCase() || "";
-        const expectedInternalId = selectedItem.internalId?.trim().toUpperCase() || "";
+        const expectedMpnValues = buildExpectedMpnValues(selectedItem);
+        const hasExpectedMpn = expectedMpnValues.length > 0;
+        const verificationMatch = normalizedMpnId ? verifyMPN(normalizedMpnId, selectedItem) : null;
 
-        // Check if BOM item has expected validation requirements
-        const hasExpectedMpn = !!expectedMpn;
-        const hasExpectedPartNumber = !!expectedPartNumber;
-        const hasExpectedInternalId = !!expectedInternalId;
-
-        // Step 2: Validate MPN/Internal ID based on what's provided and required
+        // Step 2: Validate MPN/Internal ID using strict exact matching only
         if (normalizedMpnId) {
-          // User provided an MPN or Internal ID
-          let userInputMatches = false;
-          
-          if (internalIdType === "mpn") {
-            // User provided an MPN - compare to BOTH expectedMpn AND partNumber with fuzzy matching
-            // Try matching against MPN first
-            if (hasExpectedMpn && expectedMpn) {
-              fuzzyMatchResult = ValidationService.fuzzyMatchValue(
-                normalizedMpnId,
-                expectedMpn,
-                0.95 // 95% threshold
-              );
-              if (fuzzyMatchResult.matches) {
-                userInputMatches = true;
-                expectedValue = expectedMpn;
-                matchingAlgorithm = fuzzyMatchResult.score === 100 ? "exact" : "fuzzy";
-                if (fuzzyMatchResult.suggestions && fuzzyMatchResult.suggestions.length > 0) {
-                  suggestions = fuzzyMatchResult.suggestions;
-                }
-              }
-            }
-            
-            // If MPN didn't match, try matching against Part Number as alternative
-            if (!userInputMatches && hasExpectedPartNumber && expectedPartNumber) {
-              fuzzyMatchResult = ValidationService.fuzzyMatchValue(
-                normalizedMpnId,
-                expectedPartNumber,
-                0.95 // 95% threshold
-              );
-              if (fuzzyMatchResult.matches) {
-                userInputMatches = true;
-                expectedValue = expectedPartNumber;
-                matchingAlgorithm = fuzzyMatchResult.score === 100 ? "exact" : "fuzzy";
-                if (fuzzyMatchResult.suggestions && fuzzyMatchResult.suggestions.length > 0) {
-                  suggestions = fuzzyMatchResult.suggestions;
-                }
-              }
-            }
-            
-            // If no matches found but we have expected values, track best score for error message
-            if (!userInputMatches && (hasExpectedMpn || hasExpectedPartNumber)) {
-              // Keep the last fuzzy result for error message
-              if (!expectedValue) {
-                expectedValue = expectedMpn || expectedPartNumber || "";
-              }
-            }
-            
-            // If no expected values at all, accept as provided
-            if (!userInputMatches && !hasExpectedMpn && !hasExpectedPartNumber) {
-              userInputMatches = true;
-            }
-            
-            mpnMatched = userInputMatches;
-          } else if (internalIdType === "internal_id") {
-            // User provided an Internal ID - compare to expectedInternalId with fuzzy matching
-            expectedValue = expectedInternalId || "";
-            if (hasExpectedInternalId && expectedInternalId) {
-              // Use fuzzy matching instead of exact match
-              fuzzyMatchResult = ValidationService.fuzzyMatchValue(
-                normalizedMpnId,
-                expectedInternalId,
-                0.95 // 95% threshold
-              );
-              userInputMatches = fuzzyMatchResult.matches;
-              matchingAlgorithm = fuzzyMatchResult.score === 100 ? "exact" : "fuzzy";
-              if (fuzzyMatchResult.suggestions && fuzzyMatchResult.suggestions.length > 0) {
-                suggestions = fuzzyMatchResult.suggestions;
-              }
-            } else {
-              // No fuzzy match needed, accept as provided
-              userInputMatches = true;
-            }
-            internalIdMatched = userInputMatches;
-          }
+          mpnMatched = verificationMatch !== null;
+          internalIdMatched = verificationMatch?.matchedField === "internalPartNumber";
 
           // Determine scan status based on mode
           if (verificationMode === "auto") {
             // AUTO mode: MUST match if BOM has expected value
-            if (hasExpectedMpn || hasExpectedPartNumber || hasExpectedInternalId) {
-              if (!userInputMatches) {
+            if (hasExpectedMpn) {
+              if (!verificationMatch) {
                 scanStatus = "reject";
-                message = `❌ AUTO MODE REJECTED: ${internalIdType === "mpn" ? "MPN/PART#" : "Internal ID"} '${normalizedMpnId}' (${fuzzyMatchResult.score}% match) does NOT meet 95% threshold. Expected: '${expectedValue}'${suggestions.length > 0 ? ` — Did you mean: ${suggestions.join(", ")}?` : ""}`;
+                message = `❌ MPN mismatch for feeder ${normalizedFeeder}.\nScanned: ${normalizedMpnId}\nExpected one of: ${expectedMpnValues.join(" | ")}`;
               } else {
                 scanStatus = "ok";
-                const matchType = matchingAlgorithm === "exact" ? "VERIFIED (EXACT)" : `VERIFIED (${fuzzyMatchResult.score}% MATCH)`;
-                message = `✅ ${matchType}: Feeder ${normalizedFeeder} with ${internalIdType} ${normalizedMpnId} PASSED validation`;
+                message = `✅ VERIFIED (EXACT): Feeder ${normalizedFeeder} with ${internalIdType} ${normalizedMpnId} PASSED validation`;
               }
             } else {
               // BOM doesn't require validation, but user provided value - accept it
@@ -437,16 +411,15 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
               message = `✅ Feeder ${normalizedFeeder} with ${internalIdType} ${normalizedMpnId} ACCEPTED`;
             }
           } else if (verificationMode === "manual") {
-            // MANUAL mode: Strict validation - REJECT if provided MPN doesn't meet threshold
-            if (userInputMatches) {
+            // MANUAL mode: Strict exact validation
+            if (verificationMatch) {
               scanStatus = "ok";
-              const matchType = matchingAlgorithm === "exact" ? "VERIFIED (EXACT)" : `VERIFIED (${fuzzyMatchResult.score}% MATCH)`;
-              message = `✅ ${matchType}: Feeder ${normalizedFeeder} with ${internalIdType} ${normalizedMpnId} PASSED`;
+              message = `✅ VERIFIED (EXACT): Feeder ${normalizedFeeder} with ${internalIdType} ${normalizedMpnId} PASSED`;
             } else {
               // STRICT: Reject if user provided insufficient/incorrect MPN/ID but BOM requires validation
-              if (hasExpectedMpn || hasExpectedPartNumber || hasExpectedInternalId) {
+              if (hasExpectedMpn) {
                 scanStatus = "reject";
-                message = `❌ VALIDATION FAILED: Feeder ${normalizedFeeder} - ${internalIdType === "mpn" ? "MPN/PART#" : "Internal ID"} '${normalizedMpnId}' (${fuzzyMatchResult.score}% match) does NOT meet 95% threshold. Expected: '${expectedValue}'${suggestions.length > 0 ? ` — Did you mean: ${suggestions.join(", ")}?` : ""}`;
+                message = `❌ MPN mismatch for feeder ${normalizedFeeder}.\nScanned: ${normalizedMpnId}\nExpected one of: ${expectedMpnValues.join(" | ")}`;
               } else {
                 // BOM doesn't require validation, so accept the provided value
                 scanStatus = "ok";
@@ -456,20 +429,11 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
           }
         } else {
           // No MPN/Internal ID provided - check if validation was required
-          if (hasExpectedMpn || hasExpectedPartNumber || hasExpectedInternalId) {
+          if (hasExpectedMpn) {
             // BOM requires validation but user didn't provide it
-            if (verificationMode === "auto") {
-              // AUTO mode: REJECT if required but not provided
+            if (verificationMode === "auto" || verificationMode === "manual") {
               scanStatus = "reject";
-              const expectedLabel = (hasExpectedMpn || hasExpectedPartNumber) ? "MPN/PART#" : "Internal ID";
-              const expectedVal = expectedMpn || expectedPartNumber || expectedInternalId;
-              message = `❌ AUTO MODE REJECTED: ${expectedLabel} REQUIRED for feeder ${normalizedFeeder} but not provided. Expected: ${expectedVal}`;
-            } else if (verificationMode === "manual") {
-              // MANUAL mode: also enforce required validation input
-              scanStatus = "reject";
-              const expectedLabel = (hasExpectedMpn || hasExpectedPartNumber) ? "MPN/PART#" : "Internal ID";
-              const expectedVal = expectedMpn || expectedPartNumber || expectedInternalId;
-              message = `❌ MANUAL MODE REJECTED: ${expectedLabel} REQUIRED for feeder ${normalizedFeeder} but not provided. Expected: ${expectedVal}`;
+              message = `❌ MPN mismatch for feeder ${normalizedFeeder}.\nScanned: ${normalizedMpnId ?? ""}\nExpected one of: ${expectedMpnValues.join(" | ")}`;
             }
           } else {
             // No expected validation in BOM for this feeder - accept as is
@@ -494,10 +458,10 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
         description: selectedItem?.description ?? null,
         location: selectedItem?.location ?? null,
         verificationMode: verificationMode,
-        matchScore: fuzzyMatchResult.score > 0 ? fuzzyMatchResult.score : null,
-        matchingAlgorithm: matchingAlgorithm,
-        expectedValue: expectedValue || null,
-        suggestions: suggestions.length > 0 ? JSON.stringify(suggestions) : null,
+        matchScore: verificationMatch ? 100 : null,
+        matchingAlgorithm: verificationMatch ? "exact" : null,
+        expectedValue: expectedMpnValues.length > 0 ? expectedMpnValues.join(" | ") : null,
+        suggestions: null,
         scannedAt: TimestampService.createScanTimestamp(),
       })
       .returning();
@@ -599,10 +563,10 @@ router.get("/sessions/:sessionId/splices", async (req, res) => {
 router.post("/sessions/:sessionId/splices", async (req, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
-    const { feederNumber, oldSpoolBarcode, newSpoolBarcode, durationSeconds } = req.body;
+    const { feederNumber, operatorId, oldSpoolBarcode, newSpoolBarcode, durationSeconds } = req.body;
 
-    if (!feederNumber || !oldSpoolBarcode || !newSpoolBarcode) {
-      res.status(400).json({ error: "feederNumber, oldSpoolBarcode, and newSpoolBarcode are required" });
+    if (!feederNumber || !operatorId || !oldSpoolBarcode || !newSpoolBarcode) {
+      res.status(400).json({ error: "feederNumber, operatorId, oldSpoolBarcode, and newSpoolBarcode are required" });
       return;
     }
 
@@ -658,6 +622,9 @@ router.post("/sessions/:sessionId/splices", async (req, res) => {
       .values({
         sessionId,
         feederNumber: normalizedFeeder,
+        operatorId: operatorId.trim(),
+        oldMpn: oldSpoolBarcode.trim(),
+        newMpn: newSpoolBarcode.trim(),
         oldSpoolBarcode: oldSpoolBarcode.trim(),
         newSpoolBarcode: newSpoolBarcode.trim(),
         durationSeconds: durationSeconds ?? null,

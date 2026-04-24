@@ -607,6 +607,8 @@ components:
           type: integer
         feederNumber:
           type: string
+        operatorId:
+          type: string
         oldSpoolBarcode:
           type: string
         newSpoolBarcode:
@@ -616,12 +618,14 @@ components:
           format: date-time
         durationSeconds:
           type: integer
-      required: [id, sessionId, feederNumber, oldSpoolBarcode, newSpoolBarcode, splicedAt]
+      required: [id, sessionId, feederNumber, operatorId, oldSpoolBarcode, newSpoolBarcode, splicedAt]
 
     CreateSpliceRequest:
       type: object
       properties:
         feederNumber:
+          type: string
+        operatorId:
           type: string
         oldSpoolBarcode:
           type: string
@@ -629,7 +633,7 @@ components:
           type: string
         durationSeconds:
           type: integer
-      required: [feederNumber, oldSpoolBarcode, newSpoolBarcode]
+      required: [feederNumber, operatorId, oldSpoolBarcode, newSpoolBarcode]
 
     CreateSessionRequest:
       type: object

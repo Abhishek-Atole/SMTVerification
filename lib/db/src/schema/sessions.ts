@@ -2,10 +2,9 @@ import { pgTable, serial, text, integer, timestamp, boolean, index, pgEnum } fro
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { bomsTable } from "./bom";
-import { usersTable } from "./users";
 
 export const changeoverSessionStatusEnum = pgEnum("changeover_session_status", ["active", "completed", "cancelled"]);
-export const feederScanStatusEnum = pgEnum("feeder_scan_status", ["verified", "failed"]);
+export const feederScanStatusEnum = pgEnum("feeder_scan_status", ["verified", "failed", "duplicate"]);
 
 export const sessionsTable = pgTable("sessions", {
   id: serial("id").primaryKey(),
@@ -71,6 +70,9 @@ export const spliceRecordsTable = pgTable("splice_records", {
     .notNull()
     .references(() => sessionsTable.id, { onDelete: "cascade" }),
   feederNumber: text("feeder_number").notNull(),
+  operatorId: text("operator_id").notNull(),
+  oldMpn: text("old_mpn"),
+  newMpn: text("new_mpn"),
   oldSpoolBarcode: text("old_spool_barcode").notNull(),
   newSpoolBarcode: text("new_spool_barcode").notNull(),
   durationSeconds: integer("duration_seconds"),

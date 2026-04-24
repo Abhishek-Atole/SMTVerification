@@ -26,6 +26,7 @@ export const bomItemsTable = pgTable(
     referenceDesignator: text("reference_designator"),
     requiredQty: text("required_qty"),
     referenceLocation: text("reference_location"),
+    internalPartNumber: text("internal_part_number"),
     
     // CSV Fields - Optional
     values: text("values"),
