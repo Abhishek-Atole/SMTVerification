@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import router from "./routes";
@@ -49,6 +50,13 @@ const apiLimiter = rateLimit({
 });
 
 app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }),
+);
+
+app.use(
   pinoHttp({
     logger,
     serializers: {
@@ -91,11 +99,8 @@ app.use(
   }),
 );
 
-// Security headers (but allow Chrome DevTools probes in development)
+// Custom CSP policy (managed separately from Helmet)
 app.use((req, res, next) => {
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("X-XSS-Protection", "1; mode=block");
   res.setHeader("Content-Security-Policy", cspDirectives);
   next();
 });
