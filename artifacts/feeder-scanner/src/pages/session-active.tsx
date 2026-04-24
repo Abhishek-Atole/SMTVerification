@@ -272,6 +272,23 @@ export default function SessionActive() {
     };
   }, [autoAdvanceTimer]);
 
+  // AUTO MODE: Auto-submit when user scans MPN at spool step (no ENTER required)
+  useEffect(() => {
+    if (verificationMode !== "auto" || scanStep !== "spool" || !scanInput.trim()) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      const val = scanInput.trim();
+      if (val && !verificationInProgress) {
+        // Auto-submit the scanned MPN in auto mode
+        handleScanBarcode(val);
+      }
+    }, 100); // Small debounce to capture full scan
+
+    return () => clearTimeout(timer);
+  }, [scanInput, verificationMode, scanStep, verificationInProgress]);
+
   useEffect(() => {
     if (session?.startTime) {
       const start = new Date(session.startTime);
@@ -406,6 +423,13 @@ export default function SessionActive() {
   };
 
   function handleScanBarcode(val: string) {
+    // In auto mode at spool: allow empty val to skip MPN (auto-advance)
+    if (verificationMode === "auto" && scanStep === "spool" && !val) {
+      // Skip MPN scan in auto mode - auto-submit with no MPN value
+      handleAutoModeSubmit("", undefined);
+      return;
+    }
+
     if (!val) {
       return;
     }
@@ -529,6 +553,13 @@ export default function SessionActive() {
   const handleScanSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const val = scanInput.trim();
+    
+    // In auto mode at spool step with empty ENTER: auto-skip (advance without MPN)
+    if (verificationMode === "auto" && scanStep === "spool" && !val) {
+      handleScanBarcode(""); // Empty val auto-advances in auto mode
+      return;
+    }
+    
     if (!val) {
       return;
     }
