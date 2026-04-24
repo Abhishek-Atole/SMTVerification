@@ -16,6 +16,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlternateSelector } from "@/components/alternate-selector";
 import { useNotification } from "@/hooks/use-notification";
+import { useNotification as useToastNotification } from "@/components/NotificationSystem";
 import { useScanner } from "@/hooks/useScanner";
 import { ScanNotification } from "@/components/notifications/ScanNotification";
 import { LogPanel } from "@/components/LogPanel";
@@ -78,11 +79,11 @@ export default function SessionActive() {
     notifications,
     showAlert,
     showErrorAlert,
-    showDuplicateAlert,
     showWarningAlert,
     showSuccessAlert,
     dismissNotification,
   } = useNotification();
+  const notify = useToastNotification();
 
   const { data: session, isLoading: sessionLoading } = useGetSession(sessionId, {
     query: { enabled: !!sessionId, queryKey: getGetSessionQueryKey(sessionId) },
@@ -281,7 +282,7 @@ export default function SessionActive() {
     }
   }, [session?.startTime, session?.endTime]);
 
-  // Show notification for errors and duplicates
+  // Show notification for errors
   useEffect(() => {
     if (lastScanResult && lastScanResult.status === "reject") {
       const signature = `${lastScanResult.feeder}::${lastScanResult.msg}`;
@@ -291,15 +292,13 @@ export default function SessionActive() {
       lastNotifiedRef.current = signature;
 
       const msgLower = lastScanResult.msg.toLowerCase();
-      if (msgLower.includes("duplicate") || msgLower.includes("already") || msgLower.includes("violation")) {
-        showDuplicateAlert(lastScanResult.msg);
-      } else if (msgLower.includes("error") || msgLower.includes("failed")) {
+      if (msgLower.includes("error") || msgLower.includes("failed")) {
         showErrorAlert(lastScanResult.msg);
       } else if (msgLower.includes("warning")) {
         showWarningAlert(lastScanResult.msg);
       }
     }
-  }, [lastScanResult, showDuplicateAlert, showErrorAlert, showWarningAlert]);
+  }, [lastScanResult, showErrorAlert, showWarningAlert]);
 
   const flashBg = (status: "ok" | "reject" | "splice") => {
     const bg = document.getElementById("scan-flash-bg");
@@ -447,8 +446,11 @@ export default function SessionActive() {
         setScanInput("");
         setIsDuplicate(true);
         lastNotifiedRef.current = `${normalizedFeederNumber}::⚠️ DUPLICATE: Feeder "${normalizedFeederNumber}" already verified`;
-        showDuplicateAlert(
-          `Feeder "${normalizedFeederNumber}" has already been successfully scanned and verified.\n\nTo re-scan, please reject the existing scan first.`
+        notify(
+          "duplicate",
+          `Feeder "${normalizedFeederNumber}" has already been verified.`,
+          "To re-scan, reject the existing scan first.",
+          () => focusNextFrame(inputRef)
         );
         return; // Block duplicate scan
       }

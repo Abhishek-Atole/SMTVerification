@@ -2,7 +2,16 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, Info, TriangleAlert, XCircle, X } from "lucide-react";
 
-type NotificationType = "success" | "error" | "warning" | "info";
+type NotificationType = "success" | "error" | "warning" | "info" | "duplicate";
+
+type NotifyFn = {
+  (type: NotificationType, message: string, details?: string, onDismiss?: () => void): void;
+  success: (message: string, details?: string) => void;
+  error: (message: string, details?: string, onDismiss?: () => void) => void;
+  warning: (message: string, details?: string) => void;
+  info: (message: string, details?: string) => void;
+  duplicate: (message: string, details?: string, onDismiss?: () => void) => void;
+};
 
 interface NotificationItem {
   id: string;
@@ -15,28 +24,56 @@ interface NotificationItem {
 }
 
 interface NotificationContextValue {
-  notify: {
-    success: (message: string, details?: string) => void;
-    error: (message: string, details?: string, onDismiss?: () => void) => void;
-    warning: (message: string, details?: string) => void;
-    info: (message: string, details?: string) => void;
-  };
+  notify: NotifyFn;
 }
 
 const NOTIFICATION_LIMIT = 5;
 
-const TYPE_STYLE: Record<NotificationType, { title: string; color: string; Icon: typeof CheckCircle2 }> = {
-  success: { title: "SUCCESS", color: "#16a34a", Icon: CheckCircle2 },
-  error: { title: "ERROR", color: "#dc2626", Icon: XCircle },
-  warning: { title: "WARNING", color: "#d97706", Icon: TriangleAlert },
-  info: { title: "INFO", color: "#2563eb", Icon: Info },
-};
-
-const AUTO_DISMISS_MS: Record<NotificationType, number> = {
-  success: 3000,
-  warning: 4000,
-  error: 10000,
-  info: 5000,
+const TYPE_STYLE: Record<
+  NotificationType,
+  {
+    title: string;
+    bg: string;
+    border: string;
+    icon: ReactNode;
+    autoDismiss: number;
+  }
+> = {
+  success: {
+    title: "SUCCESS",
+    bg: "#dcfce7",
+    border: "#16a34a",
+    icon: <CheckCircle2 className="h-5 w-5" />,
+    autoDismiss: 3000,
+  },
+  error: {
+    title: "ERROR",
+    bg: "#fee2e2",
+    border: "#dc2626",
+    icon: <XCircle className="h-5 w-5" />,
+    autoDismiss: 10000,
+  },
+  warning: {
+    title: "WARNING",
+    bg: "#fef3c7",
+    border: "#d97706",
+    icon: <TriangleAlert className="h-5 w-5" />,
+    autoDismiss: 4000,
+  },
+  info: {
+    title: "INFO",
+    bg: "#dbeafe",
+    border: "#2563eb",
+    icon: <Info className="h-5 w-5" />,
+    autoDismiss: 5000,
+  },
+  duplicate: {
+    title: "Duplicate Scan",
+    bg: "#fef3c7",
+    border: "#d97706",
+    icon: "⚠️",
+    autoDismiss: 8000,
+  },
 };
 
 const NotificationContext = createContext<NotificationContextValue | null>(null);
@@ -77,7 +114,6 @@ function NotificationToast({
   onClose: (id: string) => void;
 }) {
   const style = TYPE_STYLE[item.type];
-  const { Icon } = style;
 
   useEffect(() => {
     if (item.type === "error") {
@@ -92,12 +128,13 @@ function NotificationToast({
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 24 }}
       transition={{ duration: 0.2 }}
-      className="relative w-full max-w-[360px] overflow-hidden rounded-md border bg-card shadow-lg"
+      className="relative w-full max-w-[360px] overflow-hidden rounded-md border shadow-lg"
+      style={{ backgroundColor: style.bg, borderColor: style.border }}
       data-testid={`notification-${item.id}`}
     >
       <div className="flex items-start gap-3 p-3">
-        <div className="mt-0.5" style={{ color: style.color }}>
-          <Icon className="h-5 w-5" />
+        <div className="mt-0.5 text-lg leading-none" style={{ color: style.border }}>
+          {style.icon}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold leading-5">{style.title}</p>
@@ -113,7 +150,7 @@ function NotificationToast({
           <X className="h-4 w-4" />
         </button>
       </div>
-      <div className="h-0.5" style={{ backgroundColor: style.color }} />
+      <div className="h-0.5" style={{ backgroundColor: style.border }} />
     </motion.div>
   );
 }
@@ -144,7 +181,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         message,
         details,
         createdAt: Date.now(),
-        autoDismissMs: AUTO_DISMISS_MS[type],
+        autoDismissMs: TYPE_STYLE[type].autoDismiss,
         onDismiss,
       };
 
@@ -176,14 +213,18 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<NotificationContextValue>(
-    () => ({
-      notify: {
-        success: (message, details) => push("success", message, details),
-        error: (message, details, onDismiss) => push("error", message, details, onDismiss),
-        warning: (message, details) => push("warning", message, details),
-        info: (message, details) => push("info", message, details),
-      },
-    }),
+    () => {
+      const notify = ((type: NotificationType, message: string, details?: string, onDismiss?: () => void) =>
+        push(type, message, details, onDismiss)) as NotifyFn;
+
+      notify.success = (message, details) => push("success", message, details);
+      notify.error = (message, details, onDismiss) => push("error", message, details, onDismiss);
+      notify.warning = (message, details) => push("warning", message, details);
+      notify.info = (message, details) => push("info", message, details);
+      notify.duplicate = (message, details, onDismiss) => push("duplicate", message, details, onDismiss);
+
+      return { notify };
+    },
     [push],
   );
 

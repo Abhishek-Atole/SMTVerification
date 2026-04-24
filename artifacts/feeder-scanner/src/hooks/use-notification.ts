@@ -20,14 +20,13 @@ interface UseNotificationReturn {
   notifications: AlertNotification[];
   showAlert: (
     message: string,
-    type: "error" | "warning" | "success" | "duplicate",
+    type: "error" | "warning" | "success",
     priority?: "critical" | "high" | "medium" | "low",
     title?: string,
     duration?: number
   ) => void;
   showErrorAlert: (message: string, priority?: "critical" | "high" | "medium" | "low") => void;
   showWarningAlert: (message: string, priority?: "critical" | "high" | "medium" | "low") => void;
-  showDuplicateAlert: (message: string) => void;
   showSuccessAlert: (message: string) => void;
   clearNotification: () => void;
   dismissNotification: (id: string) => void;
@@ -64,27 +63,23 @@ export function useNotification(): UseNotificationReturn {
   const showAlert = useCallback(
     (
       message: string,
-      type: "error" | "warning" | "success" | "duplicate" = "warning",
+      type: "error" | "warning" | "success" = "warning",
       priority: "critical" | "high" | "medium" | "low" = "medium",
       title?: string,
       duration: number = 0
     ) => {
-      const mappedType: NotificationPayload["type"] =
-        type === "duplicate" ? "error" : type;
-
       push({
-        type: mappedType,
+        type,
         title: title || getTitleForType(type),
         message,
         autoCloseDuration: duration > 0 ? duration : getDurationForType(type),
       });
 
       addLog({
-        type: mappedType,
+        type,
         message,
         details: {
           priority,
-          notificationType: type,
         },
       });
 
@@ -113,13 +108,6 @@ export function useNotification(): UseNotificationReturn {
     [showAlert]
   );
 
-  const showDuplicateAlert = useCallback(
-    (message: string) => {
-      showAlert(message, "duplicate", "medium", "⚠️ DUPLICATE", 4000);
-    },
-    [showAlert]
-  );
-
   const showSuccessAlert = useCallback(
     (message: string) => {
       showAlert(message, "success", "low", "✓ SUCCESS", 2000);
@@ -143,19 +131,15 @@ export function useNotification(): UseNotificationReturn {
     showAlert,
     showErrorAlert,
     showWarningAlert,
-    showDuplicateAlert,
     showSuccessAlert,
     clearNotification,
     dismissNotification: dismiss,
   };
 }
 
-function getDurationForType(type: "error" | "warning" | "success" | "duplicate") {
+function getDurationForType(type: "error" | "warning" | "success") {
   if (type === "error") {
     return 5000;
-  }
-  if (type === "duplicate") {
-    return 4000;
   }
   if (type === "success") {
     return 2000;
@@ -163,12 +147,9 @@ function getDurationForType(type: "error" | "warning" | "success" | "duplicate")
   return 3000;
 }
 
-function getTitleForType(type: "error" | "warning" | "success" | "duplicate") {
+function getTitleForType(type: "error" | "warning" | "success") {
   if (type === "error") {
     return "❌ ERROR";
-  }
-  if (type === "duplicate") {
-    return "⚠️ DUPLICATE";
   }
   if (type === "success") {
     return "✓ SUCCESS";
