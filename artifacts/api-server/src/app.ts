@@ -9,6 +9,18 @@ import { sql } from "drizzle-orm";
 
 const app: Express = express();
 
+const cspDirectives = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "font-src 'self'",
+  "connect-src 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
 app.use(
   pinoHttp({
     logger,
@@ -57,11 +69,7 @@ app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-XSS-Protection", "1; mode=block");
-  // Allow resources in development: images, scripts, styles, connections
-  res.setHeader(
-    "Content-Security-Policy",
-    "default-src 'self'; connect-src 'self' http: https: ws: wss:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; media-src 'self';"
-  );
+  res.setHeader("Content-Security-Policy", cspDirectives);
   next();
 });
 
@@ -119,10 +127,7 @@ app.use("/api", router);
 
 // 404 handler with proper CSP
 app.use((req, res) => {
-  res.setHeader(
-    "Content-Security-Policy",
-    "default-src 'self'; connect-src 'self' http: https: ws: wss:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
-  );
+  res.setHeader("Content-Security-Policy", cspDirectives);
   res.status(404).json({ error: "Not Found" });
 });
 
@@ -134,10 +139,7 @@ app.use(
     res: express.Response,
     next: express.NextFunction,
   ) => {
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'self'; connect-src 'self' http: https: ws: wss:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
-    );
+    res.setHeader("Content-Security-Policy", cspDirectives);
     logger.error({ err }, "Unhandled error");
     res.status(500).json({ error: "Internal Server Error" });
   },
