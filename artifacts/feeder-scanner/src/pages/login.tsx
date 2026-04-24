@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/auth-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -17,6 +16,8 @@ const NAMES_BY_ROLE: Record<string, string[]> = {
 export default function Login() {
   const [selectedName, setSelectedName] = useState("");
   const [customName, setCustomName] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [role, setRole] = useState<"engineer" | "qa" | "operator" | null>(null);
   const { login } = useAuth();
   const [, setLocation] = useLocation();
@@ -29,13 +30,20 @@ export default function Login() {
     setRole(r);
     setSelectedName("");
     setCustomName("");
+    setPassword("");
+    setError("");
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!finalName || !role) return;
-    login(finalName, role);
-    setLocation("/");
+    try {
+      setError("");
+      await login(finalName, role, password);
+      setLocation("/");
+    } catch {
+      setError("Invalid username, role, or password.");
+    }
   };
 
   return (
@@ -108,10 +116,29 @@ export default function Login() {
               </div>
             )}
 
+            {role && (
+              <div className="space-y-3">
+                <label className="text-sm font-medium" htmlFor="password">
+                  Password
+                </label>
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-12 text-lg"
+                />
+              </div>
+            )}
+
+            {error && <p className="text-sm font-medium text-red-600">{error}</p>}
+
             <Button
               type="submit"
               className="w-full h-12 text-lg font-bold tracking-wide"
-              disabled={!finalName || !role}
+              disabled={!finalName || !role || !password}
             >
               LOGIN
             </Button>

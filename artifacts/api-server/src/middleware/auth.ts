@@ -2,11 +2,15 @@ import type { NextFunction, Request, Response } from "express";
 import { db } from "@workspace/db";
 import { changeoverSessionsTable } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
+import { getAuthActorFromCookie } from "../routes/auth";
 
 export type UserRole = "operator" | "qa" | "engineer";
 
 export interface RequestActor {
+  userId: number;
   id: number;
+  username: string;
+  name: string;
   role: UserRole;
 }
 
@@ -14,39 +18,20 @@ export interface AuthRequest extends Request {
   actor?: RequestActor;
 }
 
-function normalizeRole(value: unknown): UserRole | null {
-  const role = String(value ?? "").trim().toLowerCase();
-  if (role === "operator" || role === "qa" || role === "engineer") {
-    return role;
-  }
-  return null;
-}
-
-function getActorFromRequest(req: AuthRequest): RequestActor | null {
-  const headerUserId = req.headers["x-user-id"];
-  const headerRole = req.headers["x-user-role"];
-
-  const fallbackUserId = req.body?.operatorId ?? req.query?.operatorId;
-  const fallbackRole = req.body?.role ?? req.query?.role;
-
-  const rawUserId = Array.isArray(headerUserId) ? headerUserId[0] : headerUserId ?? fallbackUserId;
-  const rawRole = Array.isArray(headerRole) ? headerRole[0] : headerRole ?? fallbackRole;
-
-  const id = Number(rawUserId);
-  const role = normalizeRole(rawRole);
-
-  if (!Number.isFinite(id) || !role) return null;
-  return { id, role };
-}
-
 export function attachActor(req: AuthRequest, res: Response, next: NextFunction): void {
-  const actor = getActorFromRequest(req);
+  const actor = getAuthActorFromCookie(req);
   if (!actor) {
-    res.status(401).json({ error: "Missing or invalid actor context" });
+    res.status(401).json({ error: "Unauthorized" });
     return;
   }
 
-  req.actor = actor;
+  req.actor = {
+    userId: actor.userId,
+    id: actor.userId,
+    username: actor.username,
+    name: actor.username,
+    role: actor.role,
+  };
   next();
 }
 

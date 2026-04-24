@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * Custom API client for endpoints not covered by generated API client
  */
@@ -12,6 +11,39 @@ class APIError extends Error {
     super(message);
     this.name = "APIError";
   }
+}
+
+function redirectToLogin() {
+  if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+    window.location.assign("/login");
+  }
+}
+
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  return text ? (JSON.parse(text) as T) : ({} as T);
+}
+
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, {
+    ...init,
+    credentials: "include",
+  });
+
+  if (response.status === 401) {
+    redirectToLogin();
+  }
+
+  const data = await parseJsonResponse<T>(response);
+  if (!response.ok) {
+    throw new APIError(
+      (data as { error?: string })?.error || `API error: ${response.statusText}`,
+      response.status,
+      { data },
+    );
+  }
+
+  return data;
 }
 
 export const api = {
@@ -28,16 +60,7 @@ export const api = {
     const queryString = params.toString();
     const fullUrl = queryString ? `${url}?${queryString}` : url;
     try {
-      const response = await fetch(fullUrl);
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new APIError(
-          data?.error || `API error: ${response.statusText}`,
-          response.status,
-          { data }
-        );
-      }
+      const data = await request<T>(fullUrl);
       return { data };
     } catch (error) {
       if (error instanceof APIError) {
@@ -51,20 +74,11 @@ export const api = {
 
   async post<T>(url: string, body?: any): Promise<{ data: T }> {
     try {
-      const response = await fetch(url, {
+      const data = await request<T>(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: body ? JSON.stringify(body) : undefined,
       });
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new APIError(
-          data?.error || `API error: ${response.statusText}`,
-          response.status,
-          { data }
-        );
-      }
       return { data };
     } catch (error) {
       if (error instanceof APIError) {
@@ -78,18 +92,9 @@ export const api = {
 
   async delete<T>(url: string): Promise<{ data: T }> {
     try {
-      const response = await fetch(url, {
+      const data = await request<T>(url, {
         method: "DELETE",
       });
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new APIError(
-          data?.error || `API error: ${response.statusText}`,
-          response.status,
-          { data }
-        );
-      }
       return { data };
     } catch (error) {
       if (error instanceof APIError) {

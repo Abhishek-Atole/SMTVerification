@@ -14,6 +14,7 @@ import dashboardRouter from "./dashboard";
 import timestampRouter from "./timestamp";
 import reportsRouter from "./reports";
 import verificationRouter from "./verification";
+import authRouter from "./auth";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(dashboardRouter);
 router.use(timestampRouter);
 router.use(reportsRouter);
 router.use(verificationRouter);
+router.use(authRouter);
 
 export default router;
