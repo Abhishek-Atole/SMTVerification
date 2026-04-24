@@ -11,8 +11,32 @@ import {
   scanRecordsTable,
   spliceRecordsTable,
 } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { TimestampService } from "./timestamp-service";
+
+const ALLOWED_TABLES = [
+  "bom_items",
+  "changeover_sessions",
+  "feeder_scans",
+  "splice_records",
+  "users",
+  "boms",
+  "components",
+  "component_alternates",
+  "feeders",
+  "sessions",
+  "scan_records",
+  "audit_logs",
+] as const;
+
+type AllowedTable = (typeof ALLOWED_TABLES)[number];
+
+function assertAllowedTable(name: string): AllowedTable {
+  if (!(ALLOWED_TABLES as readonly string[]).includes(name)) {
+    throw new Error(`Invalid table name: ${name}`);
+  }
+  return name as AllowedTable;
+}
 
 interface SeedOptions {
   companiesCount?: number;
@@ -372,8 +396,11 @@ export class SeedDataService {
    */
   static async getDatabaseStats() {
     const getCount = async (tableName: string): Promise<number> => {
+      const safe = assertAllowedTable(tableName);
       // @ts-ignore - Raw execute result type
-      const result: any = await db.execute(`SELECT COUNT(*) as count FROM "${tableName}"`);
+      const result: any = await db.execute(
+        sql`SELECT COUNT(*) as count FROM ${sql.identifier(safe)}`,
+      );
       return result?.rows?.[0]?.count ?? 0;
     };
 
