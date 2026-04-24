@@ -121,12 +121,9 @@ export default function Dashboard() {
         { sessionId },
         {
           onSuccess: (data) => {
-            // Keep loading screen visible for at least 500ms
-            setTimeout(() => {
-              setDeletingSessionId(null);
-              // Invalidate sessions query to refetch
-              queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
-            }, 500);
+            setDeletingSessionId(null);
+            // Invalidate sessions query to refetch
+            queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
           },
           onError: (error: any) => {
             setDeletingSessionId(null);

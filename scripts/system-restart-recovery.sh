@@ -326,35 +326,50 @@ stop_server() {
 
 parse_database_url() {
   local db_url="$1"
-  # Robust parsing of postgresql://user:password@host:port/database
-  # Handles passwords with ':' and '@' by working right-to-left
-  
-  if [[ $db_url =~ ^postgresql://(.+)@([^/:]+)(?::([0-9]+))?/(.+)$ ]]; then
-    local auth_part="${BASH_REMATCH[1]}"
-    local host_part="${BASH_REMATCH[2]}"
-    local port_part="${BASH_REMATCH[3]:-}"
-    local db_part="${BASH_REMATCH[4]%%\?*}"
-    
-    # Split auth_part on last colon to separate user and password
-    if [[ $auth_part =~ ^(.+):([^:]+)$ ]]; then
-      DB_USER="${BASH_REMATCH[1]}"
-      DB_PASSWORD="${BASH_REMATCH[2]}"
-    else
-      DB_USER="$auth_part"
-      DB_PASSWORD=""
+  # Parse with Python so special characters and URL encoding are handled safely.
+  # This keeps the shell logic simple while preserving ':' and '@' in passwords.
+  if command -v python3 &> /dev/null; then
+    local parsed
+    parsed=$(python3 - "$db_url" <<'PY'
+import sys
+from urllib.parse import urlparse, unquote
+
+url = sys.argv[1]
+parsed = urlparse(url)
+
+if parsed.scheme != "postgresql":
+    raise SystemExit(1)
+
+user = unquote(parsed.username or "postgres")
+password = unquote(parsed.password or "")
+host = parsed.hostname or "localhost"
+port = str(parsed.port or 5432)
+name = unquote((parsed.path or "/").lstrip("/").split("?", 1)[0]) or "smt_verification"
+
+print(user)
+print(password)
+print(host)
+print(port)
+print(name)
+PY
+    ) || true
+
+    if [ -n "$parsed" ]; then
+      DB_USER=$(printf '%s' "$parsed" | sed -n '1p')
+      DB_PASSWORD=$(printf '%s' "$parsed" | sed -n '2p')
+      DB_HOST=$(printf '%s' "$parsed" | sed -n '3p')
+      DB_PORT=$(printf '%s' "$parsed" | sed -n '4p')
+      DB_NAME=$(printf '%s' "$parsed" | sed -n '5p')
+      return 0
     fi
-    
-    DB_HOST="$host_part"
-    DB_PORT="${port_part:-5432}"
-    DB_NAME="$db_part"
-  else
-    # Fallback to defaults if regex doesn't match
-    DB_USER="postgres"
-    DB_PASSWORD=""
-    DB_HOST="localhost"
-    DB_PORT="5432"
-    DB_NAME="smt_verification"
   fi
+
+  # Fallback to safe defaults if parsing is unavailable or fails.
+  DB_USER="postgres"
+  DB_PASSWORD=""
+  DB_HOST="localhost"
+  DB_PORT="5432"
+  DB_NAME="smt_verification"
 }
 
 check_database_connection() {
@@ -489,18 +504,30 @@ start_api_server() {
     return 1
   fi
   
-  # Start the server in background
+  # Start the server in background with environment variables from .env
   log_info "Launching API server process..."
-  PORT=3000 nohup node --enable-source-maps ./dist/index.mjs >> "$LOG_DIR/api-server.log" 2>&1 &
+  (
+    export DATABASE_URL="${DATABASE_URL:-postgresql://smtverify:smtverify@localhost:5432/smtverify}"
+    export PORT=3000
+    export NODE_ENV=production
+    nohup node --enable-source-maps ./dist/index.mjs >> "$LOG_DIR/api-server.log" 2>&1 &
+  )
   local candidate_pid=$!
   sleep 2
   local server_pid
-  server_pid=$(pgrep -f "node --enable-source-maps ./dist/index.mjs" | head -n 1 || true)
+  if command -v lsof &>/dev/null; then
+    server_pid=$(lsof -ti:3000 2>/dev/null | head -n 1 || true)
+  fi
+  if [ -z "$server_pid" ]; then
+    server_pid=$(pgrep -f "node --enable-source-maps ./dist/index.mjs" | head -n 1 || true)
+  fi
   if [ -z "$server_pid" ]; then
     server_pid="$candidate_pid"
   fi
   if ! kill -0 "$server_pid" 2>/dev/null; then
     log_error "API server did not stay running after launch"
+    log_info "API server error log:"
+    tail -20 "$LOG_DIR/api-server.log"
     return 1
   fi
   echo "$server_pid" > "$PID_FILE"
@@ -515,6 +542,8 @@ start_api_server() {
     return 0
   else
     log_error "API server started but health check failed"
+    log_info "API server error log:"
+    tail -20 "$LOG_DIR/api-server.log"
     return 1
   fi
 }
@@ -531,13 +560,13 @@ start_app_server() {
   fi
 
   log_info "Building frontend production assets..."
-  if ! PORT=5173 BASE_PATH=/api npm run build >> "$LOG_DIR/app-server.log" 2>&1; then
+  if ! PORT=5173 BASE_PATH=/ npm run build >> "$LOG_DIR/app-server.log" 2>&1; then
     log_error "Frontend build failed"
     return 1
   fi
 
   log_info "Launching production frontend server..."
-  PORT=5173 BASE_PATH=/api nohup npm run serve -- --port 5173 --host 0.0.0.0 >> "$LOG_DIR/app-server.log" 2>&1 &
+  PORT=5173 BASE_PATH=/ nohup npm run serve -- --port 5173 --host 0.0.0.0 >> "$LOG_DIR/app-server.log" 2>&1 &
   local app_pid=$!
   sleep 2
   if ! kill -0 "$app_pid" 2>/dev/null; then
@@ -590,7 +619,16 @@ show_status() {
     if kill -0 "$pid" 2>/dev/null; then
       log_success "API Server: RUNNING (PID: $pid)"
     else
-      log_error "API Server: NOT RUNNING (Stale PID: $pid)"
+      local live_pid=""
+      if command -v lsof &>/dev/null; then
+        live_pid=$(lsof -ti:3000 2>/dev/null | head -n 1 || true)
+      fi
+      if [ -n "$live_pid" ] && kill -0 "$live_pid" 2>/dev/null; then
+        echo "$live_pid" > "$PID_FILE"
+        log_success "API Server: RUNNING (PID: $live_pid)"
+      else
+        log_error "API Server: NOT RUNNING (Stale PID: $pid)"
+      fi
     fi
   else
     log_error "API Server: NOT RUNNING"

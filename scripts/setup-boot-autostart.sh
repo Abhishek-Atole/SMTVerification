@@ -29,9 +29,23 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 SERVICE_FILE="$SCRIPT_DIR/smt-verification.service"
 RESTART_SCRIPT="$SCRIPT_DIR/system-restart-recovery.sh"
+LOG_DIR="/var/log/smt-verification"
+RUN_DIR="/var/run/smt-verification"
+
+echo -e "${YELLOW}Step 0: Preparing runtime directories...${NC}"
+mkdir -p "$LOG_DIR" "$RUN_DIR"
+chmod 755 "$LOG_DIR" "$RUN_DIR"
+echo -e "${GREEN}✓ Runtime directories ready${NC}"
+echo ""
 
 echo -e "${YELLOW}Step 1: Making scripts executable...${NC}"
-chmod +x "$RESTART_SCRIPT"
+if [ -f "$RESTART_SCRIPT" ]; then
+  chmod +x "$RESTART_SCRIPT"
+else
+  echo -e "${RED}✗ Restart script not found: $RESTART_SCRIPT${NC}"
+  exit 1
+fi
+ln -sf "$RESTART_SCRIPT" /usr/local/bin/system-restart-recovery.sh
 echo -e "${GREEN}✓ Scripts are executable${NC}"
 echo ""
 
@@ -94,6 +108,8 @@ LOG_LEVEL=info
 # Recovery
 AUTO_RESTART=true
 EOF
+chown root:root /etc/default/smt-verification
+chmod 600 /etc/default/smt-verification
 echo -e "${GREEN}✓ Environment configuration created${NC}"
 echo ""
 
@@ -114,10 +130,7 @@ echo -e "${GREEN}✓ Health check cron job installed${NC}"
 echo ""
 
 echo -e "${YELLOW}Step 8: Creating directories and permissions...${NC}"
-mkdir -p /var/log/smt-verification
-mkdir -p /var/run/smt-verification
-chmod 755 /var/log/smt-verification
-chmod 755 /var/run/smt-verification
+chmod 755 "$LOG_DIR" "$RUN_DIR"
 echo -e "${GREEN}✓ Directories created and permissions set${NC}"
 echo ""
 

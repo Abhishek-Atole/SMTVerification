@@ -460,13 +460,13 @@ router.post("/reports/export/:reportType", async (req, res) => {
 
     switch (format) {
       case "pdf":
-        filePath = await ExportService.exportToPdf(reportData, exportOptions, req.user?.id || "system");
+        filePath = await ExportService.exportToPdf(reportData, exportOptions, (req as any).user?.id || "system");
         break;
       case "xlsx":
-        filePath = await ExportService.exportToExcel(reportData, exportOptions, req.user?.id || "system");
+        filePath = await ExportService.exportToExcel(reportData, exportOptions, (req as any).user?.id || "system");
         break;
       case "csv":
-        filePath = await ExportService.exportToCsv(reportData, exportOptions, req.user?.id || "system");
+        filePath = await ExportService.exportToCsv(reportData, exportOptions, (req as any).user?.id || "system");
         break;
       default:
         throw new Error("Invalid export format");
@@ -484,7 +484,7 @@ router.post("/reports/export/:reportType", async (req, res) => {
         filters: filters ?? {},
         recordCount: Array.isArray(reportData) ? reportData.length : 0,
         queryTimeMs: queryTime,
-        generatedBy: req.user?.id || "system",
+        generatedBy: (req as any).user?.id || "system",
       })
       .returning({ id: reportsTable.id });
 
@@ -492,7 +492,7 @@ router.post("/reports/export/:reportType", async (req, res) => {
     if (reportRecord?.id) {
       await ExportService.recordExport(
         reportRecord.id,
-        req.user?.id || "system",
+        (req as any).user?.id || "system",
         format as "pdf" | "xlsx" | "csv",
         req.ip,
         req.get("user-agent")
@@ -518,7 +518,7 @@ router.post("/reports/export/:reportType", async (req, res) => {
  */
 router.get("/reports/exports/history", async (req, res) => {
   try {
-    const userId = req.user?.id || "system";
+    const userId = (req as any).user?.id || "system";
 
     const exports = await db.select().from(reportExportsTable).where(eq(reportExportsTable.userId, userId));
 

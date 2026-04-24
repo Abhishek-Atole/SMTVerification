@@ -1,0 +1,78 @@
+import { create } from "zustand";
+import type { LogEntry } from "@/types";
+
+interface LogStore {
+  logs: LogEntry[];
+  addLog: (entry: Omit<LogEntry, "id" | "timestamp">) => void;
+  clearLogs: () => void;
+  loadLogsFromStorage: () => void;
+}
+
+const createLogId = () =>
+  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+const LOGS_STORAGE_KEY = "smt-verification-logs";
+const MAX_LOGS = 100;
+
+// Load logs from localStorage
+const loadLogsFromStorage = (): LogEntry[] => {
+  try {
+    const stored = localStorage.getItem(LOGS_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Convert timestamp strings back to Date objects
+      return parsed.map((log: any) => ({
+        ...log,
+        timestamp: new Date(log.timestamp),
+      }));
+    }
+  } catch (err) {
+    console.warn("[LogStore] Failed to load logs from storage:", err);
+  }
+  return [];
+};
+
+// Save logs to localStorage
+const saveLogsToStorage = (logs: LogEntry[]): void => {
+  try {
+    localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(logs));
+  } catch (err) {
+    console.warn("[LogStore] Failed to save logs to storage:", err);
+  }
+};
+
+export const useLogStore = create<LogStore>((set, get) => {
+  // Load initial state from localStorage
+  const initialLogs = loadLogsFromStorage();
+
+  return {
+    logs: initialLogs,
+    addLog: (entry) => {
+      set((state) => {
+        const next: LogEntry = {
+          ...entry,
+          id: createLogId(),
+          timestamp: new Date(),
+        };
+
+        const cappedLogs = [...state.logs, next].slice(-MAX_LOGS);
+        // Persist to localStorage immediately
+        saveLogsToStorage(cappedLogs);
+        return { logs: cappedLogs };
+      });
+    },
+    clearLogs: () => {
+      set({ logs: [] });
+      // Clear from localStorage
+      try {
+        localStorage.removeItem(LOGS_STORAGE_KEY);
+      } catch (err) {
+        console.warn("[LogStore] Failed to clear logs from storage:", err);
+      }
+    },
+    loadLogsFromStorage: () => {
+      const logs = loadLogsFromStorage();
+      set({ logs });
+    },
+  };
+});

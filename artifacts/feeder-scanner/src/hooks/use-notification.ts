@@ -1,10 +1,13 @@
-import { useState, useCallback } from 'react';
-import { playBuzzer, playBuzzerForType, playDoubleBuzzer, AlertPriority, AlertType } from '@/utils/buzzer-sounds';
+import { useCallback, useMemo } from "react";
+import playFeedback from "@/utils/audio";
+import { useNotificationStore } from "@/store/useNotificationStore";
+import { useLogStore } from "@/store/useLogStore";
+import type { NotificationPayload } from "@/types";
 
 export interface AlertNotification {
   id: string;
-  type: AlertType;
-  priority: AlertPriority;
+  type: "success" | "error" | "warning" | "info" | "alternative";
+  priority: "critical" | "high" | "medium" | "low";
   message: string;
   title?: string;
   timestamp: number;
@@ -14,105 +17,161 @@ export interface AlertNotification {
 interface UseNotificationReturn {
   notification: AlertNotification | null;
   showNotification: boolean;
+  notifications: AlertNotification[];
   showAlert: (
     message: string,
-    type: AlertType,
-    priority?: AlertPriority,
+    type: "error" | "warning" | "success" | "duplicate",
+    priority?: "critical" | "high" | "medium" | "low",
     title?: string,
     duration?: number
   ) => void;
-  showErrorAlert: (message: string, priority?: AlertPriority) => void;
-  showWarningAlert: (message: string, priority?: AlertPriority) => void;
+  showErrorAlert: (message: string, priority?: "critical" | "high" | "medium" | "low") => void;
+  showWarningAlert: (message: string, priority?: "critical" | "high" | "medium" | "low") => void;
   showDuplicateAlert: (message: string) => void;
   showSuccessAlert: (message: string) => void;
   clearNotification: () => void;
+  dismissNotification: (id: string) => void;
 }
 
 /**
  * Hook for managing alert notifications with buzzer sounds and priorities
  */
 export function useNotification(): UseNotificationReturn {
-  const [notification, setNotification] = useState<AlertNotification | null>(null);
-  const [showNotification, setShowNotification] = useState(false);
+  const notifications = useNotificationStore((state) => state.notifications);
+  const push = useNotificationStore((state) => state.push);
+  const dismiss = useNotificationStore((state) => state.dismiss);
+  const addLog = useLogStore((state) => state.addLog);
+
+  const notification = useMemo<AlertNotification | null>(() => {
+    const latest = notifications[notifications.length - 1];
+    if (!latest) {
+      return null;
+    }
+
+    return {
+      id: latest.id,
+      type: latest.type,
+      priority: latest.type === "error" ? "high" : "low",
+      message: latest.message,
+      title: latest.title,
+      timestamp: 0,
+      duration: latest.autoCloseDuration,
+    };
+  }, [notifications]);
+
+  const showNotification = notifications.length > 0;
 
   const showAlert = useCallback(
     (
       message: string,
-      type: AlertType = 'warning',
-      priority: AlertPriority = 'medium',
+      type: "error" | "warning" | "success" | "duplicate" = "warning",
+      priority: "critical" | "high" | "medium" | "low" = "medium",
       title?: string,
       duration: number = 0
     ) => {
-      // Create notification
-      const newNotification: AlertNotification = {
-        id: `${Date.now()}-${Math.random()}`,
-        type,
-        priority,
+      const mappedType: NotificationPayload["type"] =
+        type === "duplicate" ? "error" : type;
+
+      push({
+        type: mappedType,
+        title: title || getTitleForType(type),
         message,
-        title,
-        timestamp: Date.now(),
-        duration,
-      };
+        autoCloseDuration: duration > 0 ? duration : getDurationForType(type),
+      });
 
-      setNotification(newNotification);
-      setShowNotification(true);
+      addLog({
+        type: mappedType,
+        message,
+        details: {
+          priority,
+          notificationType: type,
+        },
+      });
 
-      // Play buzzer sound
-      playBuzzer(priority);
-
-      // Auto-dismiss if duration specified
-      if (duration > 0) {
-        const timer = setTimeout(() => {
-          setShowNotification(false);
-        }, duration);
-
-        return () => clearTimeout(timer);
+      if (type === "success") {
+        playFeedback("success");
+      } else if (type === "warning") {
+        playFeedback("warning");
+      } else {
+        playFeedback("error");
       }
     },
-    []
+    [addLog, push]
   );
 
   const showErrorAlert = useCallback(
-    (message: string, priority: AlertPriority = 'high') => {
-      showAlert(message, 'error', priority, '❌ ERROR');
+    (message: string, priority: "critical" | "high" | "medium" | "low" = "high") => {
+      showAlert(message, "error", priority, "❌ ERROR", 5000);
     },
     [showAlert]
   );
 
   const showWarningAlert = useCallback(
-    (message: string, priority: AlertPriority = 'medium') => {
-      showAlert(message, 'warning', priority, '⚡ WARNING');
+    (message: string, priority: "critical" | "high" | "medium" | "low" = "medium") => {
+      showAlert(message, "warning", priority, "⚡ WARNING", 3000);
     },
     [showAlert]
   );
 
   const showDuplicateAlert = useCallback(
     (message: string) => {
-      showAlert(message, 'duplicate', 'medium', '⚠️ DUPLICATE');
+      showAlert(message, "duplicate", "medium", "⚠️ DUPLICATE", 4000);
     },
     [showAlert]
   );
 
   const showSuccessAlert = useCallback(
     (message: string) => {
-      playDoubleBuzzer();
-      showAlert(message, 'success', 'low', '✓ SUCCESS', 2000);
+      showAlert(message, "success", "low", "✓ SUCCESS", 2000);
     },
     [showAlert]
   );
 
   const clearNotification = useCallback(() => {
-    setShowNotification(false);
-  }, []);
+    if (!notifications.length) {
+      return;
+    }
+
+    const latest = notifications[notifications.length - 1];
+    dismiss(latest.id);
+  }, [dismiss, notifications]);
 
   return {
     notification,
     showNotification,
+    notifications,
     showAlert,
     showErrorAlert,
     showWarningAlert,
     showDuplicateAlert,
     showSuccessAlert,
     clearNotification,
+    dismissNotification: dismiss,
   };
+}
+
+function getDurationForType(type: "error" | "warning" | "success" | "duplicate") {
+  if (type === "error") {
+    return 5000;
+  }
+  if (type === "duplicate") {
+    return 4000;
+  }
+  if (type === "success") {
+    return 2000;
+  }
+  return 3000;
+}
+
+function getTitleForType(type: "error" | "warning" | "success" | "duplicate") {
+  if (type === "error") {
+    return "❌ ERROR";
+  }
+  if (type === "duplicate") {
+    return "⚠️ DUPLICATE";
+  }
+  if (type === "success") {
+    return "✓ SUCCESS";
+  }
+  return "⚡ WARNING";
 }

@@ -38,9 +38,11 @@ This guide explains the automatic system restart and recovery mechanisms for the
 ### Quick Setup (Recommended)
 
 ```bash
-cd /media/abhishek-atole/Courses/Final SMT MES\ SYSTEM/SMTVerification/scripts
+cd scripts
 sudo bash setup-boot-autostart.sh
 ```
+
+If you are not already in the project root, replace `scripts` with your own repository path, for example `cd /path/to/SMTVerification/scripts`.
 
 This will:
 - Install the systemd service
@@ -358,8 +360,10 @@ sudo lsof -i :3000
 sudo lsof -ti:3000 | xargs kill -9
 
 # Try manual recovery
-sudo /media/abhishek-atole/Courses/Final\ SMT\ MES\ SYSTEM/SMTVerification/scripts/system-restart-recovery.sh recover
+sudo ./scripts/system-restart-recovery.sh recover
 ```
+
+If you are running from another directory, replace `./scripts` with the actual path to your repository.
 
 ### Database Connection Failed
 

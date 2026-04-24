@@ -1,19 +1,19 @@
 [Unit]
 Description=SMT Verification System Auto-Start & Recovery
-Documentation=file:///media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/docs/SYSTEM_RESTART_GUIDE.md
 After=network.target postgresql.service
 Wants=postgresql.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
 
 [Service]
-Type=forking
+Type=exec
 User=root
 Group=root
-WorkingDirectory=/media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification
 ExecStartPre=/bin/sleep 5
-ExecStart=/media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/scripts/system-restart-recovery.sh start
-ExecStop=/media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/scripts/system-restart-recovery.sh stop
-ExecReload=/media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/scripts/system-restart-recovery.sh restart
-RemainAfterExit=yes
+ExecStart=/usr/bin/env bash /usr/local/bin/system-restart-recovery.sh start
+ExecStop=/usr/bin/env bash /usr/local/bin/system-restart-recovery.sh stop
+ExecReload=/usr/bin/env bash /usr/local/bin/system-restart-recovery.sh restart
+RemainAfterExit=no
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=smt-verification
@@ -25,10 +25,6 @@ Environment="DB_HOST=localhost"
 Environment="DB_USER=postgres"
 Environment="DB_NAME=smt_verification"
 Environment="DB_PORT=5432"
-
-# Recovery behavior
-StartLimitInterval=300
-StartLimitBurst=3
 
 [Install]
 WantedBy=multi-user.target

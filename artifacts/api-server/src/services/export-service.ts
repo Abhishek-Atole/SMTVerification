@@ -1,4 +1,4 @@
-import { createWriteStream, mkdirSync } from "fs";
+import { createWriteStream, mkdirSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import { db } from "@workspace/db";
 import { reportExportsTable } from "@workspace/db/schema";

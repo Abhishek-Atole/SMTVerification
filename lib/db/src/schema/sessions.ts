@@ -1,7 +1,11 @@
-import { pgTable, serial, text, integer, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, boolean, index, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { bomsTable } from "./bom";
+import { usersTable } from "./users";
+
+export const changeoverSessionStatusEnum = pgEnum("changeover_session_status", ["active", "completed", "cancelled"]);
+export const feederScanStatusEnum = pgEnum("feeder_scan_status", ["verified", "failed"]);
 
 export const sessionsTable = pgTable("sessions", {
   id: serial("id").primaryKey(),
@@ -73,6 +77,54 @@ export const spliceRecordsTable = pgTable("splice_records", {
   splicedAt: timestamp("spliced_at").defaultNow().notNull(),
 });
 
+export const changeoverSessionsTable = pgTable(
+  "changeover_sessions",
+  {
+    id: serial("id").primaryKey(),
+    operatorId: integer("operator_id")
+      .notNull()
+      .references(() => usersTable.id),
+    bomId: integer("bom_id")
+      .notNull()
+      .references(() => bomsTable.id, { onDelete: "cascade" }),
+    status: changeoverSessionStatusEnum("status").notNull().default("active"),
+    startedAt: timestamp("started_at").defaultNow().notNull(),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    operatorIdIdx: index("changeover_sessions_operator_id_idx").on(table.operatorId),
+    bomIdIdx: index("changeover_sessions_bom_id_idx").on(table.bomId),
+    statusIdx: index("changeover_sessions_status_idx").on(table.status),
+  })
+);
+
+export const feederScansTable = pgTable(
+  "feeder_scans",
+  {
+    id: serial("id").primaryKey(),
+    sessionId: integer("session_id")
+      .notNull()
+      .references(() => changeoverSessionsTable.id, { onDelete: "cascade" }),
+    feederNumber: text("feeder_number").notNull(),
+    scannedValue: text("scanned_value").notNull(),
+    matchedField: text("matched_field"),
+    matchedMake: text("matched_make"),
+    lotCode: text("lot_code"),
+    status: feederScanStatusEnum("status").notNull(),
+    scannedAt: timestamp("scanned_at").defaultNow().notNull(),
+    operatorId: integer("operator_id")
+      .notNull()
+      .references(() => usersTable.id),
+  },
+  (table) => ({
+    sessionIdIdx: index("feeder_scans_session_id_idx").on(table.sessionId),
+    feederNumberIdx: index("feeder_scans_feeder_number_idx").on(table.feederNumber),
+    statusIdx: index("feeder_scans_status_idx").on(table.status),
+    operatorIdIdx: index("feeder_scans_operator_id_idx").on(table.operatorId),
+  })
+);
+
 export const insertSessionSchema = createInsertSchema(sessionsTable).omit({ id: true }).extend({
   createdAt: z.date().optional(),
   startTime: z.date().optional(),
@@ -83,6 +135,13 @@ export const insertScanRecordSchema = createInsertSchema(scanRecordsTable).omit(
 export const insertSpliceRecordSchema = createInsertSchema(spliceRecordsTable).omit({ id: true }).extend({
   splicedAt: z.date().optional(),
 });
+export const insertChangeoverSessionSchema = createInsertSchema(changeoverSessionsTable).omit({ id: true }).extend({
+  startedAt: z.date().optional(),
+  createdAt: z.date().optional(),
+});
+export const insertFeederScanSchema = createInsertSchema(feederScansTable).omit({ id: true }).extend({
+  scannedAt: z.date().optional(),
+});
 
 export type Session = typeof sessionsTable.$inferSelect;
 export type InsertSession = z.infer<typeof insertSessionSchema>;
@@ -90,3 +149,7 @@ export type ScanRecord = typeof scanRecordsTable.$inferSelect;
 export type InsertScanRecord = z.infer<typeof insertScanRecordSchema>;
 export type SpliceRecord = typeof spliceRecordsTable.$inferSelect;
 export type InsertSpliceRecord = z.infer<typeof insertSpliceRecordSchema>;
+export type ChangeoverSession = typeof changeoverSessionsTable.$inferSelect;
+export type InsertChangeoverSession = z.infer<typeof insertChangeoverSessionSchema>;
+export type FeederScan = typeof feederScansTable.$inferSelect;
+export type InsertFeederScan = z.infer<typeof insertFeederScanSchema>;

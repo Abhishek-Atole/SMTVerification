@@ -45,6 +45,19 @@ SMTVerification/
 3. **API Reference**: See [docs/guides/API_REFERENCE.md](docs/guides/API_REFERENCE.md)
 4. **BOM Management**: View [docs/features/bom/](docs/features/bom/) for BOM guides
 
+## Next.js Feeder Verification App
+
+The root workspace now includes a separate Next.js implementation at [feeder-verification/](feeder-verification/).
+
+```bash
+cd feeder-verification
+pnpm install
+pnpm prisma:generate
+pnpm prisma:migrate:dev
+pnpm prisma:seed
+pnpm dev
+```
+
 ## 📚 Documentation
 
 - **Setup Guides**: [docs/setup/](docs/setup/)

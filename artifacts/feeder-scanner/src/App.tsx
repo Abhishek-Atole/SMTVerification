@@ -67,10 +67,7 @@ function Router() {
             <Layout>
               <Switch>
                 <Route path="/">
-                  {() => {
-                    setLocation("/verification");
-                    return null;
-                  }}
+                  {() => <ProtectedRoute component={VerificationPage} allowedRoles={["engineer", "operator", "qa"]} />}
                 </Route>
                 <Route path="/bom">
                   {() => <ProtectedRoute component={Boms} allowedRoles={["engineer"]} />}

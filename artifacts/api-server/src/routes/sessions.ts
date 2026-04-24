@@ -212,6 +212,9 @@ function normalizeInput(input?: string | null): string | undefined {
 
 router.post("/sessions/:sessionId/scans", async (req, res) => {
   try {
+    // === PERFORMANCE: Track validation time ===
+    const validationStartTime = Date.now();
+    
     const sessionId = Number(req.params.sessionId);
     const { 
       feederNumber, 
@@ -524,6 +527,8 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
     });
 
     // === STEP 5: PREPARE RESPONSE ===
+    const validationTimeMs = Date.now() - validationStartTime;
+    
     res.json({
       // @ts-ignore - scan object properties
       scan,
@@ -531,6 +536,8 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
       isDuplicate: existingScan.length > 0,
       caseConverted,
       message,
+      validationTimeMs,
+      performanceOk: validationTimeMs < 200, // Track if under 200ms threshold
       validationDetails: {
         isDuplicate: existingScan.length > 0,
         feederNumberMatched: !!selectedItem,
@@ -599,17 +606,58 @@ router.post("/sessions/:sessionId/splices", async (req, res) => {
       return;
     }
 
+    // === STEP 1: Validate Session Exists ===
     const [session] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
     if (!session) {
       res.status(404).json({ error: "Session not found" });
       return;
     }
 
+    // === STEP 2: Verify Feeder Was Scanned & Verified ===
+    const normalizedFeeder = feederNumber.trim().toUpperCase();
+    const feederScans = await db
+      .select()
+      .from(scanRecordsTable)
+      .where(
+        and(
+          eq(scanRecordsTable.sessionId, sessionId),
+          eq(scanRecordsTable.feederNumber, normalizedFeeder),
+          eq(scanRecordsTable.status, "ok")
+        )
+      );
+
+    if (feederScans.length === 0) {
+      // Feeder not verified - log attempted splice on unverified feeder
+      const operatorName = session.operatorName || "UNKNOWN";
+      await db.insert(auditLogsTable).values({
+        entityType: "feeder_splice",
+        entityId: `session_${sessionId}_feeder_${normalizedFeeder}`,
+        action: "splice_rejected",
+        oldValue: null,
+        newValue: JSON.stringify({
+          sessionId,
+          feederNumber: normalizedFeeder,
+          oldSpoolBarcode: oldSpoolBarcode.trim(),
+          newSpoolBarcode: newSpoolBarcode.trim(),
+          reason: "Feeder not verified before splicing",
+        }),
+        changedBy: operatorName,
+        description: `Splice attempt REJECTED: Feeder ${normalizedFeeder} not verified before splicing attempt`,
+        createdAt: TimestampService.createAuditTimestamp(),
+      });
+
+      return res.status(400).json({
+        error: `❌ Feeder ${normalizedFeeder} has not been verified. Please complete verification before splicing.`,
+        feederVerified: false,
+      });
+    }
+
+    // === STEP 3: Record Splice with Audit Log ===
     const [splice] = await db
       .insert(spliceRecordsTable)
       .values({
         sessionId,
-        feederNumber: feederNumber.trim(),
+        feederNumber: normalizedFeeder,
         oldSpoolBarcode: oldSpoolBarcode.trim(),
         newSpoolBarcode: newSpoolBarcode.trim(),
         durationSeconds: durationSeconds ?? null,
@@ -617,7 +665,37 @@ router.post("/sessions/:sessionId/splices", async (req, res) => {
       })
       .returning();
 
-    res.status(201).json(splice);
+    // === STEP 4: Create Comprehensive Audit Log for Splice ===
+    const operatorName = session.operatorName || "UNKNOWN";
+    const feederScan = feederScans[0];
+    
+    await db.insert(auditLogsTable).values({
+      entityType: "feeder_splice",
+      entityId: `session_${sessionId}_feeder_${normalizedFeeder}`,
+      action: "splice_recorded",
+      oldValue: JSON.stringify({
+        feederNumber: normalizedFeeder,
+        spoolBarcode: oldSpoolBarcode.trim(),
+        scannedComponent: feederScan.internalIdScanned || feederScan.partNumber || "UNKNOWN",
+      }),
+      newValue: JSON.stringify({
+        feederNumber: normalizedFeeder,
+        spoolBarcode: newSpoolBarcode.trim(),
+        replacementTime: new Date().toISOString(),
+        durationSeconds: durationSeconds ?? null,
+      }),
+      changedBy: operatorName,
+      description: `Feeder ${normalizedFeeder} spool replaced: Old spool ${oldSpoolBarcode.trim()} → New spool ${newSpoolBarcode.trim()}${durationSeconds ? ` (Duration: ${durationSeconds}s)` : ""}`,
+      createdAt: TimestampService.createAuditTimestamp(),
+    });
+
+    // === STEP 5: Return Response ===
+    res.status(201).json({
+      splice,
+      message: `✅ Feeder ${normalizedFeeder} spool successfully replaced`,
+      feederVerified: true,
+      auditLogged: true,
+    });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to record splice" });

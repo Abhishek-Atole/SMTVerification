@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Boxes, History, PlusSquare, BarChart3, LogOut, Sun, Moon, Menu, X, Trash2, TrendingUp, FileText } from "lucide-react";
+import { LayoutDashboard, Boxes, History, PlusSquare, BarChart3, LogOut, Sun, Moon, Menu, X, Trash2, TrendingUp, FileText, ScanLine, Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/auth-context";
 import { useTheme } from "@/components/theme-provider";
@@ -16,6 +16,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const NAV_ITEMS = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["engineer", "qa", "operator"] },
     { href: "/session/new", label: "New Session", icon: PlusSquare, roles: ["engineer", "operator"] },
+    { href: "/verification", label: "Verification", icon: ScanLine, roles: ["engineer", "qa", "operator"] },
+    { href: "/splicing", label: "Splicing", icon: Scissors, roles: ["engineer", "qa", "operator"] },
     { href: "/bom", label: "BOM Manager", icon: Boxes, roles: ["engineer"] },
     { href: "/analytics", label: "Analytics", icon: BarChart3, roles: ["engineer", "qa"] },
     { href: "/reports", label: "Reports", icon: FileText, roles: ["engineer", "qa"] },
