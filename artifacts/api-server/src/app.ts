@@ -4,8 +4,11 @@ import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { validateEnv } from "./lib/validateEnv";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+
+validateEnv();
 
 const app: Express = express();
 
