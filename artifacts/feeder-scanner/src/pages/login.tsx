@@ -38,7 +38,8 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <div className="mb-8 text-center">
-        <AppLogo className="h-32 mx-auto mb-4" />
+        <AppLogo className="h-20 sm:h-24 mx-auto mb-4" />
+        <p className="text-xs uppercase tracking-[0.24em] text-muted-foreground font-semibold">{appConfig.companyShort}</p>
         <h1 className="text-3xl font-black tracking-tighter text-primary">{appConfig.companyName}</h1>
         <p className="text-muted-foreground mt-2">{appConfig.systemTitle}</p>
       </div>
