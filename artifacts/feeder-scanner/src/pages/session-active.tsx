@@ -18,6 +18,7 @@ import { ModeToggle } from "@/components/ModeToggle";
 import { useNotification } from "@/hooks/use-notification";
 import { useNotification as useToastNotification } from "@/components/NotificationSystem";
 import { useScanner } from "@/hooks/useScanner";
+import { useAutoScan } from "@/hooks/useAutoScan";
 import { ScanNotification } from "@/components/notifications/ScanNotification";
 import { LogPanel } from "@/components/LogPanel";
 import { useAuth } from "@/context/auth-context";
@@ -126,6 +127,8 @@ export default function SessionActive() {
   const [lastVerificationTime, setLastVerificationTime] = useState<number | null>(null);
   const [verificationInProgress, setVerificationInProgress] = useState(false);
   const [autoAdvanceTimer, setAutoAdvanceTimer] = useState<NodeJS.Timeout | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const scanningRef = useRef(false);
 
   useEffect(() => {
     if (session?.verificationMode) {
@@ -280,6 +283,27 @@ export default function SessionActive() {
     resetAfterMs: 10000,
   });
 
+  const { reset: resetAutoScan } = useAutoScan(scanInput, {
+    onScan: (value) => {
+      if (scanningRef.current || verificationInProgress || verificationLocked || pendingVerification || needsAlternateSelection) {
+        return;
+      }
+
+      scanningRef.current = true;
+      setScanning(true);
+      try {
+        handleScanBarcode(value);
+      } catch (error) {
+        scanningRef.current = false;
+        setScanning(false);
+        throw error;
+      }
+    },
+    delayMs: 300,
+    minLength: 3,
+    enabled: session?.status === "active" && activeTab === "loading",
+  });
+
   useEffect(() => {
     const focusInput = () => {
       if (document.activeElement !== inputRef.current && session?.status === "active") {
@@ -298,23 +322,6 @@ export default function SessionActive() {
       }
     };
   }, [autoAdvanceTimer]);
-
-  // AUTO MODE: Auto-submit when user scans MPN at spool step (no ENTER required)
-  useEffect(() => {
-    if (verificationMode !== "AUTO" || scanStep !== "spool" || !scanInput.trim()) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      const val = scanInput.trim();
-      if (val && !verificationInProgress) {
-        // Auto-submit the scanned MPN in auto mode
-        handleScanBarcode(val);
-      }
-    }, 100); // Small debounce to capture full scan
-
-    return () => clearTimeout(timer);
-  }, [scanInput, verificationMode, scanStep, verificationInProgress]);
 
   useEffect(() => {
     if (session?.startTime) {
@@ -449,7 +456,21 @@ export default function SessionActive() {
     }
   };
 
+  const clearScanInput = () => {
+    setScanInput("");
+    resetAutoScan();
+    scanningRef.current = false;
+    setScanning(false);
+  };
+
   function handleScanBarcode(val: string) {
+    if (scanningRef.current || verificationInProgress || verificationLocked) {
+      return;
+    }
+
+    scanningRef.current = true;
+    setScanning(true);
+
     // In auto mode at spool: allow empty val to skip MPN (auto-advance)
     if (verificationMode === "AUTO" && scanStep === "spool" && !val) {
       // Skip MPN scan in auto mode - auto-submit with no MPN value
@@ -458,6 +479,8 @@ export default function SessionActive() {
     }
 
     if (!val) {
+      scanningRef.current = false;
+      setScanning(false);
       return;
     }
 
@@ -477,11 +500,13 @@ export default function SessionActive() {
           feeder: normalizedFeederNumber,
           msg: `❌ ERROR: Feeder "${normalizedFeederNumber}" not found in BOM`,
         });
-        setScanInput("");
+        clearScanInput();
         showErrorAlert(
           `Feeder "${normalizedFeederNumber}" does not exist in the loaded BOM.\n\nPlease check the feeder number and try again.`,
           "high"
         );
+        scanningRef.current = false;
+        setScanning(false);
         return; // Block further processing
       }
 
@@ -495,7 +520,7 @@ export default function SessionActive() {
           feeder: normalizedFeederNumber,
           msg: `⚠️ DUPLICATE: Feeder "${normalizedFeederNumber}" already verified`,
         });
-        setScanInput("");
+        clearScanInput();
         setIsDuplicate(true);
         lastNotifiedRef.current = `${normalizedFeederNumber}::⚠️ DUPLICATE: Feeder "${normalizedFeederNumber}" already verified`;
         notify(
@@ -504,6 +529,8 @@ export default function SessionActive() {
           "To re-scan, reject the existing scan first.",
           () => focusNextFrame(inputRef)
         );
+        scanningRef.current = false;
+        setScanning(false);
         return; // Block duplicate scan
       }
 
@@ -512,7 +539,7 @@ export default function SessionActive() {
 
       setPendingFeeder(normalizedFeederNumber);
       setFeederScanTime(Date.now());
-      setScanInput("");
+      clearScanInput();
       setCaseConverted(val !== normalizedFeederNumber);
       setIsDuplicate(false);
 
@@ -540,6 +567,8 @@ export default function SessionActive() {
         } else {
           setScanStep("spool");
         }
+        scanningRef.current = false;
+        setScanning(false);
       }
     } else if (needsAlternateSelection) {
       setScanStep("spool");
@@ -548,13 +577,15 @@ export default function SessionActive() {
       if (verificationMode === "AUTO") {
         focusNextFrame(inputRef);
       }
+      scanningRef.current = false;
+      setScanning(false);
     } else if (scanStep === "spool") {
       // STEP 2: MPN/INTERNAL ID INPUT (Optional in both modes)
       if (val) {
         setInternalIdInput(val.trim().toUpperCase());
         setCaseConverted(caseConverted || val !== val.trim().toUpperCase());
       }
-      setScanInput("");
+      clearScanInput();
 
       const matchingItem = bomDetail?.items.find(item => item.id === selectedItemIdForScan);
       const duration = feederScanTime ? Date.now() - feederScanTime : undefined;
@@ -574,11 +605,18 @@ export default function SessionActive() {
         // AUTO mode: immediately submit
         handleAutoModeSubmit(val.trim().toUpperCase(), duration);
       }
+      if (verificationMode === "MANUAL") {
+        scanningRef.current = false;
+        setScanning(false);
+      }
     }
   }
 
   const handleScanSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (scanningRef.current) {
+      return;
+    }
     const val = scanInput.trim();
     
     // In auto mode at spool step with empty ENTER: auto-skip (advance without MPN)
@@ -620,7 +658,7 @@ export default function SessionActive() {
         showSuccessAlert(`MPN matched successfully for feeder ${pendingFeeder}.`);
         mirrorVerificationResult(pendingFeeder, mpnScanned, pendingAvailableOptions?.primary?.[0]?.partNumber);
         setSplicingPhaseActive(true);
-        setScanInput("");
+        clearScanInput();
         setPendingFeeder("");
         setFeederScanTime(null);
         setScanStep("feeder");
@@ -635,7 +673,7 @@ export default function SessionActive() {
         focusNextFrame(inputRef);
       } else {
         showErrorAlert(`MPN mismatch for feeder ${pendingFeeder}. ${res.message}`, "high");
-        setScanInput("");
+        clearScanInput();
       }
     } catch (err: any) {
       setLastScanResult({
@@ -646,6 +684,8 @@ export default function SessionActive() {
       showErrorAlert(`MPN verification failed for feeder ${pendingFeeder}. ${err?.message || "Unknown error"}`, "high");
     } finally {
       setVerificationInProgress(false);
+      scanningRef.current = false;
+      setScanning(false);
     }
   };
 
