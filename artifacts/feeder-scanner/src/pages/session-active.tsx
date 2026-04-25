@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRoute, useLocation, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import {
   useGetSession, useScanFeeder, useUpdateSession, useGetBom,
   useListSplices, useRecordSplice,
@@ -52,6 +53,26 @@ interface LocalScanEntry {
   durationMs?: number;
 }
 
+interface SessionScanLogRow {
+  id: number;
+  feederNumber: string;
+  scannedValue: string;
+  matchedField: string | null;
+  matchedMake: string | null;
+  lotCode: string | null;
+  status: "verified" | "duplicate" | "failed";
+  verificationMode: "AUTO" | "MANUAL";
+  scannedAt: string;
+  bom: {
+    refDes: string | null;
+    componentDesc: string | null;
+    packageSize: string | null;
+    internalPartNumber: string | null;
+    expectedMpns: string[];
+    makes: string[];
+  };
+}
+
 function formatDuration(ms: number) {
   if (ms < 1000) return `${ms}ms`;
   const s = Math.round(ms / 1000);
@@ -97,6 +118,19 @@ export default function SessionActive() {
   });
   const { data: splices, isLoading: splicesLoading } = useListSplices(sessionId, {
     query: { enabled: !!sessionId, queryKey: getListSplicesQueryKey(sessionId) },
+  });
+  const { data: scanLog } = useQuery({
+    queryKey: ["session-scan-log", sessionId],
+    queryFn: async () => {
+      const response = await fetch(`/api/sessions/${sessionId}/scans`, {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to load scan log");
+      }
+      return (await response.json()) as { sessionId: number; scans: SessionScanLogRow[] };
+    },
+    enabled: !!sessionId,
   });
 
   const scanFeeder = useScanFeeder();
@@ -176,6 +210,30 @@ export default function SessionActive() {
   } | null>(null);
   const lastNotifiedRef = useRef<string>("");
   const wasAllRequiredVerifiedRef = useRef(false);
+
+  const scanLogRows = scanLog?.scans ?? [];
+
+  const formatMatchedAs = (row: SessionScanLogRow) => {
+    const field = row.matchedField ?? "";
+    if (!field) return "—";
+    if (field === "internalPartNumber") return "Internal P/N";
+
+    const suffix = row.matchedMake ? ` (${row.matchedMake})` : "";
+    const label = field.replace("mpn", "MPN ");
+    return `${label}${suffix}`;
+  };
+
+  const getScannedValueStyle = (row: SessionScanLogRow) => {
+    if (row.status === "failed") return "text-[#B91C1C] font-bold";
+    if (row.matchedField === "mpn2" || row.matchedField === "mpn3") return "text-[#B45309] font-bold";
+    return "text-[#15803D] font-bold";
+  };
+
+  const getScannedValueSuffix = (row: SessionScanLogRow) => {
+    if (row.status === "failed") return " ✗";
+    if (row.matchedField === "mpn2" || row.matchedField === "mpn3") return " ▲";
+    return "";
+  };
 
   const resetVerificationState = useVerificationStore((state) => state.resetAll);
   const setVerificationBomEntries = useVerificationStore((state) => state.setBomEntries);
@@ -1249,14 +1307,23 @@ export default function SessionActive() {
               <div className="flex justify-between items-center gap-2">
                 <CardTitle className="text-xs sm:text-sm font-bold tracking-wider uppercase text-muted-foreground">Log</CardTitle>
                 <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm font-bold">
-                  <span className="text-primary">{session.scans.length}</span>
+                  <span className="text-primary">{scanLogRows.length || session.scans.length}</span>
                   <span className="text-amber-500">{splicingRecords.length}S</span>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="flex-1 p-0 overflow-hidden">
               <ScrollArea className="h-full w-full">
-                <div className="p-2 sm:p-3 space-y-1 sm:space-y-2">
+                <style>{`
+                  @keyframes scanRowSlideIn {
+                    from { opacity: 0; transform: translateY(-6px); }
+                    to { opacity: 1; transform: translateY(0); }
+                  }
+                  .scan-row-slide-in {
+                    animation: scanRowSlideIn 180ms ease-out;
+                  }
+                `}</style>
+                <div className="p-2 sm:p-3 space-y-2">
                   {/* Splice records first (inline, amber) */}
                   {splices && splices.length > 0 && splices.map((sp) => (
                     <div key={`splice-${sp.id}`} className="flex items-center justify-between p-2 sm:p-3 border rounded-md font-mono text-xs shadow-sm bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
@@ -1272,42 +1339,65 @@ export default function SessionActive() {
                       </div>
                     </div>
                   ))}
-                  {[...session.scans].reverse().map((scan) => {
-                    // Check if this feeder has alternates in the BOM
-                    const feederBomItems = bomDetail?.items.filter(
-                      (item) => item.feederNumber.trim().toUpperCase() === scan.feederNumber.trim().toUpperCase()
-                    ) || [];
-                    const feederHasAlternates = feederBomItems.some((item) => item.isAlternate);
-                    
-                    return (
-                      <div key={scan.id} className={`flex items-center justify-between p-2 sm:p-3 border rounded-md font-mono text-xs shadow-sm transition-colors ${
-                        scan.status === "ok" ? "bg-success/5 border-success/20 text-foreground" : "bg-destructive/5 border-destructive/20 text-foreground"
-                      }`}>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className={`font-black uppercase tracking-wider w-10 ${scan.status === "ok" ? "text-success" : "text-destructive"}`}>
-                            {scan.status === "ok" ? "OK" : "REJ"}
-                          </span>
-                          <span className="font-bold truncate flex items-center gap-1">
-                            {scan.feederNumber}
-                            {scan.status === "ok" && feederHasAlternates && (
-                              <span className="text-amber-600 dark:text-amber-400 font-bold text-xs bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 rounded whitespace-nowrap">
-                                [ALT]
-                              </span>
-                            )}
-                          </span>
-                          {(scan as any).spoolBarcode && <span className="text-muted-foreground text-xs hidden sm:inline truncate">{(scan as any).spoolBarcode?.substring(0, 8)}...</span>}
-                        </div>
-                        <div className="text-muted-foreground text-xs font-medium">
-                          {format(new Date(scan.scannedAt), "HH:mm")}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {verificationScans.length === 0 && !splicingRecords.length && (
-                    <div className="h-20 flex items-center justify-center text-muted-foreground text-xs font-medium">
-                      No scans
+                  <div className="border border-border rounded-lg overflow-hidden bg-card shadow-sm">
+                    <div className="max-h-[42vh] overflow-y-auto">
+                      <table className="w-full border-collapse font-mono text-[11px] sm:text-xs lg:text-sm">
+                        <thead className="sticky top-0 z-20 bg-slate-900 text-white">
+                          <tr>
+                            <th className="px-2 py-2 text-left font-bold whitespace-nowrap">Time</th>
+                            <th className="px-2 py-2 text-left font-bold whitespace-nowrap">Feeder No.</th>
+                            <th className="px-2 py-2 text-left font-bold whitespace-nowrap">Ref / Des</th>
+                            <th className="px-2 py-2 text-left font-bold whitespace-nowrap">Component</th>
+                            <th className="px-2 py-2 text-left font-bold whitespace-nowrap">Package</th>
+                            <th className="px-2 py-2 text-left font-bold whitespace-nowrap">Internal P/N</th>
+                            <th className="px-2 py-2 text-left font-bold whitespace-nowrap text-[#1D4ED8]">Expected MPN</th>
+                            <th className="px-2 py-2 text-left font-bold whitespace-nowrap">Scanned (Actual)</th>
+                            <th className="px-2 py-2 text-left font-bold whitespace-nowrap">Matched As</th>
+                            <th className="px-2 py-2 text-left font-bold whitespace-nowrap">Lot Code</th>
+                            <th className="px-2 py-2 text-left font-bold whitespace-nowrap">Mode</th>
+                            <th className="px-2 py-2 text-left font-bold whitespace-nowrap">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {scanLogRows.length === 0 ? (
+                            <tr>
+                              <td colSpan={12} className="px-3 py-8 text-center text-muted-foreground font-medium">
+                                No scans yet
+                              </td>
+                            </tr>
+                          ) : (
+                            scanLogRows.map((row, index) => (
+                              <tr
+                                key={row.id}
+                                className={`border-t border-border/60 ${index % 2 === 1 ? "bg-slate-50/70 dark:bg-slate-950/15" : "bg-background"} scan-row-slide-in`}
+                              >
+                                <td className="px-2 py-2 whitespace-nowrap text-muted-foreground">{format(new Date(row.scannedAt), "hh:mm:ss a")}</td>
+                                <td className="px-2 py-2 whitespace-nowrap font-bold">{row.feederNumber}</td>
+                                <td className="px-2 py-2 whitespace-nowrap">{row.bom.refDes || "—"}</td>
+                                <td className="px-2 py-2 whitespace-nowrap">{row.bom.componentDesc || "—"}</td>
+                                <td className="px-2 py-2 whitespace-nowrap">{row.bom.packageSize || "—"}</td>
+                                <td className="px-2 py-2 whitespace-nowrap">{row.bom.internalPartNumber || "—"}</td>
+                                <td className="px-2 py-2 whitespace-nowrap text-[#1D4ED8] font-semibold">{row.bom.expectedMpns.length > 0 ? row.bom.expectedMpns.join(" / ") : "—"}</td>
+                                <td className={`px-2 py-2 whitespace-nowrap ${getScannedValueStyle(row)}`}>{row.scannedValue}{getScannedValueSuffix(row)}</td>
+                                <td className="px-2 py-2 whitespace-nowrap">{formatMatchedAs(row)}</td>
+                                <td className="px-2 py-2 whitespace-nowrap">{row.lotCode || "—"}</td>
+                                <td className="px-2 py-2 whitespace-nowrap">
+                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${row.verificationMode === "AUTO" ? "bg-blue-100 text-[#1D4ED8]" : "bg-amber-100 text-[#B45309]"}`}>
+                                    {row.verificationMode}
+                                  </span>
+                                </td>
+                                <td className="px-2 py-2 whitespace-nowrap">
+                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${row.status === "verified" ? "bg-green-100 text-[#15803D]" : row.status === "duplicate" ? "bg-amber-100 text-[#B45309]" : "bg-red-100 text-[#B91C1C]"}`}>
+                                    {row.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
                     </div>
-                  )}
+                  </div>
                 </div>
               </ScrollArea>
             </CardContent>

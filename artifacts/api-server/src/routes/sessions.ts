@@ -2,7 +2,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { sessionsTable, scanRecordsTable, spliceRecordsTable, bomItemsTable, bomsTable, auditLogsTable } from "@workspace/db/schema";
-import { eq, and, sql, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, sql, desc, isNull, isNotNull } from "drizzle-orm";
 import { TimestampService } from "../services/timestamp-service";
 
 const router: IRouter = Router();
@@ -227,6 +227,91 @@ router.get("/sessions/:sessionId", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to get session" });
+  }
+});
+
+router.get("/sessions/:sessionId/scans", async (req, res) => {
+  try {
+    const sessionId = Number(req.params.sessionId);
+    if (!Number.isFinite(sessionId)) {
+      res.status(400).json({ error: "Invalid sessionId" });
+      return;
+    }
+
+    const [session] = await db
+      .select({ id: sessionsTable.id, bomId: sessionsTable.bomId })
+      .from(sessionsTable)
+      .where(eq(sessionsTable.id, sessionId));
+
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    const scans = await db
+      .select({
+        id: scanRecordsTable.id,
+        feederNumber: scanRecordsTable.feederNumber,
+        scannedValue: scanRecordsTable.spoolBarcode,
+        matchedField: scanRecordsTable.validationResult,
+        matchedMake: scanRecordsTable.description,
+        lotCode: scanRecordsTable.lotNumber,
+        status: scanRecordsTable.status,
+        verificationMode: scanRecordsTable.verificationMode,
+        scannedAt: scanRecordsTable.scannedAt,
+        refDes: bomItemsTable.referenceLocation,
+        componentDesc: bomItemsTable.description,
+        packageSize: bomItemsTable.packageDescription,
+        internalPartNumber: bomItemsTable.internalPartNumber,
+        mpn1: bomItemsTable.mpn1,
+        make1: bomItemsTable.make1,
+        mpn2: bomItemsTable.mpn2,
+        make2: bomItemsTable.make2,
+        mpn3: bomItemsTable.mpn3,
+        make3: bomItemsTable.make3,
+      })
+      .from(scanRecordsTable)
+      .leftJoin(
+        bomItemsTable,
+        session.bomId === null
+          ? sql`1 = 0`
+          : and(
+              eq(bomItemsTable.feederNumber, scanRecordsTable.feederNumber),
+              eq(bomItemsTable.bomId, session.bomId),
+            ),
+      )
+      .where(eq(scanRecordsTable.sessionId, sessionId))
+      .orderBy(desc(scanRecordsTable.scannedAt));
+
+    res.json({
+      sessionId,
+      scans: scans.map((row) => ({
+        id: row.id,
+        feederNumber: row.feederNumber,
+        scannedValue: row.scannedValue ?? row.feederNumber,
+        matchedField: row.matchedField,
+        matchedMake: row.matchedMake,
+        lotCode: row.lotCode,
+        status: row.status,
+        verificationMode: row.verificationMode,
+        scannedAt: new Date(row.scannedAt).toISOString(),
+        bom: {
+          refDes: row.refDes ?? null,
+          componentDesc: row.componentDesc ?? null,
+          packageSize: row.packageSize ?? null,
+          internalPartNumber: row.internalPartNumber ?? null,
+          expectedMpns: [row.internalPartNumber, row.mpn1, row.mpn2, row.mpn3].filter(
+            (value): value is string => Boolean(value && value.trim()),
+          ),
+          makes: [row.make1, row.make2, row.make3].filter(
+            (value): value is string => Boolean(value && value.trim()),
+          ),
+        },
+      })),
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to list session scans" });
   }
 });
 
