@@ -38,7 +38,7 @@ export function LogPanel() {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `fvs-log-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+    anchor.download = `ucal-smt-log-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);

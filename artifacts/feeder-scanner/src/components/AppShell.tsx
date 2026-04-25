@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Clock, AlertCircle } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
+import { AppLogo } from "@/components/AppLogo";
+import { appConfig } from "@/lib/appConfig";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -42,9 +44,10 @@ export function AppShell({ children, jobId }: AppShellProps) {
       <header className="border-b border-neutral-200 bg-white shadow-sm sticky top-0 z-50">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-4">
+            <AppLogo className="h-10 w-10" />
             <div className="flex flex-col">
-              <h1 className="text-lg font-bold text-neutral-900">FVS — Feeder Verification System</h1>
-              <p className="text-xs text-neutral-500">Manufacturing Floor Verification & Splicing</p>
+              <h1 className="text-lg font-bold text-neutral-900">{appConfig.companyShort} — {appConfig.systemTitle}</h1>
+              <p className="text-xs text-neutral-500">{appConfig.companyName}</p>
             </div>
           </div>
 
