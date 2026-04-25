@@ -26,6 +26,7 @@ import { AuthProvider, useAuth } from "@/context/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { NotificationProvider } from "@/components/NotificationSystem";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { appConfig } from "@/lib/appConfig";
 
 const queryClient = new QueryClient();
 
@@ -49,6 +50,37 @@ function ProtectedRoute({ component: Component, allowedRoles }: { component: any
 
 function Router() {
   const { user } = useAuth();
+  const [location] = useLocation();
+
+  useEffect(() => {
+    const routeLabelMap: Record<string, string> = {
+      "/": "Dashboard",
+      "/login": "Login",
+      "/bom": "BOM",
+      "/session/new": "New Session",
+      "/session": "Session",
+      "/verification": "Verification",
+      "/splicing": "Splicing",
+      "/sessions": "Session History",
+      "/analytics": "Analytics",
+      "/reports": "Reports",
+      "/trash": "Trash",
+      "/real-time-dashboard": "Real-Time Dashboard",
+    };
+
+    const exact = routeLabelMap[location];
+    if (exact) {
+      document.title = `${appConfig.companyShort} | ${exact}`;
+      return;
+    }
+
+    if (location.startsWith("/session/")) {
+      document.title = `${appConfig.companyShort} | Session`;
+      return;
+    }
+
+    document.title = `${appConfig.companyShort} | ${appConfig.systemTitle}`;
+  }, [location]);
 
   return (
     <Switch>
