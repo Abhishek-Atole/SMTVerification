@@ -6,6 +6,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AppLogo } from "@/components/AppLogo";
+import { appConfig } from "@/lib/appConfig";
 
 export default function Analytics() {
   const [sessionId, setSessionId] = useState<string>("all");
@@ -31,8 +33,11 @@ export default function Analytics() {
     <div className="p-6 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-14" />
-          <h1 className="text-3xl font-black tracking-tight">Analytics Dashboard</h1>
+          <AppLogo className="h-14" />
+          <div>
+            <h1 className="text-3xl font-black tracking-tight">{appConfig.systemTitle}</h1>
+            <p className="text-sm text-muted-foreground font-medium">Analytics Dashboard</p>
+          </div>
         </div>
       </div>
 

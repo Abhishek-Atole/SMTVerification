@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Settings, ShieldCheck, ScanLine } from "lucide-react";
+import { appConfig } from "@/lib/appConfig";
+import { AppLogo } from "@/components/AppLogo";
 
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -36,10 +38,9 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <div className="mb-8 text-center">
-        <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-32 mx-auto mb-4" />
-        <h1 className="text-3xl font-black tracking-tighter text-primary">UCAL ELECTRONICS</h1>
-        <p className="text-lg font-bold text-foreground/80 mt-1">PVT. LTD.</p>
-        <p className="text-muted-foreground mt-2">SMT Feeder Scanning & Verification System</p>
+        <AppLogo className="h-32 mx-auto mb-4" />
+        <h1 className="text-3xl font-black tracking-tighter text-primary">{appConfig.companyName}</h1>
+        <p className="text-muted-foreground mt-2">{appConfig.systemTitle}</p>
       </div>
 
       <Card className="w-full max-w-xl shadow-lg border-border">

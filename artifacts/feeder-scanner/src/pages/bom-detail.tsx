@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader2, Trash2, Upload } from "lucide-react";
 import Papa from "papaparse";
 import { useLocation } from "wouter";
+import { AppLogo } from "@/components/AppLogo";
 
 export default function BomDetail() {
   const [, params] = useRoute("/bom/:id");
@@ -275,7 +276,7 @@ export default function BomDetail() {
     <div className="p-8 max-w-6xl mx-auto w-full space-y-8">
       <div className="flex justify-between items-start border-b border-border pb-4">
         <div className="flex items-start gap-4">
-          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-16" />
+          <AppLogo className="h-16" />
           <div>
             <h1 className="text-3xl font-mono font-bold tracking-tight text-foreground uppercase">{bom.name}</h1>
             <p className="text-muted-foreground mt-2 font-mono">{bom.description}</p>

@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
 import { Loader2, Upload } from "lucide-react";
+import { appConfig } from "@/lib/appConfig";
+import { AppLogo } from "@/components/AppLogo";
 
 const SUPERVISOR_NAMES = ["Umesh Nagile", "Dhupchand Bhardwaj", "Maruti Birader"];
 const OPERATOR_NAMES = ["Aarti", "Aniket", "Suraj"];
@@ -73,7 +75,7 @@ export default function SessionNew() {
 
   const [bomId, setBomId] = useState("");
   const [freeScanMode, setFreeScanMode] = useState(false);
-  const [companyName, setCompanyName] = useState("UCAL ELECTRONICS PVT. LTD.");
+  const [companyName, setCompanyName] = useState(appConfig.companyName);
   const [customerName, setCustomerName] = useState("");
   const [panelName, setPanelName] = useState("");
   const [supervisorName, setSupervisorName] = useState("");
@@ -84,7 +86,7 @@ export default function SessionNew() {
   const [productionCount, setProductionCount] = useState("");
   const [machineType, setMachineType] = useState("");
   const [lineNumber, setLineNumber] = useState("");
-  const defaultLogoUrl = "/ucal-logo.svg";
+  const defaultLogoUrl = appConfig.logoUrl ?? "";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,7 +132,7 @@ export default function SessionNew() {
     <div className="w-full space-y-4 sm:space-y-6 lg:space-y-8 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 max-w-4xl mx-auto">
       {/* Header - Responsive */}
       <div className="border-b border-border pb-3 sm:pb-4 lg:pb-4 flex items-center gap-2 sm:gap-3 lg:gap-4">
-        <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-10 sm:h-12 lg:h-14" />
+        <AppLogo className="h-10 sm:h-12 lg:h-14" />
         <div>
           <h1 className="text-xl sm:text-2xl lg:text-3xl font-mono font-bold tracking-tight text-foreground">NEW SESSION</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1 font-mono">Initialize verification run</p>

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
 import { Loader2, Search, ChevronRight } from "lucide-react";
+import { AppLogo } from "@/components/AppLogo";
 
 export default function SessionHistory() {
   const { data: sessions, isLoading } = useListSessions();
@@ -57,7 +58,7 @@ export default function SessionHistory() {
       <div className="px-4 sm:px-6 lg:px-8 flex flex-col gap-4 sm:gap-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
           <div className="flex items-center gap-2 sm:gap-4">
-            <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-10 sm:h-14" />
+            <AppLogo className="h-10 sm:h-14" />
             <div>
               <h1 className="text-2xl sm:text-3xl font-mono font-bold tracking-tight text-foreground">SESSION HISTORY</h1>
               <p className="text-xs sm:text-sm text-muted-foreground mt-1 font-mono">Past verification runs</p>

@@ -8,6 +8,7 @@ import { useAuth } from "@/context/auth-context";
 import { useState, useEffect } from "react";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { AppLogo } from "@/components/AppLogo";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -276,7 +277,7 @@ export default function Dashboard() {
           <div className="max-w-6xl mx-auto w-full space-y-10 animate-in fade-in duration-500">
             <div className="flex flex-col items-center justify-center py-12 sm:py-16 text-center space-y-6">
               <div className="flex items-center justify-center gap-3 mb-2">
-                <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-12 sm:h-16" />
+                  <AppLogo className="h-12 sm:h-16" />
                 <div className="hidden sm:block h-8 w-px bg-border" />
                 <div className="text-left">
                   <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Welcome</p>
@@ -396,7 +397,7 @@ export default function Dashboard() {
         <div className="max-w-6xl mx-auto w-full space-y-10 animate-in fade-in duration-500">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
             <div className="flex items-center gap-4">
-              <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-14 sm:h-16 flex-shrink-0" />
+              <AppLogo className="h-14 sm:h-16 flex-shrink-0" />
               <div>
                 <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Quality Assurance</p>
                 <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">QA Dashboard</h1>
@@ -698,7 +699,7 @@ export default function Dashboard() {
         <div className="max-w-6xl mx-auto w-full space-y-10 animate-in fade-in duration-500">
           <div className="flex justify-between items-start sm:items-center gap-6 flex-col sm:flex-row">
             <div className="flex items-center gap-4">
-              <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-16" />
+              <AppLogo className="h-16" />
               <div>
                 <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Operations</p>
                 <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">Engineer Dashboard</h1>

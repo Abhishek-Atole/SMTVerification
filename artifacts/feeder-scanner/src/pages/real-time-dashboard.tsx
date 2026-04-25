@@ -7,6 +7,8 @@ import { Loader2, AlertTriangle, TrendingUp, Zap } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from "recharts";
+import { AppLogo } from "@/components/AppLogo";
+import { appConfig } from "@/lib/appConfig";
 
 const API_BASE = "http://localhost:3000/api";
 
@@ -163,8 +165,11 @@ export default function RealTimeDashboard() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-4">
-          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-14" />
-          <h1 className="text-3xl font-black tracking-tight">Real-Time Dashboard</h1>
+          <AppLogo className="h-14" />
+          <div>
+            <h1 className="text-3xl font-black tracking-tight">{appConfig.systemTitle}</h1>
+            <p className="text-sm text-muted-foreground font-medium">Real-Time Dashboard</p>
+          </div>
         </div>
         <div className="w-[250px]">
           <Select value={sessionId || "all"} onValueChange={(val) => setSessionId(val === "all" ? null : val)}>

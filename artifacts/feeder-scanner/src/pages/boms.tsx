@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { Loader2, Plus, Edit2, Search, Download, Copy, ChevronDown, ChevronUp } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListBomsQueryKey } from "@workspace/api-client-react";
+import { AppLogo } from "@/components/AppLogo";
 
 export default function Boms() {
   const { data: boms, isLoading } = useListBoms();
@@ -208,7 +209,7 @@ export default function Boms() {
     <div className="p-8 max-w-6xl mx-auto w-full space-y-6">
       <div className="flex justify-between items-end border-b border-border pb-4 mb-4">
         <div className="flex items-center gap-4">
-          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-14" />
+          <AppLogo className="h-14" />
           <div>
             <h1 className="text-3xl font-mono font-bold tracking-tight text-foreground">BOM MANAGER</h1>
             <p className="text-muted-foreground mt-2">Manage Bill of Materials for verification</p>

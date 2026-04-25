@@ -38,6 +38,7 @@ import { useSplicingStore } from "@/store/useSplicingStore";
 import { useLogStore } from "@/store/useLogStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import type { FeederScan, SplicingRecord } from "@/types";
+import { AppLogo } from "@/components/AppLogo";
 
 type ScanStep = "feeder" | "spool";
 type SpliceStep = "feeder" | "oldSpool" | "newSpool";
@@ -1031,7 +1032,7 @@ export default function SessionActive() {
       {/* Header - Responsive */}
       <header className="bg-card border-b border-border p-2 sm:p-3 lg:p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4 shrink-0 shadow-sm z-10 relative">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <img src="/ucal-logo.svg" alt="UCAL Electronics" className="h-8 sm:h-10" />
+          <AppLogo className="h-8 sm:h-10" />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-2 sm:gap-x-4 lg:gap-x-8 gap-y-1 sm:gap-y-2 text-xs sm:text-sm min-w-0">
             <div className="truncate"><span className="text-muted-foreground font-medium text-xs">PANEL:</span> <span className="font-bold text-primary ml-1 truncate block">{session.panelName}</span></div>
             <div className="truncate"><span className="text-muted-foreground font-medium text-xs">BOM:</span> <span className="font-bold ml-1 truncate block">{session.bomName || session.bomId}</span></div>
