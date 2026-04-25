@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Router, type IRouter } from "express";
 import { AuditService } from "../services/audit-service";
 
@@ -17,8 +16,6 @@ router.post("/audit/log", async (req, res) => {
       });
     }
 
-    // @ts-ignore - Drizzle type inference issue with returning()
-    // @ts-ignore - Drizzle type inference issue
     const log = await AuditService.recordAuditLog({
       entityType,
       entityId,

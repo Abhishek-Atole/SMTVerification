@@ -19,10 +19,8 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH || "/";
 
-// API_TARGET: Use localhost for dev, can override for mobile/network access
-const apiTarget = process.env.NODE_ENV === "production" 
-  ? (process.env.API_TARGET || "http://localhost:3000")
-  : "http://localhost:3000";
+// API_TARGET can be overridden in both dev and prod to prevent proxying to the wrong local service.
+const apiTarget = process.env.API_TARGET || "http://localhost:3000";
 
 export default defineConfig({
   base: basePath,

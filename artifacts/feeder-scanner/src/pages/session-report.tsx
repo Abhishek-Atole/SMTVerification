@@ -193,7 +193,7 @@ export default function SessionReport() {
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
       const margin = 10;
-      const changeoverId = `CHG${String(session.id).padStart(8, "0")}`;
+      const changeoverId = String(session.id); // ID is already in format SMT_YYYYMMDD_NNNNNN
       const verificationMode = String(session.verificationMode ?? "manual").toUpperCase();
 
       const envCompanyName =
@@ -537,7 +537,7 @@ export default function SessionReport() {
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-mono font-bold tracking-tight">SMT CHANGEOVER</h1>
             <h2 className="text-lg sm:text-xl lg:text-2xl font-mono font-bold tracking-tight text-primary">REPORT</h2>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1 font-mono truncate">
-              CHG{String(session.id).padStart(8, "0")} | {session.companyName}
+              {String(session.id)} | {session.companyName}
             </p>
           </div>
         </div>
@@ -602,7 +602,7 @@ export default function SessionReport() {
           </div>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-2 sm:gap-x-4 lg:gap-x-8 gap-y-2 sm:gap-y-3 text-xs">
-          <div><span className="font-bold text-muted-foreground">ID:</span> <span className="truncate">CHG{String(session.id).padStart(8, "0")}</span></div>
+          <div><span className="font-bold text-muted-foreground">ID:</span> <span className="truncate">{String(session.id)}</span></div>
           <div><span className="font-bold text-muted-foreground">Panel:</span> <span className="truncate">{session.panelName}</span></div>
           <div><span className="font-bold text-muted-foreground">Shift:</span> <span className="truncate">{session.shiftName}</span></div>
           <div><span className="font-bold text-muted-foreground">Date:</span> <span className="truncate">{session.shiftDate}</span></div>

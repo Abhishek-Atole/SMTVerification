@@ -6,6 +6,7 @@ type NotificationType = "success" | "error" | "warning" | "info" | "duplicate";
 
 type NotifyFn = {
   (type: NotificationType, message: string, details?: string, onDismiss?: () => void): void;
+  
   success: (message: string, details?: string) => void;
   error: (message: string, details?: string, onDismiss?: () => void) => void;
   warning: (message: string, details?: string) => void;
@@ -101,8 +102,8 @@ export function playBuzzer(): void {
     oscillator.onended = () => {
       void audioContext.close();
     };
-  } catch {
-    // Ignore audio failures (autoplay restrictions, unsupported browsers).
+  } catch (error) {
+    console.warn("[NotificationSystem] Audio unavailable", error);
   }
 }
 

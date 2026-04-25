@@ -16,7 +16,7 @@ interface AuthSessionResponse {
 
 interface AuthContextType {
   user: User | null;
-  login: (name: string, role: Role, password: string) => Promise<void>;
+  login: (username: string, role: Role, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -44,6 +44,28 @@ async function fetchWithCredentials<T>(input: RequestInfo | URL, init?: RequestI
   return readJsonResponse<T>(response);
 }
 
+async function toAuthError(response: Response): Promise<Error> {
+  try {
+    const payload = await readJsonResponse<{ error?: string }>(response);
+    if (payload?.error) {
+      const normalized = payload.error.trim().toLowerCase();
+      if (normalized === "unauthorized" || normalized === "invalid credentials") {
+        return new Error("Invalid username, role, or password.");
+      }
+
+      return new Error(payload.error);
+    }
+  } catch {
+    // Ignore JSON parsing failures and fallback to status-based error text.
+  }
+
+  if (response.status === 401) {
+    return new Error("Invalid username, role, or password.");
+  }
+
+  return new Error(`Authentication request failed (${response.status}).`);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
@@ -56,7 +78,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (active) {
           setUser({ userId: session.userId, name: session.username, role: session.role });
         }
-      } catch {
+      } catch (error) {
+        const isExpectedUnauthenticated =
+          error instanceof Response && error.status === 401;
+
+        if (!isExpectedUnauthenticated) {
+          console.warn("[AuthContext] Failed to restore session", error);
+        }
+
         if (active) {
           setUser(null);
         }
@@ -68,11 +97,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = async (name: string, role: Role, password: string) => {
-    const session = await fetchWithCredentials<AuthSessionResponse>("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ username: name, password, role }),
-    });
+  const login = async (username: string, role: Role, password: string) => {
+    let session: AuthSessionResponse;
+    try {
+      session = await fetchWithCredentials<AuthSessionResponse>("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ username, password, role }),
+      });
+    } catch (error) {
+      if (error instanceof Response) {
+        throw await toAuthError(error);
+      }
+      throw error;
+    }
 
     setUser({ userId: session.userId, name: session.username, role: session.role });
   };

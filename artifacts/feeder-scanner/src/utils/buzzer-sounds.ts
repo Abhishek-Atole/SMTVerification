@@ -208,11 +208,11 @@ export function unlockAudio(): void {
   try {
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     if (audioContext.state === 'suspended') {
-      audioContext.resume().catch(() => {
-        // Ignore errors - audio may not be available
+      audioContext.resume().catch((error) => {
+        console.warn('[BuzzerSounds] Failed to resume audio context', error);
       });
     }
-  } catch {
-    // Ignore errors - Web Audio API may not be available
+  } catch (error) {
+    console.warn('[BuzzerSounds] Web Audio API unavailable', error);
   }
 }

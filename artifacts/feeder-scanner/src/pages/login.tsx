@@ -4,45 +4,32 @@ import { useAuth } from "@/context/auth-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Settings, ShieldCheck, ScanLine } from "lucide-react";
 
-const NAMES_BY_ROLE: Record<string, string[]> = {
-  engineer: ["Umesh Nagile", "Dhupchand Bhardwaj", "Maruti Birader"],
-  qa: ["Abhishek Atole", "Viswajit"],
-  operator: ["Aarti", "Aniket", "Suraj"],
-};
-
 export default function Login() {
-  const [selectedName, setSelectedName] = useState("");
-  const [customName, setCustomName] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [role, setRole] = useState<"engineer" | "qa" | "operator" | null>(null);
   const { login } = useAuth();
   const [, setLocation] = useLocation();
 
-  const names = role ? NAMES_BY_ROLE[role] ?? [] : [];
-  const isOther = selectedName === "__other__";
-  const finalName = isOther ? customName.trim() : selectedName;
-
   const handleRoleChange = (r: "engineer" | "qa" | "operator") => {
     setRole(r);
-    setSelectedName("");
-    setCustomName("");
     setPassword("");
     setError("");
   };
 
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!finalName || !role) return;
+    if (!username.trim() || !role) return;
     try {
       setError("");
-      await login(finalName, role, password);
+      await login(username.trim(), role, password);
       setLocation("/");
-    } catch {
-      setError("Invalid username, role, or password.");
+    } catch (error: unknown) {
+      console.warn("[Login] Authentication failed", error);
+      setError(error instanceof Error ? error.message : "Authentication failed. Please try again.");
     }
   };
 
@@ -58,7 +45,7 @@ export default function Login() {
       <Card className="w-full max-w-xl shadow-lg border-border">
         <CardHeader>
           <CardTitle className="text-2xl text-center">Authentication</CardTitle>
-          <CardDescription className="text-center">Select your role and name to continue</CardDescription>
+          <CardDescription className="text-center">Select your role and enter credentials to continue</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-8">
@@ -89,32 +76,20 @@ export default function Login() {
               </div>
             </div>
 
-            {role && (
-              <div className="space-y-3">
-                <label className="text-sm font-medium">Select Name</label>
-                <Select value={selectedName} onValueChange={setSelectedName}>
-                  <SelectTrigger className="h-12">
-                    <SelectValue placeholder="Choose your name..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {names.map((n) => (
-                      <SelectItem key={n} value={n}>{n}</SelectItem>
-                    ))}
-                    <SelectItem value="__other__">Other (enter manually)</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {isOther && (
-                  <Input
-                    autoFocus
-                    placeholder="Enter your full name"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    className="h-12 text-lg"
-                  />
-                )}
-              </div>
-            )}
+            <div className="space-y-3">
+              <label className="text-sm font-medium" htmlFor="username">
+                Username
+              </label>
+              <Input
+                id="username"
+                name="username"
+                autoComplete="username"
+                placeholder="Enter your username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="h-12 text-lg"
+              />
+            </div>
 
             {role && (
               <div className="space-y-3">
@@ -123,6 +98,7 @@ export default function Login() {
                 </label>
                 <Input
                   id="password"
+                  name="password"
                   type="password"
                   autoComplete="current-password"
                   placeholder="Enter your password"
@@ -138,7 +114,7 @@ export default function Login() {
             <Button
               type="submit"
               className="w-full h-12 text-lg font-bold tracking-wide"
-              disabled={!finalName || !role || !password}
+              disabled={!username.trim() || !role || !password}
             >
               LOGIN
             </Button>

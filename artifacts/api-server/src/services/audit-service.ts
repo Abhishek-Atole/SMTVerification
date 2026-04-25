@@ -1,5 +1,3 @@
-// @ts-nocheck
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { db } from "@workspace/db";
 import { auditLogsTable, InsertAuditLog } from "@workspace/db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
@@ -15,12 +13,11 @@ export class AuditService {
       ...data,
       createdAt: data.createdAt || TimestampService.createAuditTimestamp(),
     };
-    
-    // @ts-ignore - Drizzle insert type inference issue
-    const result = (await db
+
+    const result = await db
       .insert(auditLogsTable)
       .values(auditData)
-      .returning()) as any[];
+      .returning();
     return result[0];
   }
 
@@ -28,8 +25,7 @@ export class AuditService {
    * Get audit logs for a specific entity
    */
   static async getAuditLogsForEntity(entityType: string, entityId: string) {
-    // @ts-ignore - Drizzle select type inference issue
-    const logs: any[] = await db
+    const logs = await db
       .select()
       .from(auditLogsTable)
       .where(
@@ -47,8 +43,7 @@ export class AuditService {
    * Get audit logs for a specific action type
    */
   static async getAuditLogsByAction(action: string, limit: number = 100) {
-    // @ts-ignore - Drizzle select type inference issue
-    const logs: any[] = await db
+    const logs = await db
       .select()
       .from(auditLogsTable)
       .where(eq(auditLogsTable.action, action))
@@ -62,8 +57,7 @@ export class AuditService {
    * Get audit logs by user
    */
   static async getAuditLogsByUser(userId: string, limit: number = 100) {
-    // @ts-ignore - Drizzle select type inference issue  
-    const logs: any[] = await db
+    const logs = await db
       .select()
       .from(auditLogsTable)
       .where(eq(auditLogsTable.changedBy, userId))
@@ -81,8 +75,7 @@ export class AuditService {
     endDate: Date,
     limit: number = 1000
   ) {
-    // @ts-ignore - Drizzle select type inference issue
-    const logs: any[] = await db
+    const logs = await db
       .select()
       .from(auditLogsTable)
       .where(
@@ -101,8 +94,7 @@ export class AuditService {
    * Get change history for an entity
    */
   static async getChangeHistory(entityType: string, entityId: string) {
-    // @ts-ignore - Drizzle select type inference issue
-    const logs: any[] = await db
+    const logs = await db
       .select()
       .from(auditLogsTable)
       .where(

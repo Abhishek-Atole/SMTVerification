@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { changeoverSessionsTable, feederScansTable } from "@workspace/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getSessionProgress, verifyFeederScan } from "../services/verificationService";
+import { generateSessionId } from "../lib/generateSessionId";
 import {
   attachActor,
   requireOperatorSessionOwnership,
@@ -12,7 +13,7 @@ import {
 
 const router: IRouter = Router();
 
-router.use(attachActor);
+router.use("/verification", attachActor);
 
 function toNumber(value: unknown): number {
   return Number(value);
@@ -28,9 +29,13 @@ router.post("/verification/sessions", async (req, res) => {
       return;
     }
 
+    // Generate new session ID in format SMT_YYYYMMDD_NNNNNN
+    const sessionId = await generateSessionId();
+
     const [session] = await db
       .insert(changeoverSessionsTable)
       .values({
+        id: sessionId,
         operatorId,
         bomId,
         status: "active",

@@ -1,12 +1,12 @@
 // @ts-nocheck
-import { useListSessions, useListBoms, useGetAnalyticsOverview, getGetAnalyticsOverviewQueryKey, useDeleteSession, getListSessionsQueryKey, useListDeletedSessions, getListDeletedSessionsQueryKey, useRecoverSession } from "@workspace/api-client-react";
+import { useListSessions, useListBoms, useGetAnalyticsOverview, getGetAnalyticsOverviewQueryKey, getListSessionsQueryKey } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Play, Boxes, CheckCircle2, Loader2, BarChart3, ScanLine, Clock, Trash2 } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
 import { useState, useEffect } from "react";
-import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
 export default function Dashboard() {
@@ -40,7 +40,10 @@ export default function Dashboard() {
   */
 
   // PRIMARY APPROACH: Using call-level callbacks
-  const deleteSessionMutation = useDeleteSession();
+  const deleteSessionMutation = useMutation({
+    mutationFn: ({ sessionId }: { sessionId: number }) =>
+      api.delete(`/api/sessions/${sessionId}`),
+  });
   const { data: boms, isLoading: bomsLoading } = useListBoms();
   const { data: overview, isLoading: overviewLoading, isError: overviewError } = useGetAnalyticsOverview({
     query: { 
@@ -59,8 +62,14 @@ export default function Dashboard() {
   const [recoveringSessionId, setRecoveringSessionId] = useState<number | null>(null);
 
   // Trash bin hooks
-  const { data: deletedSessions, isLoading: deletedSessionsLoading, refetch: refetchDeletedSessions } = useListDeletedSessions({
-    query: { enabled: showTrashBin }
+  const deletedSessionsQueryKey = ["deleted-sessions"] as const;
+  const { data: deletedSessions, isLoading: deletedSessionsLoading, refetch: refetchDeletedSessions } = useQuery({
+    queryKey: deletedSessionsQueryKey,
+    queryFn: async () => {
+      const response = await api.get("/api/sessions/deleted");
+      return response.data;
+    },
+    enabled: showTrashBin,
   });
   
   // Fetch comprehensive trash items (all data types)
@@ -86,7 +95,10 @@ export default function Dashboard() {
     refetchInterval: 5000, // Refresh every 5 seconds
   });
   
-  const recoverSessionMutation = useRecoverSession();
+  const recoverSessionMutation = useMutation({
+    mutationFn: ({ sessionId }: { sessionId: number }) =>
+      api.post(`/api/sessions/${sessionId}/recover`),
+  });
 
   useEffect(() => {
     if (!deletingSessionId || !deleteSessionMutation.isPending) {
@@ -154,7 +166,7 @@ export default function Dashboard() {
       {
         onSuccess: () => {
           setRecoveringSessionId(null);
-          queryClient.invalidateQueries({ queryKey: getListDeletedSessionsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: deletedSessionsQueryKey });
           queryClient.invalidateQueries({ queryKey: getListSessionsQueryKey() });
           refetchDeletedSessions();
         },

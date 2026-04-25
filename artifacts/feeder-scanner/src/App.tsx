@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -26,6 +25,7 @@ import SplicingPage from "@/pages/splicing";
 import { AuthProvider, useAuth } from "@/context/auth-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { NotificationProvider } from "@/components/NotificationSystem";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -49,15 +49,7 @@ function ProtectedRoute({ component: Component, allowedRoles }: { component: any
 
 function Router() {
   const { user } = useAuth();
-  const [location, setLocation] = useLocation();
-  
-  // Redirect "/" to "/verification" on mount
-  useEffect(() => {
-    if (user && location === "/") {
-      setLocation("/verification");
-    }
-  }, [user, location, setLocation]);
-  
+
   return (
     <Switch>
       <Route path="/login" component={Login} />
@@ -67,7 +59,7 @@ function Router() {
             <Layout>
               <Switch>
                 <Route path="/">
-                  {() => <ProtectedRoute component={VerificationPage} allowedRoles={["engineer", "operator", "qa"]} />}
+                  {() => <ProtectedRoute component={Dashboard} allowedRoles={["engineer", "operator", "qa"]} />}
                 </Route>
                 <Route path="/bom">
                   {() => <ProtectedRoute component={Boms} allowedRoles={["engineer"]} />}
@@ -124,12 +116,14 @@ function App() {
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
           <TooltipProvider>
-            <NotificationProvider>
-              <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
-                <Router />
-              </WouterRouter>
-              <Toaster />
-            </NotificationProvider>
+            <ErrorBoundary>
+              <NotificationProvider>
+                <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
+                  <Router />
+                </WouterRouter>
+                <Toaster />
+              </NotificationProvider>
+            </ErrorBoundary>
           </TooltipProvider>
         </QueryClientProvider>
       </AuthProvider>

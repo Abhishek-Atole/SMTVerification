@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Link, useLocation } from "wouter";
 import { LayoutDashboard, Boxes, History, PlusSquare, BarChart3, LogOut, Sun, Moon, Menu, X, Trash2, TrendingUp, FileText, ScanLine, Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -6,8 +5,9 @@ import { useAuth } from "@/context/auth-context";
 import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import type { ReactNode } from "react";
 
-export function Layout({ children }: { children: React.ReactNode }) {
+export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();

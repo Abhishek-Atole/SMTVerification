@@ -1,7 +1,11 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
 import jwt, { type JwtPayload } from "jsonwebtoken";
+import { and, eq } from "drizzle-orm";
+import { db } from "@workspace/db";
+import { usersTable } from "@workspace/db/schema";
 import { type UserRole } from "../middleware/auth";
+import { auditLog } from "../lib/auditLogger";
 
 type AuthUser = {
   userId: number;
@@ -17,57 +21,6 @@ type AuthTokenPayload = {
 };
 
 const LOGIN_DURATION_MS = 8 * 60 * 60 * 1000;
-
-const demoUsers: AuthUser[] = [
-  {
-    userId: 1,
-    username: "Umesh Nagile",
-    role: "engineer",
-    passwordHash: bcrypt.hashSync("Engineer@SMT2026", 12),
-  },
-  {
-    userId: 2,
-    username: "Dhupchand Bhardwaj",
-    role: "engineer",
-    passwordHash: bcrypt.hashSync("Engineer@SMT2026", 12),
-  },
-  {
-    userId: 3,
-    username: "Maruti Birader",
-    role: "engineer",
-    passwordHash: bcrypt.hashSync("Engineer@SMT2026", 12),
-  },
-  {
-    userId: 4,
-    username: "Abhishek Atole",
-    role: "qa",
-    passwordHash: bcrypt.hashSync("QA@SMT2026", 12),
-  },
-  {
-    userId: 5,
-    username: "Viswajit",
-    role: "qa",
-    passwordHash: bcrypt.hashSync("QA@SMT2026", 12),
-  },
-  {
-    userId: 6,
-    username: "Aarti",
-    role: "operator",
-    passwordHash: bcrypt.hashSync("Operator@SMT2026", 12),
-  },
-  {
-    userId: 7,
-    username: "Aniket",
-    role: "operator",
-    passwordHash: bcrypt.hashSync("Operator@SMT2026", 12),
-  },
-  {
-    userId: 8,
-    username: "Suraj",
-    role: "operator",
-    passwordHash: bcrypt.hashSync("Operator@SMT2026", 12),
-  },
-];
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -114,7 +67,8 @@ function verifyToken(token: string): AuthTokenPayload | null {
       username,
       role,
     };
-  } catch {
+  } catch (error) {
+    console.warn("[Auth] Invalid JWT token", error);
     return null;
   }
 }
@@ -141,23 +95,36 @@ const router: IRouter = Router();
 router.post("/auth/login", async (req, res) => {
   const parsed = parseLoginPayload(req.body);
   if (!parsed) {
+    await auditLog({ event: "LOGIN_FAILURE", detail: "Invalid login payload", ip: req.ip });
     res.status(400).json({ error: "Invalid login payload" });
     return;
   }
 
   const { username, password, role } = parsed;
   const normalizedUsername = username.trim().toLowerCase();
-  const user = demoUsers.find(
-    (candidate) => candidate.role === role && candidate.username.toLowerCase() === normalizedUsername,
-  );
+
+  const userRecord = await db.query.usersTable.findFirst({
+    where: and(eq(usersTable.username, normalizedUsername), eq(usersTable.role, role)),
+  });
+
+  const user: AuthUser | null = userRecord
+    ? {
+      userId: userRecord.id,
+      username: userRecord.username,
+      role: userRecord.role as UserRole,
+      passwordHash: userRecord.password,
+    }
+    : null;
 
   if (!user) {
+    await auditLog({ event: "LOGIN_FAILURE", detail: `Unknown user: ${username}`, ip: req.ip });
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
 
   const passwordMatches = await bcrypt.compare(password, user.passwordHash);
   if (!passwordMatches) {
+    await auditLog({ event: "LOGIN_FAILURE", operatorId: user.userId, detail: "Password mismatch", ip: req.ip });
     res.status(401).json({ error: "Invalid credentials" });
     return;
   }
@@ -169,6 +136,7 @@ router.post("/auth/login", async (req, res) => {
   });
 
   res.cookie("smt_token", token, getCookieOptions());
+  await auditLog({ event: "LOGIN_SUCCESS", operatorId: user.userId, detail: user.role, ip: req.ip });
   res.status(200).json({
     userId: user.userId,
     username: user.username,
@@ -176,8 +144,10 @@ router.post("/auth/login", async (req, res) => {
   });
 });
 
-router.post("/auth/logout", (_req, res) => {
+router.post("/auth/logout", async (req, res) => {
   res.clearCookie("smt_token", getCookieOptions());
+  const actor = getAuthActorFromCookie(req);
+  await auditLog({ event: "LOGOUT", operatorId: actor?.userId, detail: actor?.role, ip: req.ip });
   res.status(200).json({ success: true });
 });
 

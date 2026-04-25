@@ -6,11 +6,15 @@ export const usersTable = pgTable(
   "users",
   {
     id: serial("id").primaryKey(),
-    name: text("name").notNull(),
+    username: text("username").notNull().default(""),
+    password: text("password").notNull().default(""),
+    displayName: text("display_name").notNull().default(""),
+    name: text("name").notNull().default(""),
     role: text("role").notNull().default("operator"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
+    usernameIdx: index("users_username_idx").on(table.username),
     roleIdx: index("users_role_idx").on(table.role),
   })
 );

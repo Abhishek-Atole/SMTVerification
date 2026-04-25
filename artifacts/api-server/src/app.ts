@@ -83,9 +83,21 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const localDevOriginPattern = /^http:\/\/localhost:\d+$/;
+
 app.use(
   cors({
     origin: (origin, callback) => {
+      const isLocalDevOrigin =
+        process.env.NODE_ENV !== "production" &&
+        typeof origin === "string" &&
+        localDevOriginPattern.test(origin);
+
+      if (isLocalDevOrigin) {
+        callback(null, true);
+        return;
+      }
+
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
         return;

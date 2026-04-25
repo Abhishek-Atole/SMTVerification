@@ -283,7 +283,8 @@ async function parseErrorBody(response: Response, method: string): Promise<unkno
   if (isJsonMediaType(mediaType) || looksLikeJson(normalized)) {
     try {
       return JSON.parse(normalized);
-    } catch {
+    } catch (error) {
+      console.warn("[api-client-react] Failed to parse error response body as JSON", error);
       return raw;
     }
   }

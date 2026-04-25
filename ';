@@ -1,0 +1,8 @@
+ id | username  |   role   | password_len |                           password                           
+----+-----------+----------+--------------+--------------------------------------------------------------
+  1 | operator1 | operator |           60 | $2b$12$W1wmebnkYRSDQDPehQ2h7O1vgVHa9z9jg/WfiU3Vl3Uav/OzxWNgK
+  2 | operator2 | operator |           60 | $2b$12$icKtyO/6vfvCNKUgkp5ZUeJjGWG.xSf5MPi1svotVWqEHcIEwHz0m
+  3 | qa1       | qa       |           60 | $2b$12$bskZKWGsMt8k3IGOyEuVT.6oc8ue/7yON7vTjpItJAfAFuWAQ2X4y
+  4 | engineer1 | engineer |           60 | $2b$12$HnNqA8arnlb4AnWdRWZre.QGRr6Jxv61nAYCsiHIIoMKO280oNjs6
+(4 rows)
+

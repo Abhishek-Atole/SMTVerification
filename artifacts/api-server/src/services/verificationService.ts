@@ -54,6 +54,58 @@ function buildBaseResult(feederNumber: string, item: BomItemForVerification): Om
   };
 }
 
+export function verifyMPN(scanned: string, bomRow: BomItemForVerification): VerifyResult {
+  const normalizedScannedValue = normalize(scanned);
+  const base = buildBaseResult(bomRow.feederNumber, bomRow);
+
+  const internalTokens = tokenizeInternalPartNumber(bomRow.internalPartNumber).map(normalize);
+  if (internalTokens.includes(normalizedScannedValue)) {
+    return {
+      ...base,
+      valid: true,
+      matchedField: "internalPartNumber",
+      matchedMake: null,
+      errorCode: null,
+    };
+  }
+
+  if (isNonEmpty(bomRow.mpn1) && normalize(bomRow.mpn1) === normalizedScannedValue) {
+    return {
+      ...base,
+      valid: true,
+      matchedField: "mpn1",
+      matchedMake: isNonEmpty(bomRow.make1) ? bomRow.make1.trim() : null,
+      errorCode: null,
+    };
+  }
+
+  if (isNonEmpty(bomRow.mpn2) && normalize(bomRow.mpn2) === normalizedScannedValue) {
+    return {
+      ...base,
+      valid: true,
+      matchedField: "mpn2",
+      matchedMake: isNonEmpty(bomRow.make2) ? bomRow.make2.trim() : null,
+      errorCode: null,
+    };
+  }
+
+  if (isNonEmpty(bomRow.mpn3) && normalize(bomRow.mpn3) === normalizedScannedValue) {
+    return {
+      ...base,
+      valid: true,
+      matchedField: "mpn3",
+      matchedMake: isNonEmpty(bomRow.make3) ? bomRow.make3.trim() : null,
+      errorCode: null,
+    };
+  }
+
+  return {
+    ...base,
+    valid: false,
+    errorCode: normalizedScannedValue ? "COMPONENT_MISMATCH" : "COMPONENT_MISMATCH",
+  };
+}
+
 export async function verifyFeederScan(
   feederNumber: string,
   scannedValue: string,
@@ -132,52 +184,16 @@ export async function verifyFeederScan(
     };
   }
 
-  const internalTokens = tokenizeInternalPartNumber(item.internalPartNumber).map(normalize);
-  if (internalTokens.includes(normalizedScannedValue)) {
-    return {
-      ...base,
-      valid: true,
-      matchedField: "internalPartNumber",
-      matchedMake: null,
-      errorCode: null,
-    };
-  }
-
-  if (isNonEmpty(item.mpn1) && normalize(item.mpn1) === normalizedScannedValue) {
-    return {
-      ...base,
-      valid: true,
-      matchedField: "mpn1",
-      matchedMake: isNonEmpty(item.make1) ? item.make1.trim() : null,
-      errorCode: null,
-    };
-  }
-
-  if (isNonEmpty(item.mpn2) && normalize(item.mpn2) === normalizedScannedValue) {
-    return {
-      ...base,
-      valid: true,
-      matchedField: "mpn2",
-      matchedMake: isNonEmpty(item.make2) ? item.make2.trim() : null,
-      errorCode: null,
-    };
-  }
-
-  if (isNonEmpty(item.mpn3) && normalize(item.mpn3) === normalizedScannedValue) {
-    return {
-      ...base,
-      valid: true,
-      matchedField: "mpn3",
-      matchedMake: isNonEmpty(item.make3) ? item.make3.trim() : null,
-      errorCode: null,
-    };
-  }
-
-  return {
-    ...base,
-    valid: false,
-    errorCode: "COMPONENT_MISMATCH",
-  };
+  return verifyMPN(scannedValue, {
+    feederNumber: normalizedFeederNumber,
+    internalPartNumber: item.internalPartNumber,
+    mpn1: item.mpn1,
+    mpn2: item.mpn2,
+    mpn3: item.mpn3,
+    make1: item.make1,
+    make2: item.make2,
+    make3: item.make3,
+  });
 }
 
 export async function getSessionProgress(
