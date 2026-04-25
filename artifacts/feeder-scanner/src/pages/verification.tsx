@@ -11,6 +11,8 @@ import { useScanner } from "@/hooks/useScanner";
 import { useNotification } from "@/hooks/use-notification";
 import { ScanNotification } from "@/components/notifications/ScanNotification";
 import { LogPanel } from "@/components/LogPanel";
+import { AppLogo } from "@/components/AppLogo";
+import { appConfig } from "@/lib/appConfig";
 
 export default function VerificationPage() {
   const [, setLocation] = useLocation();
@@ -84,7 +86,7 @@ export default function VerificationPage() {
   }, [currentStep, activeFeederInput]);
 
   useEffect(() => {
-    document.title = `FVS | Verifying... (${progress.verifiedCount}/${progress.totalRequired})`;
+    document.title = `${appConfig.companyShort} | Verifying... (${progress.verifiedCount}/${progress.totalRequired})`;
   }, [progress.verifiedCount, progress.totalRequired]);
 
   useEffect(() => {
@@ -129,7 +131,18 @@ export default function VerificationPage() {
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6 app-noise">
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 lg:grid-cols-5">
+      <div className="mx-auto max-w-7xl space-y-4">
+        <div className="flex items-center justify-between rounded-xl border border-border/60 bg-card px-4 py-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <AppLogo className="h-10 w-10 shrink-0" />
+            <div className="min-w-0">
+              <h1 className="text-base font-bold truncate">Verification Station</h1>
+              <p className="text-xs text-muted-foreground truncate">{appConfig.systemTitle}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div className="space-y-4 lg:col-span-3">
           <Card className="panel-pop scan-surface">
             <CardHeader>
@@ -225,6 +238,7 @@ export default function VerificationPage() {
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center text-center">
                     <div>
+                    </div>
                       <div className="text-3xl font-black">{progress.percentage}%</div>
                       <div className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Complete</div>
                     </div>

@@ -12,6 +12,8 @@ import { useIsVerificationComplete } from "@/store/useVerificationStore";
 import { useSplicingStore } from "@/store/useSplicingStore";
 import { ScanNotification } from "@/components/notifications/ScanNotification";
 import { LogPanel } from "@/components/LogPanel";
+import { AppLogo } from "@/components/AppLogo";
+import { appConfig } from "@/lib/appConfig";
 
 type Step = "feeder" | "oldSpool" | "newSpool";
 
@@ -40,7 +42,7 @@ export default function SplicingPage() {
   }, [isVerificationComplete, setLocation]);
 
   useEffect(() => {
-    document.title = "FVS | Splicing";
+    document.title = `${appConfig.companyShort} | Splicing`;
   }, []);
 
   const currentLabel = useMemo(() => {
@@ -88,7 +90,13 @@ export default function SplicingPage() {
     <div className="min-h-screen bg-background p-4 md:p-6 app-noise">
       <div className="mx-auto max-w-6xl space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">Splicing Station</h1>
+          <div className="flex items-center gap-3">
+            <AppLogo className="h-10 w-10" />
+            <div>
+              <h1 className="text-xl font-bold">Splicing Station</h1>
+              <p className="text-xs text-muted-foreground">{appConfig.systemTitle}</p>
+            </div>
+          </div>
           <Button variant="outline" onClick={() => setLocation("/verification")}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back To Verification
           </Button>
