@@ -28,7 +28,14 @@ import { NotificationProvider } from "@/components/NotificationSystem";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { appConfig } from "@/lib/appConfig";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      staleTime: 30_000,
+    },
+  },
+});
 
 function ProtectedRoute({ component: Component, allowedRoles }: { component: any, allowedRoles?: string[] }) {
   const { user } = useAuth();
@@ -147,16 +154,16 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
         <AuthProvider>
-          <TooltipProvider>
+          <NotificationProvider>
             <ErrorBoundary>
-              <NotificationProvider>
+              <TooltipProvider>
                 <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
                   <Router />
                 </WouterRouter>
                 <Toaster />
-              </NotificationProvider>
+              </TooltipProvider>
             </ErrorBoundary>
-          </TooltipProvider>
+          </NotificationProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
