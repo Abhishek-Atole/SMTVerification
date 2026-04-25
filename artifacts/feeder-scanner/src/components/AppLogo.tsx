@@ -1,20 +1,21 @@
 import { appConfig } from "@/lib/appConfig";
+import { useState } from "react";
 
 type AppLogoProps = {
   className?: string;
 };
 
 export function AppLogo({ className }: AppLogoProps) {
-  if (appConfig.logoUrl) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  if (appConfig.logoUrl && !imageFailed) {
     return (
       <img
         src={appConfig.logoUrl}
         alt={appConfig.companyShort}
         className={className}
         style={{ objectFit: "contain" }}
-        onError={(event) => {
-          (event.currentTarget as HTMLImageElement).style.display = "none";
-        }}
+        onError={() => setImageFailed(true)}
       />
     );
   }
