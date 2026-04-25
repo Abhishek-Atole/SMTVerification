@@ -23,6 +23,10 @@ HEALTH_CHECK_RETRIES=5
 configure_runtime_paths() {
   if [ "${EUID:-0}" -ne 0 ]; then
     local runtime_root="${TMPDIR:-/tmp}/smt-verification"
+    if ! mkdir -p "$runtime_root/logs" "$runtime_root/run" 2>/dev/null; then
+      runtime_root="$PROJECT_ROOT/.runtime/smt-verification"
+      mkdir -p "$runtime_root/logs" "$runtime_root/run" 2>/dev/null || true
+    fi
     LOG_DIR="$runtime_root/logs"
     LOCK_DIR="$runtime_root/run"
     LOCK_FILE="$LOCK_DIR/system.lock"
@@ -54,6 +58,10 @@ load_project_env() {
 configure_runtime_paths
 load_project_env
 
+# Service ports (frontend defaults to 5173)
+API_PORT="${API_PORT:-${PORT:-3000}}"
+FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -71,7 +79,9 @@ log() {
   local message="$@"
   local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
   mkdir -p "$LOG_DIR" "$LOCK_DIR" 2>/dev/null || true
-  echo "[$timestamp] [$level] $message" | tee -a "$RECOVERY_LOG"
+  if ! echo "[$timestamp] [$level] $message" | tee -a "$RECOVERY_LOG" >/dev/null; then
+    echo "[$timestamp] [$level] $message"
+  fi
 }
 
 log_info() {
@@ -183,8 +193,8 @@ force_unlock() {
   
   # Kill any node processes on the ports
   log_info "Killing any processes on API/app ports..."
-  lsof -ti:3000 | xargs kill -9 2>/dev/null || true
-  lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+  lsof -ti:"$API_PORT" | xargs kill -9 2>/dev/null || true
+  lsof -ti:"$FRONTEND_PORT" | xargs kill -9 2>/dev/null || true
   
   # Remove lock files
   rm -f "$LOCK_FILE"
@@ -311,9 +321,9 @@ stop_server() {
   # Also clean up generic node api-server processes
   pkill -9 -f "node.*api-server" 2>/dev/null || true
   
-  # Force-kill any remaining processes on port 3000
+  # Force-kill any remaining processes on API port
   if command -v lsof &>/dev/null; then
-    lsof -ti:3000 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+    lsof -ti:"$API_PORT" 2>/dev/null | xargs -r kill -9 2>/dev/null || true
   fi
   
   log_success "Server stopped"
@@ -434,7 +444,7 @@ wait_for_database() {
 ################################################################################
 
 check_api_health() {
-  local port=${1:-3000}
+  local port=${1:-$API_PORT}
   local endpoint="${2:-/api/health}"
   local retry=0
   
@@ -457,7 +467,7 @@ check_api_health() {
 }
 
 check_app_health() {
-  local port=${1:-5173}
+  local port=${1:-$FRONTEND_PORT}
   local retry=0
   
   log_info "Checking app at localhost:$port..."
@@ -495,11 +505,11 @@ start_api_server() {
   # Check if dependencies are installed
   if [ ! -d "node_modules" ]; then
     log_info "Installing API dependencies..."
-    pnpm install || npm install
+    pnpm install
   fi
 
   log_info "Building API server production assets..."
-  if ! npm run build >> "$LOG_DIR/api-server.log" 2>&1; then
+  if ! pnpm run build >> "$LOG_DIR/api-server.log" 2>&1; then
     log_error "API build failed"
     return 1
   fi
@@ -508,7 +518,7 @@ start_api_server() {
   log_info "Launching API server process..."
   (
     export DATABASE_URL="${DATABASE_URL:-postgresql://smtverify:smtverify@localhost:5432/smtverify}"
-    export PORT=3000
+    export PORT="$API_PORT"
     export NODE_ENV=production
     nohup node --enable-source-maps ./dist/index.mjs >> "$LOG_DIR/api-server.log" 2>&1 &
   )
@@ -516,7 +526,7 @@ start_api_server() {
   sleep 2
   local server_pid
   if command -v lsof &>/dev/null; then
-    server_pid=$(lsof -ti:3000 2>/dev/null | head -n 1 || true)
+    server_pid=$(lsof -ti:"$API_PORT" 2>/dev/null | head -n 1 || true)
   fi
   if [ -z "$server_pid" ]; then
     server_pid=$(pgrep -f "node --enable-source-maps ./dist/index.mjs" | head -n 1 || true)
@@ -537,7 +547,7 @@ start_api_server() {
   # Wait for server to be ready
   sleep 3
   
-  if check_api_health 3000; then
+  if check_api_health "$API_PORT"; then
     log_success "API server is operational"
     return 0
   else
@@ -556,17 +566,17 @@ start_app_server() {
   # Check if dependencies are installed
   if [ ! -d "node_modules" ]; then
     log_info "Installing app dependencies..."
-    pnpm install || npm install
+    pnpm install
   fi
 
   log_info "Building frontend production assets..."
-  if ! PORT=5173 BASE_PATH=/ npm run build >> "$LOG_DIR/app-server.log" 2>&1; then
+  if ! PORT="$FRONTEND_PORT" BASE_PATH=/ pnpm run build >> "$LOG_DIR/app-server.log" 2>&1; then
     log_error "Frontend build failed"
     return 1
   fi
 
   log_info "Launching production frontend server..."
-  PORT=5173 BASE_PATH=/ nohup npm run serve -- --port 5173 --host 0.0.0.0 >> "$LOG_DIR/app-server.log" 2>&1 &
+  PORT="$FRONTEND_PORT" BASE_PATH=/ nohup pnpm run serve -- --port "$FRONTEND_PORT" --host 0.0.0.0 >> "$LOG_DIR/app-server.log" 2>&1 &
   local app_pid=$!
   sleep 2
   if ! kill -0 "$app_pid" 2>/dev/null; then
@@ -579,7 +589,7 @@ start_app_server() {
   # Wait for app to be ready
   sleep 5
   
-  if check_app_health 5173; then
+  if check_app_health "$FRONTEND_PORT"; then
     log_success "Frontend app is operational"
     return 0
   else
@@ -602,8 +612,8 @@ write_status_file() {
   "status": "$status",
   "message": "$message",
   "timestamp": "$timestamp",
-  "api_port": 3000,
-  "app_port": 5173,
+  "api_port": $API_PORT,
+  "app_port": $FRONTEND_PORT,
   "log_file": "$RECOVERY_LOG"
 }
 EOF
@@ -621,7 +631,7 @@ show_status() {
     else
       local live_pid=""
       if command -v lsof &>/dev/null; then
-        live_pid=$(lsof -ti:3000 2>/dev/null | head -n 1 || true)
+        live_pid=$(lsof -ti:"$API_PORT" 2>/dev/null | head -n 1 || true)
       fi
       if [ -n "$live_pid" ] && kill -0 "$live_pid" 2>/dev/null; then
         echo "$live_pid" > "$PID_FILE"
@@ -634,13 +644,13 @@ show_status() {
     log_error "API Server: NOT RUNNING"
   fi
   
-  if check_api_health 3000 &>/dev/null; then
+  if check_api_health "$API_PORT" &>/dev/null; then
     log_success "API Health: HEALTHY"
   else
     log_warning "API Health: UNHEALTHY"
   fi
   
-  if check_app_health 5173 &>/dev/null; then
+  if check_app_health "$FRONTEND_PORT" &>/dev/null; then
     log_success "Frontend: HEALTHY"
   else
     log_warning "Frontend: UNHEALTHY"
@@ -679,8 +689,8 @@ perform_full_recovery() {
   stop_server
   
   # Wait for ports to be free
-  wait_for_port_free 3000 30 || true
-  wait_for_port_free 5173 30 || true
+  wait_for_port_free "$API_PORT" 30 || true
+  wait_for_port_free "$FRONTEND_PORT" 30 || true
   
   # Start services
   if ! start_api_server; then
@@ -723,8 +733,8 @@ start_system() {
 
   stop_server
 
-  wait_for_port_free 3000 30 || true
-  wait_for_port_free 5173 30 || true
+  wait_for_port_free "$API_PORT" 30 || true
+  wait_for_port_free "$FRONTEND_PORT" 30 || true
 
   if ! start_api_server; then
     log_error "Failed to start API server"
