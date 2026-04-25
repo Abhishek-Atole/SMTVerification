@@ -256,6 +256,8 @@ router.get("/sessions/:sessionId/scans", async (req, res) => {
         id: scanRecordsTable.id,
         feederNumber: scanRecordsTable.feederNumber,
         scannedValue: scanRecordsTable.spoolBarcode,
+        internalIdScanned: scanRecordsTable.internalIdScanned,
+        scannedMpn: scanRecordsTable.scannedMpn,
         matchedField: scanRecordsTable.validationResult,
         matchedMake: scanRecordsTable.description,
         lotCode: scanRecordsTable.lotNumber,
@@ -291,7 +293,7 @@ router.get("/sessions/:sessionId/scans", async (req, res) => {
       scans: scans.map((row) => ({
         id: row.id,
         feederNumber: row.feederNumber,
-        scannedValue: row.scannedValue ?? row.feederNumber,
+        scannedValue: row.scannedValue ?? row.internalIdScanned ?? row.scannedMpn ?? "—",
         matchedField: row.matchedField,
         matchedMake: row.matchedMake,
         lotCode: row.lotCode,
@@ -398,6 +400,15 @@ function normalizeInput(input?: string | null): string | undefined {
   return input ? input.trim().toUpperCase() : undefined;
 }
 
+function formatSmtSessionId(sourceDate: Date | string | null | undefined, sequence: number): string {
+  const date = sourceDate ? new Date(sourceDate) : new Date();
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const seq = String(sequence).padStart(6, "0");
+  return `SMT_${y}${m}${d}_${seq}`;
+}
+
 router.post("/sessions/:sessionId/scans", async (req, res) => {
   try {
     // === PERFORMANCE: Track validation time ===
@@ -407,6 +418,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
     const { 
       feederNumber, 
       mpnOrInternalId,
+      lotCode,
       internalIdType = "mpn",
       verificationMode: requestedVerificationMode,
       spoolBarcode, 
@@ -431,6 +443,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
     // === STEP 1: CASE NORMALIZATION ===
     const normalizedFeeder = normalizeInput(feederNumber);
     const normalizedMpnId = normalizeInput(mpnOrInternalId);
+    const normalizedLotCode = normalizeInput(lotCode);
     const normalizedSpool = normalizeInput(spoolBarcode);
 
     // Track if case was converted for UI feedback
@@ -583,6 +596,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
         feederNumber: normalizedFeeder!,
         spoolBarcode: normalizedSpool ?? null,
         internalIdScanned: normalizedMpnId ?? null,
+        lotNumber: normalizedLotCode ?? null,
         status: scanStatus,
         partNumber: selectedItem?.partNumber ?? null,
         description: selectedItem?.description ?? null,
@@ -1136,15 +1150,28 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
     const failCount = rows.filter((r) => r.status === "FAILED").length;
     const warnCount = rows.filter((r) => r.isAlternate && r.status === "VERIFIED").length;
     const passRate = totalFeeders > 0 ? Math.round((passCount / totalFeeders) * 100) : 0;
+    const reportSessionId = formatSmtSessionId(session.startTime, session.id);
 
     const CO_NAME = process.env.COMPANY_NAME ?? process.env.VITE_COMPANY_NAME ?? session.companyName ?? "Your Company";
     const CO_SHORT = process.env.COMPANY_SHORT ?? process.env.VITE_COMPANY_SHORT ?? "CO";
     const CO_LOGO = process.env.COMPANY_LOGO_PATH ?? process.env.VITE_LOGO_URL ?? null;
+    const SYS_TITLE = process.env.SYSTEM_TITLE ?? process.env.VITE_SYSTEM_TITLE ?? "SMT Verification";
 
     const getLogoPath = () => {
-      if (!CO_LOGO) return null;
-      const absPath = path.resolve(CO_LOGO);
-      return fs.existsSync(absPath) ? absPath : null;
+      const candidates = [
+        CO_LOGO,
+        CO_LOGO ? path.resolve(process.cwd(), CO_LOGO) : null,
+        path.resolve(process.cwd(), "artifacts/api-server/assets/ucal-logo.png"),
+        path.resolve(process.cwd(), "artifacts/feeder-scanner/public/assets/ucal-logo.png"),
+      ].filter((candidate): candidate is string => Boolean(candidate));
+
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+          return candidate;
+        }
+      }
+
+      return null;
     };
 
     const C = {
@@ -1176,7 +1203,7 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
     };
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="SMT_Report_${session.id}.pdf"`);
+    res.setHeader("Content-Disposition", `attachment; filename="SMT_Report_${reportSessionId}.pdf"`);
 
     const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 18 });
     doc.pipe(res);
@@ -1199,7 +1226,7 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
         doc.fillColor("#CBD5E1").fontSize(7).font("Helvetica").text(CO_NAME, left + 8, y + 27, { width: 70 });
       }
 
-      doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(14).text("SMT CHANGEOVER VERIFICATION REPORT", left + 70, y + 9, {
+      doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(14).text(`${SYS_TITLE.toUpperCase()} REPORT`, left + 70, y + 9, {
         width: 150,
         align: "center",
       });
@@ -1210,7 +1237,7 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
       const modeColor = modeText.includes("MANUAL") ? "#FCD34D" : "#86EFAC";
 
       doc.fillColor("#93C5FD").fontSize(8).font("Helvetica").text("Changeover ID", right - 95, y + 8, { width: 85, align: "right" });
-      doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(12).text(String(session.id), right - 95, y + 18, { width: 85, align: "right" });
+      doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(12).text(reportSessionId, right - 95, y + 18, { width: 85, align: "right" });
       doc.fillColor(modeColor).font("Helvetica").fontSize(8).text(modeText, right - 95, y + 31, { width: 85, align: "right" });
 
       doc.fillColor(C.BLUE_ACCENT).rect(left, y + bandH + 2, right - left, 3).fill();
@@ -1223,7 +1250,7 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
       const colW = (right - left) / totalCols;
 
       const kvRows = [
-        ["Changeover ID", String(session.id), "Panel ID", String(session.panelName ?? "—"), "Shift", String(session.shiftName ?? "—"), "Date", String(session.shiftDate ?? "—"), "Duration", `${Math.round(((session.endTime ? new Date(session.endTime).getTime() : Date.now()) - new Date(session.startTime).getTime()) / 60000)} min`],
+        ["Changeover ID", reportSessionId, "Panel ID", String(session.panelName ?? "—"), "Shift", String(session.shiftName ?? "—"), "Date", String(session.shiftDate ?? "—"), "Duration", `${Math.round(((session.endTime ? new Date(session.endTime).getTime() : Date.now()) - new Date(session.startTime).getTime()) / 60000)} min`],
         ["Customer", String(session.customerName ?? "—"), "Machine", String(session.machineName ?? "—"), "Operator", String(session.operatorName ?? "—"), "Start Time", session.startTime ? new Date(session.startTime).toLocaleTimeString("en-US", { hour12: true }) : "—", "BOM Version", String(bom?.name ?? "—")],
         ["PCB / Part No.", String(session.panelName ?? "—"), "Line", String(session.supervisorName ?? "—"), "QA Engineer", String(session.qaName ?? "—"), "End Time", session.endTime ? new Date(session.endTime).toLocaleTimeString("en-US", { hour12: true }) : "In Progress", "Supervisor", String(session.supervisorName ?? "—")],
       ];
@@ -1382,7 +1409,7 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
       const now = new Date();
       doc.strokeColor(C.GREY_BORDER).lineWidth(0.5).moveTo(left, pageH - 22).lineTo(right, pageH - 22).stroke();
       doc.fillColor(C.GREY_MID).font("Helvetica").fontSize(5.5).text(
-        `SMTVerification System — Electronically Generated Report | Changeover: ${session.id} | Date: ${now.toLocaleDateString("en-GB")} | BOM Version: ${bom?.name ?? "—"} | Mode: ${String(session.verificationMode ?? "AUTO").toUpperCase()} — STRICT | This document is valid without physical signature when QR-verified.`,
+        `${SYS_TITLE} — Electronically Generated Report | Changeover: ${reportSessionId} | Date: ${now.toLocaleDateString("en-GB")} | BOM Version: ${bom?.name ?? "—"} | Mode: ${String(session.verificationMode ?? "AUTO").toUpperCase()} — STRICT | This document is valid without physical signature when QR-verified.`,
         left,
         pageH - 18,
         { width: right - left, align: "center" },
