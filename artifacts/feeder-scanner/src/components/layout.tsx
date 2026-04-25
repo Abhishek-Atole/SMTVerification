@@ -6,6 +6,8 @@ import { useTheme } from "@/components/theme-provider";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import type { ReactNode } from "react";
+import { AppLogo } from "@/components/AppLogo";
+import { appConfig } from "@/lib/appConfig";
 
 export function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
@@ -45,9 +47,9 @@ export function Layout({ children }: { children: ReactNode }) {
       )}>
         <div className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-sidebar-border bg-sidebar">
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <img src="/ucal-logo.svg" alt="UCAL" className="h-10 w-10 flex-shrink-0" />
+            <AppLogo className="h-10 w-10 flex-shrink-0" />
             <span className="font-mono font-bold tracking-tight text-sm text-sidebar-primary hidden sm:inline truncate">
-              SMT_VERIFY
+              {appConfig.systemTitle}
             </span>
           </div>
           <Button 
@@ -125,7 +127,12 @@ export function Layout({ children }: { children: ReactNode }) {
           >
             <Menu className="w-5 h-5" />
           </Button>
-          <div className="flex-1 text-center font-semibold text-sm truncate px-2">SMT-VERIFY</div>
+          <div className="flex-1 px-2">
+            <div className="flex items-center justify-center gap-2 min-w-0">
+              <AppLogo className="h-6 w-6 flex-shrink-0" />
+              <span className="text-center font-semibold text-sm truncate">{appConfig.companyShort}</span>
+            </div>
+          </div>
           <Button 
             variant="ghost" 
             size="icon"
