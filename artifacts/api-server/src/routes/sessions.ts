@@ -4,6 +4,9 @@ import { db } from "@workspace/db";
 import { sessionsTable, scanRecordsTable, spliceRecordsTable, bomItemsTable, bomsTable, auditLogsTable } from "@workspace/db/schema";
 import { eq, and, sql, desc, isNull, isNotNull } from "drizzle-orm";
 import { TimestampService } from "../services/timestamp-service";
+import PDFDocument from "pdfkit";
+import fs from "node:fs";
+import path from "node:path";
 
 const router: IRouter = Router();
 
@@ -1043,6 +1046,360 @@ router.get("/sessions/:sessionId/report", async (req, res) => {
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to get session report" });
+  }
+});
+
+router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
+  try {
+    const sessionId = Number(req.params.sessionId);
+    if (!Number.isFinite(sessionId)) {
+      res.status(400).json({ error: "Invalid sessionId" });
+      return;
+    }
+
+    const [session] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    const [bom] = session.bomId
+      ? await db.select().from(bomsTable).where(eq(bomsTable.id, session.bomId))
+      : [null];
+
+    const scans = await db
+      .select()
+      .from(scanRecordsTable)
+      .where(eq(scanRecordsTable.sessionId, sessionId))
+      .orderBy(scanRecordsTable.scannedAt);
+
+    const bomItems = session.bomId
+      ? await db.select().from(bomItemsTable).where(eq(bomItemsTable.bomId, session.bomId))
+      : [];
+
+    const bomByFeeder = new Map<string, any>();
+    for (const item of bomItems) {
+      const key = String(item.feederNumber ?? "").trim().toUpperCase();
+      if (!bomByFeeder.has(key)) bomByFeeder.set(key, item);
+    }
+
+    const rows = scans.map((scan, rowIndex) => {
+      const feederKey = String(scan.feederNumber ?? "").trim().toUpperCase();
+      const item = bomByFeeder.get(feederKey);
+      const scanStatus = String(scan.status ?? "").toLowerCase();
+      const status = scanStatus === "ok" ? "verified" : scanStatus === "reject" ? "failed" : "duplicate";
+
+      const matchedField = String(scan.validationResult ?? "").toLowerCase();
+      const matchedLabel = matchedField === "mpn1"
+        ? `MPN 1 (${item?.make1 ?? ""})`
+        : matchedField === "mpn2"
+          ? `MPN 2 (${item?.make2 ?? ""})`
+          : matchedField === "mpn3"
+            ? `MPN 3 (${item?.make3 ?? ""})`
+            : matchedField === "internalpartnumber"
+              ? "Internal P/N"
+              : "No Match";
+
+      const expectedMpns = [item?.mpn1, item?.mpn2, item?.mpn3].filter(Boolean).join(" / ") || "—";
+      const scannedValue = scan.spoolBarcode || scan.scannedMpn || "—";
+      const isAlternate = matchedField === "mpn2" || matchedField === "mpn3";
+      const isFailed = status === "failed";
+
+      const scannedText = isFailed
+        ? `${scannedValue} ✗`
+        : isAlternate
+          ? `${scannedValue} ▲`
+          : scannedValue;
+
+      return {
+        rowIndex,
+        feederNumber: scan.feederNumber,
+        refDes: item?.referenceLocation ?? "—",
+        component: item?.description ?? "—",
+        value: item?.description ?? "—",
+        pkgSize: item?.packageDescription ?? "—",
+        internalPartNo: item?.internalPartNumber ?? "—",
+        expectedMpns,
+        scannedText,
+        matchedLabel,
+        lotCode: scan.lotNumber ?? "—",
+        modeText: String(scan.verificationMode ?? "AUTO").toUpperCase() === "MANUAL" ? "MAN" : "AUTO",
+        status: status.toUpperCase(),
+        scannedAt: scan.scannedAt ? new Date(scan.scannedAt).toLocaleTimeString("en-US", { hour12: true }) : "—",
+        isAlternate,
+        isFailed,
+      };
+    });
+
+    const totalFeeders = rows.filter((r) => r.status !== "DUPLICATE").length;
+    const passCount = rows.filter((r) => r.status === "VERIFIED").length;
+    const failCount = rows.filter((r) => r.status === "FAILED").length;
+    const warnCount = rows.filter((r) => r.isAlternate && r.status === "VERIFIED").length;
+    const passRate = totalFeeders > 0 ? Math.round((passCount / totalFeeders) * 100) : 0;
+
+    const CO_NAME = process.env.COMPANY_NAME ?? process.env.VITE_COMPANY_NAME ?? session.companyName ?? "Your Company";
+    const CO_SHORT = process.env.COMPANY_SHORT ?? process.env.VITE_COMPANY_SHORT ?? "CO";
+    const CO_LOGO = process.env.COMPANY_LOGO_PATH ?? process.env.VITE_LOGO_URL ?? null;
+
+    const getLogoPath = () => {
+      if (!CO_LOGO) return null;
+      const absPath = path.resolve(CO_LOGO);
+      return fs.existsSync(absPath) ? absPath : null;
+    };
+
+    const C = {
+      NAVY: "#1A3557",
+      BLUE: "#1D4ED8",
+      BLUE_LIGHT: "#EFF6FF",
+      WHITE: "#FFFFFF",
+      BLACK: "#0F172A",
+      GREY_DARK: "#374151",
+      GREY_MID: "#6B7280",
+      GREY_LIGHT: "#F3F4F6",
+      GREY_BORDER: "#D1D5DB",
+      GREEN: "#15803D",
+      GREEN_BG: "#F0FDF4",
+      RED: "#B91C1C",
+      RED_BG: "#FEF2F2",
+      AMBER: "#B45309",
+      AMBER_BG: "#FFFBEB",
+      BLUE_ACCENT: "#2563EB",
+    } as const;
+
+    const toRgb = (hex: string): [number, number, number] => {
+      const value = hex.replace("#", "");
+      return [
+        Number.parseInt(value.slice(0, 2), 16),
+        Number.parseInt(value.slice(2, 4), 16),
+        Number.parseInt(value.slice(4, 6), 16),
+      ];
+    };
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="SMT_Report_${session.id}.pdf"`);
+
+    const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 18 });
+    doc.pipe(res);
+
+    const pageW = doc.page.width;
+    const pageH = doc.page.height;
+    const left = 18;
+    const right = pageW - 18;
+    let y = 18;
+
+    const drawHeader = () => {
+      const bandH = 40;
+      doc.fillColor(C.NAVY).rect(left, y, right - left, bandH).fill();
+
+      const logoPath = getLogoPath();
+      if (logoPath) {
+        doc.image(logoPath, left + 8, y + 7, { fit: [45, 16] });
+      } else {
+        doc.fillColor(C.WHITE).fontSize(20).font("Helvetica-Bold").text(CO_SHORT, left + 8, y + 7, { width: 60 });
+        doc.fillColor("#CBD5E1").fontSize(7).font("Helvetica").text(CO_NAME, left + 8, y + 27, { width: 70 });
+      }
+
+      doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(14).text("SMT CHANGEOVER VERIFICATION REPORT", left + 70, y + 9, {
+        width: 150,
+        align: "center",
+      });
+      doc.fillColor("#BFDBFE").font("Helvetica").fontSize(8).text(CO_NAME, left + 70, y + 24, { width: 150, align: "center" });
+      doc.fillColor("#93C5FD").fontSize(7).text("SMT Manufacturing Quality System", left + 70, y + 34, { width: 150, align: "center" });
+
+      const modeText = String(session.verificationMode ?? "AUTO").toUpperCase() === "MANUAL" ? "🔒 MANUAL MODE" : "⚡ AUTO — STRICT MODE";
+      const modeColor = modeText.includes("MANUAL") ? "#FCD34D" : "#86EFAC";
+
+      doc.fillColor("#93C5FD").fontSize(8).font("Helvetica").text("Changeover ID", right - 95, y + 8, { width: 85, align: "right" });
+      doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(12).text(String(session.id), right - 95, y + 18, { width: 85, align: "right" });
+      doc.fillColor(modeColor).font("Helvetica").fontSize(8).text(modeText, right - 95, y + 31, { width: 85, align: "right" });
+
+      doc.fillColor(C.BLUE_ACCENT).rect(left, y + bandH + 2, right - left, 3).fill();
+      y += bandH + 8;
+    };
+
+    const drawInfoGrid = () => {
+      const rowH = 17;
+      const totalCols = 10;
+      const colW = (right - left) / totalCols;
+
+      const kvRows = [
+        ["Changeover ID", String(session.id), "Panel ID", String(session.panelName ?? "—"), "Shift", String(session.shiftName ?? "—"), "Date", String(session.shiftDate ?? "—"), "Duration", `${Math.round(((session.endTime ? new Date(session.endTime).getTime() : Date.now()) - new Date(session.startTime).getTime()) / 60000)} min`],
+        ["Customer", String(session.customerName ?? "—"), "Machine", String(session.machineName ?? "—"), "Operator", String(session.operatorName ?? "—"), "Start Time", session.startTime ? new Date(session.startTime).toLocaleTimeString("en-US", { hour12: true }) : "—", "BOM Version", String(bom?.name ?? "—")],
+        ["PCB / Part No.", String(session.panelName ?? "—"), "Line", String(session.supervisorName ?? "—"), "QA Engineer", String(session.qaName ?? "—"), "End Time", session.endTime ? new Date(session.endTime).toLocaleTimeString("en-US", { hour12: true }) : "In Progress", "Supervisor", String(session.supervisorName ?? "—")],
+      ];
+
+      doc.fillColor(C.GREY_LIGHT).rect(left, y, right - left, rowH * 3).fill();
+      doc.lineWidth(1).strokeColor(C.NAVY).rect(left, y, right - left, rowH * 3).stroke();
+      doc.lineWidth(0.4).strokeColor(C.GREY_BORDER);
+
+      for (let r = 1; r < 3; r += 1) doc.moveTo(left, y + rowH * r).lineTo(right, y + rowH * r).stroke();
+      for (let c = 1; c < totalCols; c += 1) doc.moveTo(left + colW * c, y).lineTo(left + colW * c, y + rowH * 3).stroke();
+
+      kvRows.forEach((row, rowIdx) => {
+        for (let i = 0; i < row.length; i += 2) {
+          const x = left + (i * colW) / 2 + 3;
+          const yy = y + rowIdx * rowH + 4;
+          doc.fillColor(C.GREY_MID).font("Helvetica-Bold").fontSize(6.5).text(String(row[i]), x, yy, { width: colW - 4 });
+          doc.fillColor(C.BLACK).font("Helvetica-Bold").fontSize(7.5).text(String(row[i + 1] || "—"), x, yy + 7, { width: colW - 4 });
+        }
+      });
+
+      y += rowH * 3 + 8;
+    };
+
+    const colPct = [0.055, 0.05, 0.09, 0.07, 0.038, 0.09, 0.125, 0.125, 0.088, 0.075, 0.042, 0.045, 0.047];
+    const getColWidths = (usableWidth: number) => {
+      const sum = colPct.reduce((a, b) => a + b, 0);
+      return colPct.map((p) => usableWidth * (p / sum));
+    };
+
+    const drawTable = () => {
+      doc.fillColor(C.NAVY).font("Helvetica-Bold").fontSize(10).text("▌ Component Verification Details", left, y);
+      y += 16;
+
+      const headers = ["Feeder\nNo.", "Ref /\nDes", "Component\nDescription", "Value", "Pkg\nSize", "Internal\nPart No.", "Expected MPN\n(BOM — valid options)", "Scanned Spool\n(Actual Scan)", "Matched\nAs", "Lot\nCode", "Mode", "Status", "Time"];
+      const widths = getColWidths(right - left);
+      const rowH = 18;
+
+      const drawHeaderRow = () => {
+        let x = left;
+        headers.forEach((h, idx) => {
+          const bg = idx === 6 ? C.BLUE : idx === 7 ? C.BLUE_ACCENT : C.NAVY;
+          doc.fillColor(bg).rect(x, y, widths[idx], rowH).fill();
+          doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(6.5).text(h, x + 2, y + 4, {
+            width: widths[idx] - 4,
+            align: "center",
+          });
+          doc.strokeColor(C.GREY_BORDER).lineWidth(0.4).rect(x, y, widths[idx], rowH).stroke();
+          x += widths[idx];
+        });
+        y += rowH;
+      };
+
+      drawHeaderRow();
+
+      rows.forEach((row) => {
+        if (y + 14 > pageH - 65) {
+          doc.addPage({ size: "A4", layout: "landscape", margin: 18 });
+          y = 18;
+          drawHeader();
+          drawInfoGrid();
+          drawHeaderRow();
+        }
+
+        const rowBg = row.isFailed ? C.RED_BG : row.isAlternate ? C.AMBER_BG : row.rowIndex % 2 === 0 ? C.WHITE : C.BLUE_LIGHT;
+        let x = left;
+        const values = [
+          row.feederNumber,
+          row.refDes,
+          row.component,
+          row.value,
+          row.pkgSize,
+          row.internalPartNo,
+          row.expectedMpns,
+          row.scannedText,
+          row.matchedLabel,
+          row.lotCode,
+          row.modeText,
+          row.status,
+          row.scannedAt,
+        ];
+
+        values.forEach((value, idx) => {
+          const cellBg = idx === 6 ? C.BLUE_LIGHT : rowBg;
+          doc.fillColor(cellBg).rect(x, y, widths[idx], 14).fill();
+
+          const textColor = idx === 7
+            ? row.isFailed ? C.RED : row.isAlternate ? C.AMBER : C.GREEN
+            : idx === 6 ? C.BLUE
+              : idx === 11 ? (row.status === "VERIFIED" ? C.GREEN : row.status === "FAILED" ? C.RED : C.AMBER)
+                : idx === 10 ? (row.modeText === "MAN" ? C.AMBER : C.BLUE)
+                  : C.BLACK;
+
+          doc.fillColor(textColor).font(idx === 7 || idx === 10 || idx === 11 ? "Helvetica-Bold" : "Helvetica").fontSize(6.5).text(String(value), x + 2, y + 4, {
+            width: widths[idx] - 4,
+            align: idx >= 10 ? "center" : "left",
+            ellipsis: true,
+          });
+
+          doc.strokeColor(C.GREY_BORDER).lineWidth(0.4).rect(x, y, widths[idx], 14).stroke();
+          x += widths[idx];
+        });
+
+        y += 14;
+      });
+
+      y += 7;
+      doc.fillColor(C.GREY_MID).font("Helvetica").fontSize(6).text(
+        "Legend — Scanned Spool: Green = Primary MPN matched | Amber ▲ = Alternate MPN (BOM-approved) | Red ✗ = Mismatch (rejected) | Blue = Expected BOM options | AUTO STRICT: exact match only",
+        left,
+        y,
+        { width: right - left },
+      );
+      y += 11;
+    };
+
+    const drawSummary = () => {
+      doc.fillColor(C.NAVY).font("Helvetica-Bold").fontSize(10).text("▌ Verification Summary", left, y);
+      y += 13;
+      const labels = ["Total Feeders", "PASS", "FAIL", "WARNING", "Pass Rate", "Status"];
+      const values = [String(totalFeeders), String(passCount), String(failCount), String(warnCount), `${passRate}%`, passRate === 100 ? "COMPLETE" : "FAILED"];
+      const colors = [C.NAVY, C.GREEN, C.RED, C.AMBER, C.BLUE, passRate === 100 ? C.GREEN : C.RED];
+      const cellW = (right - left) / 6;
+
+      for (let i = 0; i < 6; i += 1) {
+        const x = left + i * cellW;
+        doc.fillColor(colors[i]).rect(x, y, cellW, 26).fill();
+        doc.fillColor(C.WHITE).font("Helvetica").fontSize(7).text(labels[i], x, y + 4, { width: cellW, align: "center" });
+        doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(15).text(values[i], x, y + 12, { width: cellW, align: "center" });
+      }
+
+      doc.strokeColor(C.NAVY).lineWidth(1).rect(left, y, right - left, 26).stroke();
+      y += 34;
+    };
+
+    const drawApprovals = () => {
+      doc.fillColor(C.NAVY).font("Helvetica-Bold").fontSize(9).text("▌ Approvals & Sign-off", left, y);
+      y += 12;
+      const roles = ["SUPERVISOR", "OPERATOR", "QA ENGINEER", "PRODUCTION MANAGER"];
+      const names = [session.supervisorName ?? "", session.operatorName ?? "", session.qaName ?? "", ""];
+      const cellW = (right - left) / 4;
+
+      for (let i = 0; i < 4; i += 1) {
+        const x = left + i * cellW;
+        doc.fillColor(C.GREY_LIGHT).rect(x, y, cellW, 36).fill();
+        doc.strokeColor(C.GREY_BORDER).lineWidth(0.5).rect(x, y, cellW, 36).stroke();
+        doc.fillColor(C.GREY_MID).font("Helvetica-Bold").fontSize(7.5).text(roles[i], x, y + 4, { width: cellW, align: "center" });
+        doc.strokeColor(C.GREY_BORDER).lineWidth(0.75).moveTo(x + cellW * 0.15, y + 22).lineTo(x + cellW * 0.85, y + 22).stroke();
+        doc.fillColor(C.BLACK).font("Helvetica-Bold").fontSize(8.5).text(names[i] || "", x, y + 24, { width: cellW, align: "center" });
+        doc.fillColor(C.GREY_MID).font("Helvetica").fontSize(6.5).text("Name / Signature / Date", x, y + 31, { width: cellW, align: "center" });
+      }
+
+      y += 44;
+    };
+
+    const drawFooter = () => {
+      const now = new Date();
+      doc.strokeColor(C.GREY_BORDER).lineWidth(0.5).moveTo(left, pageH - 22).lineTo(right, pageH - 22).stroke();
+      doc.fillColor(C.GREY_MID).font("Helvetica").fontSize(5.5).text(
+        `SMTVerification System — Electronically Generated Report | Changeover: ${session.id} | Date: ${now.toLocaleDateString("en-GB")} | BOM Version: ${bom?.name ?? "—"} | Mode: ${String(session.verificationMode ?? "AUTO").toUpperCase()} — STRICT | This document is valid without physical signature when QR-verified.`,
+        left,
+        pageH - 18,
+        { width: right - left, align: "center" },
+      );
+    };
+
+    drawHeader();
+    drawInfoGrid();
+    drawTable();
+    drawSummary();
+    drawApprovals();
+    drawFooter();
+
+    doc.end();
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to generate session report PDF" });
   }
 });
 

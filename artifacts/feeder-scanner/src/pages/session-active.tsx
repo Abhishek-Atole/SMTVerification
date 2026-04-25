@@ -1055,6 +1055,13 @@ export default function SessionActive() {
           {session.status === "active" ? (
             <div className="flex gap-1 sm:gap-2 flex-col-reverse sm:flex-row">
               <Button
+                variant="secondary"
+                className="font-bold tracking-widest text-xs sm:text-sm py-1 sm:py-2 px-2 sm:px-4 h-auto"
+                onClick={() => window.open(`/api/sessions/${sessionId}/report/pdf`, "_blank")}
+              >
+                📄 PDF
+              </Button>
+              <Button
                 variant="outline"
                 className="font-bold tracking-widest text-xs sm:text-sm py-1 sm:py-2 px-2 sm:px-4 h-auto"
                 onClick={() => setShowResetDialog(true)}
@@ -1073,9 +1080,18 @@ export default function SessionActive() {
               </Button>
             </div>
           ) : (
-            <Button asChild className="font-bold tracking-widest text-xs sm:text-sm py-1 sm:py-2 px-2 sm:px-4 h-auto">
-              <Link href={`/session/${session.id}/report`}>REPORT</Link>
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                className="font-bold tracking-widest text-xs sm:text-sm py-1 sm:py-2 px-2 sm:px-4 h-auto"
+                onClick={() => window.open(`/api/sessions/${sessionId}/report/pdf`, "_blank")}
+              >
+                📄 PDF
+              </Button>
+              <Button asChild className="font-bold tracking-widest text-xs sm:text-sm py-1 sm:py-2 px-2 sm:px-4 h-auto">
+                <Link href={`/session/${session.id}/report`}>REPORT</Link>
+              </Button>
+            </div>
           )}
         </div>
       </header>
