@@ -20,6 +20,7 @@ export const sessionsTable = pgTable("sessions", {
   shiftDate: text("shift_date").notNull(),
   logoUrl: text("logo_url"),
   productionCount: integer("production_count").default(0),
+  verificationMode: text("verification_mode").notNull().default("AUTO"),
   status: text("status").notNull().default("active"),
   startTime: timestamp("start_time").defaultNow().notNull(),
   endTime: timestamp("end_time"),
@@ -48,7 +49,7 @@ export const scanRecordsTable = pgTable(
     alternateUsed: boolean("alternate_used").default(false), // New: Was this an alternate?
     validationResult: text("validation_result"), // 'pass', 'alternate_pass', 'mismatch', 'alternate_not_found'
     internalIdScanned: text("internal_id_scanned"), // NEW: Internal ID scanned (optional)
-    verificationMode: text("verification_mode").default("manual"), // NEW: 'manual' or 'auto'
+    verificationMode: text("verification_mode").notNull().default("AUTO"), // 'AUTO' or 'MANUAL'
     matchScore: integer("match_score"), // NEW: 0-100 percentage match score from fuzzy matching
     matchingAlgorithm: text("matching_algorithm"), // NEW: 'exact' | 'fuzzy' | 'normalized'
     expectedValue: text("expected_value"), // NEW: What the system expected to match

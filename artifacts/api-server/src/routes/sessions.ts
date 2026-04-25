@@ -233,12 +233,20 @@ router.get("/sessions/:sessionId", async (req, res) => {
 router.patch("/sessions/:sessionId", async (req, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
-    const { endTime, productionCount, status, logoUrl } = req.body;
+    const { endTime, productionCount, status, logoUrl, verificationMode } = req.body;
     const updates: Record<string, unknown> = {};
     if (endTime !== undefined) updates.endTime = new Date(endTime);
     if (productionCount !== undefined) updates.productionCount = productionCount;
     if (status !== undefined) updates.status = status;
     if (logoUrl !== undefined) updates.logoUrl = logoUrl;
+    if (verificationMode !== undefined) {
+      const normalizedMode = String(verificationMode).trim().toUpperCase();
+      if (!['AUTO', 'MANUAL'].includes(normalizedMode)) {
+        res.status(400).json({ error: "verificationMode must be 'AUTO' or 'MANUAL'" });
+        return;
+      }
+      updates.verificationMode = normalizedMode;
+    }
 
     const updated = await db
       .update(sessionsTable)
@@ -264,6 +272,39 @@ router.patch("/sessions/:sessionId", async (req, res) => {
   }
 });
 
+router.patch("/sessions/:sessionId/mode", async (req, res) => {
+  try {
+    const sessionId = Number(req.params.sessionId);
+    const mode = String(req.body?.mode ?? req.body?.verificationMode ?? "").trim().toUpperCase();
+
+    if (!Number.isFinite(sessionId)) {
+      res.status(400).json({ error: "Invalid sessionId" });
+      return;
+    }
+
+    if (!['AUTO', 'MANUAL'].includes(mode)) {
+      res.status(400).json({ error: "mode must be 'AUTO' or 'MANUAL'" });
+      return;
+    }
+
+    const [updated] = await db
+      .update(sessionsTable)
+      .set({ verificationMode: mode })
+      .where(eq(sessionsTable.id, sessionId))
+      .returning();
+
+    if (!updated) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    res.json({ sessionId, mode, session: updated });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to update verification mode" });
+  }
+});
+
 // Utility function for case normalization
 function normalizeInput(input?: string | null): string | undefined {
   return input ? input.trim().toUpperCase() : undefined;
@@ -279,7 +320,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
       feederNumber, 
       mpnOrInternalId,
       internalIdType = "mpn",
-      verificationMode = "manual",
+      verificationMode: requestedVerificationMode,
       spoolBarcode, 
       selectedItemId 
     } = req.body;
@@ -289,16 +330,15 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
       return;
     }
 
-    if (!verificationMode || !["manual", "auto"].includes(verificationMode)) {
-      res.status(400).json({ error: "verificationMode must be 'manual' or 'auto'" });
-      return;
-    }
-
     const [session] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
     if (!session) {
       res.status(404).json({ error: "Session not found" });
       return;
     }
+
+    const verificationMode = String(session.verificationMode ?? requestedVerificationMode ?? "AUTO").trim().toUpperCase() === "MANUAL"
+      ? "MANUAL"
+      : "AUTO";
 
     // === STEP 1: CASE NORMALIZATION ===
     const normalizedFeeder = normalizeInput(feederNumber);
@@ -397,7 +437,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
           internalIdMatched = verificationMatch?.matchedField === "internalPartNumber";
 
           // Determine scan status based on mode
-          if (verificationMode === "auto") {
+          if (verificationMode === "AUTO") {
             // AUTO mode: MUST match if BOM has expected value
             if (hasExpectedMpn) {
               if (!verificationMatch) {
@@ -412,7 +452,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
               scanStatus = "ok";
               message = `✅ Feeder ${normalizedFeeder} with ${internalIdType} ${normalizedMpnId} ACCEPTED`;
             }
-          } else if (verificationMode === "manual") {
+          } else if (verificationMode === "MANUAL") {
             // MANUAL mode: Strict exact validation
             if (verificationMatch) {
               scanStatus = "ok";
@@ -433,7 +473,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
           // No MPN/Internal ID provided - check if validation was required
           if (hasExpectedMpn) {
             // BOM requires validation but user didn't provide it
-            if (verificationMode === "auto" || verificationMode === "manual") {
+            if (verificationMode === "AUTO" || verificationMode === "MANUAL") {
               scanStatus = "reject";
               message = `❌ MPN mismatch for feeder ${normalizedFeeder}.\nScanned: ${normalizedMpnId ?? ""}\nExpected one of: ${expectedMpnValues.join(" | ")}`;
             }
@@ -459,7 +499,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
         partNumber: selectedItem?.partNumber ?? null,
         description: selectedItem?.description ?? null,
         location: selectedItem?.location ?? null,
-        verificationMode: verificationMode,
+        verificationMode,
         matchScore: verificationMatch ? 100 : null,
         matchingAlgorithm: verificationMatch ? "exact" : null,
         expectedValue: expectedMpnValues.length > 0 ? expectedMpnValues.join(" | ") : null,
@@ -470,7 +510,7 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
 
     // === NEW: AUDIT LOGGING ===
     const operatorName = session.operatorName || "UNKNOWN";
-    const auditDescription = `${verificationMode.toUpperCase()} mode scan: Feeder ${normalizedFeeder} - Status: ${scanStatus === "ok" ? "PASSED" : "REJECTED"}${normalizedMpnId ? ` - ${internalIdType}: ${normalizedMpnId}` : ""}`;
+    const auditDescription = `${verificationMode} mode scan: Feeder ${normalizedFeeder} - Status: ${scanStatus === "ok" ? "PASSED" : "REJECTED"}${normalizedMpnId ? ` - ${internalIdType}: ${normalizedMpnId}` : ""}`;
     
     await db.insert(auditLogsTable).values({
       entityType: "feeder_scan",

@@ -21,6 +21,7 @@ export interface SessionDetail {
   shiftDate: string;
   logoUrl?: string;
   productionCount?: number;
+  verificationMode: 'AUTO' | 'MANUAL';
   status: SessionDetailStatus;
   startTime: Date;
   endTime?: Date;

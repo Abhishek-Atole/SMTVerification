@@ -14,6 +14,7 @@ import { format, differenceInSeconds } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlternateSelector } from "@/components/alternate-selector";
+import { ModeToggle } from "@/components/ModeToggle";
 import { useNotification } from "@/hooks/use-notification";
 import { useNotification as useToastNotification } from "@/components/NotificationSystem";
 import { useScanner } from "@/hooks/useScanner";
@@ -119,12 +120,38 @@ export default function SessionActive() {
   } | null>(null);
   const [selectedItemIdForScan, setSelectedItemIdForScan] = useState<number | null>(null);
   const [needsAlternateSelection, setNeedsAlternateSelection] = useState(false);
-  const [verificationMode, setVerificationMode] = useState<"manual" | "auto">("manual");
+  const [verificationMode, setVerificationMode] = useState<"AUTO" | "MANUAL">("AUTO");
   const [pendingVerification, setPendingVerification] = useState<any>(null);
   const [verificationLocked, setVerificationLocked] = useState(false);
   const [lastVerificationTime, setLastVerificationTime] = useState<number | null>(null);
   const [verificationInProgress, setVerificationInProgress] = useState(false);
   const [autoAdvanceTimer, setAutoAdvanceTimer] = useState<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (session?.verificationMode) {
+      setVerificationMode(String(session.verificationMode).toUpperCase() === "MANUAL" ? "MANUAL" : "AUTO");
+    }
+  }, [session?.verificationMode]);
+
+  const handleVerificationModeChange = async (mode: "AUTO" | "MANUAL") => {
+    if (!sessionId) {
+      return;
+    }
+
+    const response = await fetch(`/api/sessions/${sessionId}/mode`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      throw new Error(payload?.error ?? "Failed to update verification mode");
+    }
+
+    setVerificationMode(mode);
+    await queryClient.invalidateQueries({ queryKey: getGetSessionQueryKey(sessionId) });
+  };
 
   // Tab-based UI state for Loading vs Splicing
   const [activeTab, setActiveTab] = useState<"loading" | "splicing">("loading");
@@ -274,7 +301,7 @@ export default function SessionActive() {
 
   // AUTO MODE: Auto-submit when user scans MPN at spool step (no ENTER required)
   useEffect(() => {
-    if (verificationMode !== "auto" || scanStep !== "spool" || !scanInput.trim()) {
+    if (verificationMode !== "AUTO" || scanStep !== "spool" || !scanInput.trim()) {
       return;
     }
 
@@ -387,7 +414,7 @@ export default function SessionActive() {
           feederNumber: pendingVerification.feederNumber,
           mpnOrInternalId: pendingVerification.mpnOrInternalId || undefined,
           internalIdType: pendingVerification.internalIdType,
-          verificationMode: "manual",
+          verificationMode: "MANUAL",
           selectedItemId: pendingVerification.selectedItemId,
         },
       });
@@ -424,7 +451,7 @@ export default function SessionActive() {
 
   function handleScanBarcode(val: string) {
     // In auto mode at spool: allow empty val to skip MPN (auto-advance)
-    if (verificationMode === "auto" && scanStep === "spool" && !val) {
+    if (verificationMode === "AUTO" && scanStep === "spool" && !val) {
       // Skip MPN scan in auto mode - auto-submit with no MPN value
       handleAutoModeSubmit("", undefined);
       return;
@@ -506,7 +533,7 @@ export default function SessionActive() {
         // In AUTO mode: auto-advance to MPN step after brief delay
         // In MANUAL mode: wait for user to press Enter again
         showSuccessAlert(`Feeder "${normalizedFeederNumber}" found in BOM`);
-        if (verificationMode === "auto") {
+        if (verificationMode === "AUTO") {
           setScanStep("spool");
           setNeedsAlternateSelection(false);
           focusNextFrame(inputRef);
@@ -518,7 +545,7 @@ export default function SessionActive() {
       setScanStep("spool");
       setNeedsAlternateSelection(false);
       
-      if (verificationMode === "auto") {
+      if (verificationMode === "AUTO") {
         focusNextFrame(inputRef);
       }
     } else if (scanStep === "spool") {
@@ -532,13 +559,13 @@ export default function SessionActive() {
       const matchingItem = bomDetail?.items.find(item => item.id === selectedItemIdForScan);
       const duration = feederScanTime ? Date.now() - feederScanTime : undefined;
 
-      if (verificationMode === "manual") {
+      if (verificationMode === "MANUAL") {
         // Manual mode: show pending verification, wait for VERIFY button click
         setPendingVerification({
           feederNumber: pendingFeeder,
           mpnOrInternalId: internalIdInput || val.trim().toUpperCase() || null,
           internalIdType,
-          verificationMode: "manual",
+          verificationMode: "MANUAL",
           selectedItemId: selectedItemIdForScan || undefined,
           partNumber: matchingItem?.partNumber,
           duration,
@@ -555,7 +582,7 @@ export default function SessionActive() {
     const val = scanInput.trim();
     
     // In auto mode at spool step with empty ENTER: auto-skip (advance without MPN)
-    if (verificationMode === "auto" && scanStep === "spool" && !val) {
+    if (verificationMode === "AUTO" && scanStep === "spool" && !val) {
       handleScanBarcode(""); // Empty val auto-advances in auto mode
       return;
     }
@@ -578,7 +605,7 @@ export default function SessionActive() {
           feederNumber: pendingFeeder,
           mpnOrInternalId: mpnScanned || undefined,
           internalIdType,
-          verificationMode: "auto",
+          verificationMode: "AUTO",
           selectedItemId: selectedItemIdForScan || undefined,
         },
       });
@@ -891,11 +918,11 @@ export default function SessionActive() {
       return `SELECT COMPONENT for ${pendingFeeder} — Click primary or alternate, then press ENTER`;
     }
     if (scanStep === "feeder") {
-      return verificationMode === "auto" 
+      return verificationMode === "AUTO" 
         ? "STEP 1 — Scan FEEDER NUMBER (Auto-Advance)" 
         : "STEP 1 / 2 — Scan FEEDER NUMBER";
     }
-    const stepLabel = verificationMode === "auto" 
+    const stepLabel = verificationMode === "AUTO" 
       ? "STEP 2 (Auto-Submit)" 
       : "STEP 2 / 3";
     return `${stepLabel} — Scan MPN / INTERNAL ID or press ENTER to skip (Feeder: ${pendingFeeder})`;
@@ -997,30 +1024,27 @@ export default function SessionActive() {
 
           {session.status === "active" && activeTab === "loading" && (
             <>
-              {/* Verification Mode Toggle (shown only when in scan mode) */}
-              <div className="flex gap-1.5 sm:gap-2 lg:gap-3 bg-slate-100 dark:bg-slate-900 p-1.5 sm:p-2 lg:p-3 rounded-lg">
-                <Button
-                  type="button"
-                  variant={verificationMode === "manual" ? "default" : "outline"}
-                  className="flex-1 h-7 sm:h-9 lg:h-10 font-semibold text-xs sm:text-sm lg:text-base"
-                  onClick={() => setVerificationMode("manual")}
-                  disabled={verificationInProgress}
-                >
-                  <span className="hidden sm:inline">⬜ MANUAL VERIFICATION</span><span className="sm:hidden">⬜ Manual</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant={verificationMode === "auto" ? "default" : "outline"}
-                  className="flex-1 h-7 sm:h-9 lg:h-10 font-semibold text-xs sm:text-sm lg:text-base bg-green-600 hover:bg-green-700 border-green-600"
-                  onClick={() => setVerificationMode("auto")}
-                  disabled={verificationInProgress}
-                >
-                  <span className="hidden sm:inline">⚡ AUTO MODE</span><span className="sm:hidden">⚡ Auto</span>
-                </Button>
+              <div className="flex justify-end">
+                <ModeToggle
+                  currentMode={verificationMode}
+                  onModeChange={handleVerificationModeChange}
+                  sessionId={String(sessionId)}
+                />
+              </div>
+
+              <div
+                className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs sm:text-sm font-bold tracking-widest"
+                style={{
+                  border: `1px solid ${verificationMode === "AUTO" ? "#93C5FD" : "#FCD34D"}`,
+                  color: verificationMode === "AUTO" ? "#1D4ED8" : "#B45309",
+                  background: verificationMode === "AUTO" ? "rgba(59, 130, 246, 0.08)" : "rgba(245, 158, 11, 0.08)",
+                }}
+              >
+                {verificationMode === "AUTO" ? "⚡ AUTO — STRICT" : "🔒 MANUAL MODE"}
               </div>
 
               {/* Pending Verification Alert */}
-              {pendingVerification && verificationMode === "manual" && (
+              {pendingVerification && verificationMode === "MANUAL" && (
                 <div className="bg-blue-50 dark:bg-blue-950 border-2 border-blue-400 p-3 sm:p-4 rounded-lg space-y-3">
                   <div className="text-sm font-semibold text-blue-900 dark:text-blue-100">⏳ MANUAL VERIFICATION PENDING</div>
                   
@@ -1081,6 +1105,17 @@ export default function SessionActive() {
                     </div>
                   )}
 
+                  <div
+                    className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold tracking-widest"
+                    style={{
+                      border: `1px solid ${verificationMode === "AUTO" ? "#93C5FD" : "#FCD34D"}`,
+                      color: verificationMode === "AUTO" ? "#1D4ED8" : "#B45309",
+                      background: verificationMode === "AUTO" ? "rgba(59, 130, 246, 0.08)" : "rgba(245, 158, 11, 0.08)",
+                    }}
+                  >
+                    {verificationMode === "AUTO" ? "⚡ AUTO — STRICT" : "🔒 MANUAL MODE"}
+                  </div>
+
                   <div className="w-full flex gap-0.5 sm:gap-1 lg:gap-2 items-center justify-center min-h-12 sm:min-h-14 lg:min-h-16">
                     {scanStep === "spool" && !needsAlternateSelection && !pendingVerification && (
                       <Button type="button" variant="ghost" size="icon" className="shrink-0 h-10 sm:h-12 lg:h-14 xl:h-16 w-10 sm:w-12 lg:w-14 xl:w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); setInternalIdInput(""); setCaseConverted(false); }}>
@@ -1099,7 +1134,7 @@ export default function SessionActive() {
                         onChange={(e) => setScanInput(e.target.value)}
                         onKeyDown={handleScanKeyDown}
                         className="flex-1 text-center text-lg sm:text-2xl lg:text-3xl xl:text-4xl h-10 sm:h-12 lg:h-16 xl:h-20 font-mono tracking-[0.15em] sm:tracking-[0.2em] bg-background border-2 border-border focus-visible:border-primary rounded-lg shadow-inner text-xs sm:text-sm"
-                        placeholder={needsAlternateSelection ? "Press ENTER..." : (scanStep === "feeder" ? "SCAN FEEDER..." : verificationMode === "auto" ? "SCAN MPN/ID" : "SCAN MPN/ID...")}
+                        placeholder={needsAlternateSelection ? "Press ENTER..." : (scanStep === "feeder" ? "SCAN FEEDER..." : verificationMode === "AUTO" ? "SCAN MPN/ID" : "SCAN MPN/ID...")}
                         autoFocus
                         autoComplete="off"
                       />

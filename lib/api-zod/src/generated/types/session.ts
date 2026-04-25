@@ -20,6 +20,7 @@ export interface Session {
   shiftDate: string;
   logoUrl?: string;
   productionCount?: number;
+  verificationMode: 'AUTO' | 'MANUAL';
   status: SessionStatus;
   startTime: Date;
   endTime?: Date;
