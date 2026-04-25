@@ -17,9 +17,9 @@ const app: Express = express();
 const cspDirectives = [
   "default-src 'self'",
   "script-src 'self'",
-  "style-src 'self'",
+  "style-src 'self' https://fonts.googleapis.com",
   "img-src 'self' data:",
-  "font-src 'self'",
+  "font-src 'self' https://fonts.gstatic.com",
   "connect-src 'self'",
   "frame-ancestors 'none'",
   "base-uri 'self'",
@@ -51,7 +51,19 @@ const apiLimiter = rateLimit({
 
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        imgSrc: ["'self'", "data:"],
+        fontSrc: ["'self'"],
+        connectSrc: ["'self'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
   }),
 );
@@ -98,7 +110,13 @@ app.use(
         return;
       }
 
-      if (!origin || allowedOrigins.includes(origin)) {
+      // Allow non-browser requests such as local health checks when no Origin is sent.
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (allowedOrigins.includes(origin || "")) {
         callback(null, true);
         return;
       }
@@ -126,10 +144,11 @@ app.use("/api/", apiLimiter);
 
 // Root route - explains API structure
 app.get("/", (req, res) => {
+  const systemTitle = process.env.SYSTEM_TITLE ?? process.env.VITE_SYSTEM_TITLE ?? "SMT Verification";
   res.json({
-    name: "SMT Verification API",
+    name: `${systemTitle} API`,
     version: "1.0.0",
-    message: "Backend API for SMT Feeder Scanning & Verification System",
+    message: `Backend API for ${systemTitle}`,
     endpoints: {
       bom: "/api/bom - Bill of Materials management",
       sessions: "/api/sessions - Production session management",
@@ -140,20 +159,22 @@ app.get("/", (req, res) => {
   });
 });
 
-// Diagnostic endpoint
-app.get("/api/test-db", async (req, res) => {
-  try {
-    const dbUrl = process.env.DATABASE_URL || "NOT SET";
-    const maskedUrl = dbUrl.replace(/:[^@]+@/, ":***@");
-    const result = await db.execute(sql`SELECT 1 as test`);
-    res.json({ status: "Database connection OK", databaseUrl: maskedUrl, result });
-  } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    const dbUrl = process.env.DATABASE_URL || "NOT SET";
-    const maskedUrl = dbUrl.replace(/:[^@]+@/, ":***@");
-    res.status(500).json({ status: "Database connection FAILED", databaseUrl: maskedUrl, error: errorMessage });
-  }
-});
+// Diagnostic endpoint - disabled in production
+if (process.env.NODE_ENV !== "production") {
+  app.get("/api/test-db", async (req, res) => {
+    try {
+      const dbUrl = process.env.DATABASE_URL || "NOT SET";
+      const maskedUrl = dbUrl.replace(/:[^@]+@/, ":***@");
+      const result = await db.execute(sql`SELECT 1 as test`);
+      res.json({ status: "Database connection OK", databaseUrl: maskedUrl, result });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const dbUrl = process.env.DATABASE_URL || "NOT SET";
+      const maskedUrl = dbUrl.replace(/:[^@]+@/, ":***@");
+      res.status(500).json({ status: "Database connection FAILED", databaseUrl: maskedUrl, error: errorMessage });
+    }
+  });
+}
 
 // Handle common browser requests silently (no 404 logs)
 app.use((req, res, next): void => {
