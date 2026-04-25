@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { AppLogo } from "@/components/AppLogo";
+import { appConfig } from "@/lib/appConfig";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -280,7 +281,7 @@ export default function Dashboard() {
                   <AppLogo className="h-12 sm:h-16" />
                 <div className="hidden sm:block h-8 w-px bg-border" />
                 <div className="text-left">
-                  <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Welcome</p>
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Welcome • {appConfig.companyShort}</p>
                   <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tight text-foreground">Ready to Scan</h1>
                 </div>
               </div>
@@ -399,7 +400,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-4">
               <AppLogo className="h-14 sm:h-16 flex-shrink-0" />
               <div>
-                <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Quality Assurance</p>
+                <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">{appConfig.companyShort} Quality Assurance</p>
                 <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">QA Dashboard</h1>
               </div>
             </div>
@@ -701,7 +702,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-4">
               <AppLogo className="h-16" />
               <div>
-                <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">Operations</p>
+                <p className="text-xs uppercase tracking-widest text-muted-foreground font-semibold">{appConfig.systemTitle}</p>
                 <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">Engineer Dashboard</h1>
               </div>
             </div>
