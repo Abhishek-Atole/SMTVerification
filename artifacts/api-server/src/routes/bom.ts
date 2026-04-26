@@ -53,12 +53,24 @@ function normalizeInternalPartNumber(value: string): string {
   return value.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function hasMeaningfulBomValue(value: string): boolean {
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) return false;
+  return normalized !== "N/A" && normalized !== "NA" && normalized !== "NULL" && normalized !== "NONE" && normalized !== "-";
+}
+
 const HEADER_ALIASES: Record<string, string[]> = {
   feederNumber: ["Feeder Number", "Feeder", "Feeder No", "Feeder No."],
   internalPartNumber: [
     "Internal Part Number",
     "Company Internal Part Number",
-    "Internal Part Number",
+    "UCAL Internal Part Number",
+    "UCAL Internal Part No",
+    "UCAL Internal Part No.",
+    "UCAL Internal PN",
+    "UCAL Part Number",
+    "Ucal Internal Part Number",
+    "Ucal Internal Part No",
     "Part Number",
     "Part No",
   ],
@@ -217,6 +229,13 @@ router.post("/bom/:bomId/items", async (req, res) => {
     const {
       feederNumber,
       partNumber,
+      internalPartNumber,
+      mpn1,
+      mpn2,
+      mpn3,
+      make1,
+      make2,
+      make3,
       description,
       location,
       quantity,
@@ -251,6 +270,15 @@ router.post("/bom/:bomId/items", async (req, res) => {
         ? ["true", "1", "yes", "y", "x"].includes(dnpParts.trim().toLowerCase())
         : Boolean(dnpParts);
 
+    const resolvedInternalPartNumber =
+      internalPartNumber || rdeplyPartNo || partNumber || itemName || null;
+    const resolvedMpn1 = mpn1 || partNo1 || null;
+    const resolvedMpn2 = mpn2 || partNo2 || null;
+    const resolvedMpn3 = mpn3 || partNo3 || null;
+    const resolvedMake1 = make1 || supplier1 || null;
+    const resolvedMake2 = make2 || supplier2 || null;
+    const resolvedMake3 = make3 || supplier3 || null;
+
     const items = await db
       .insert(bomItemsTable)
       .values({ 
@@ -258,6 +286,15 @@ router.post("/bom/:bomId/items", async (req, res) => {
         feederNumber, 
         partNumber, 
         itemName: itemName || partNumber,
+        internalPartNumber: resolvedInternalPartNumber,
+        make1: resolvedMake1,
+        mpn1: resolvedMpn1,
+        make2: resolvedMake2,
+        mpn2: resolvedMpn2,
+        make3: resolvedMake3,
+        mpn3: resolvedMpn3,
+        expectedMpn: resolvedMpn1,
+        internalId: resolvedInternalPartNumber,
         srNo,
         rdeplyPartNo,
         referenceDesignator,
@@ -343,6 +380,15 @@ router.post("/bom/:bomId/import", async (req, res) => {
       if (!feederNumber) {
         skipped++;
         errors.push(`Row ${i + 1}: missing feeder number`);
+        continue;
+      }
+
+      const hasMpnData = [internalPartNumber, mpn1, mpn2, mpn3].some(hasMeaningfulBomValue);
+      if (!hasMpnData) {
+        skipped++;
+        const warning = `Row ${i + 1}: feeder ${feederNumber} has no MPN/internal part number data`;
+        errors.push(warning);
+        req.log.warn({ bomId, row: i + 1, feederNumber }, "Skipping BOM row with feeder but no MPN/internal data before insert");
         continue;
       }
 

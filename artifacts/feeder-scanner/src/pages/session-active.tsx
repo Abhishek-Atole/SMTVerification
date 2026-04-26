@@ -100,37 +100,42 @@ function tokenizeInternalPartNumber(value: string | null | undefined): string[] 
   if (!value) return [];
   return value
     .replace(/[\r\n]+/g, " ")
-    .split(/\s+/)
+    .split(/[\s,;/|]+/)
     .map((token) => token.trim())
     .filter(Boolean)
     .map((token) => token.toUpperCase());
 }
 
-/**
- * Normalize MPN/internal ID values, filtering out "N/A" placeholders and null/empty values
- */
-function normalizeMpn(value: any): string {
-  if (!value || value === "N/A" || value === "n/a") return "";
-  return normalizeScanValue(String(value));
+function normalizeMpn(val: string | null | undefined): string {
+  if (val === null || val === undefined) return "";
+  const s = String(val).trim().toUpperCase();
+  if (s === "" || s === "N/A" || s === "NA" || s === "-" || s === "NONE") return "";
+  return s;
 }
 
-/**
- * Get filtered candidates from BOM MPN fields, excluding "N/A" and empty values
- */
-function getFilteredMpnCandidates(
-  mpn1?: any,
-  mpn2?: any,
-  mpn3?: any,
-): { displayList: string; candidates: string[] } {
-  const candidates = [mpn1, mpn2, mpn3]
-    .map(normalizeMpn)
-    .filter(Boolean);
-  
-  const displayList = [mpn1, mpn2, mpn3]
-    .filter(v => v && v !== "N/A" && v !== "n/a")
-    .join(" | ");
-  
-  return { displayList, candidates };
+function buildCandidates(bomItem: any): Array<{ value: string; label: string; isPrimary: boolean }> {
+  const candidates: Array<{ value: string; label: string; isPrimary: boolean }> = [];
+
+  const m1 = normalizeMpn(bomItem?.mpn1);
+  if (m1) candidates.push({ value: m1, label: "MPN 1", isPrimary: true });
+
+  const m2 = normalizeMpn(bomItem?.mpn2);
+  if (m2) candidates.push({ value: m2, label: "MPN 2", isPrimary: false });
+
+  const m3 = normalizeMpn(bomItem?.mpn3);
+  if (m3) candidates.push({ value: m3, label: "MPN 3", isPrimary: false });
+
+  const ipn = normalizeMpn(bomItem?.internalPartNumber);
+  if (ipn) {
+    ipn
+      .split(/\s+/)
+      .filter(Boolean)
+      .forEach((token) => {
+        candidates.push({ value: token, label: "Internal ID", isPrimary: false });
+      });
+  }
+
+  return candidates;
 }
 
 export default function SessionActive() {
@@ -603,47 +608,74 @@ export default function SessionActive() {
             (item) => normalizeScanValue(item.feederNumber) === normalizeScanValue(pendingFeeder),
           );
 
-        // BUG FIX: Use normalizeMpn to filter out "N/A" and empty values from BOM fields
-        const { displayList, candidates } = getFilteredMpnCandidates(
-          sessionMatchedBomItem?.mpn1 ?? uiMatchedBomItem?.expectedMpn,
-          sessionMatchedBomItem?.mpn2,
-          sessionMatchedBomItem?.mpn3,
-        );
+        const lockedFeeder = (sessionMatchedBomItem ?? uiMatchedBomItem) as any;
+        const rawScanned = val;
+        const normalizedScanned = normalizeMpn(val);
 
-        const internalTokens = tokenizeInternalPartNumber(
-          String(sessionMatchedBomItem?.internalPartNumber ?? uiMatchedBomItem?.internalId ?? ""),
-        );
+        console.log("[FULL BOM ITEM]", JSON.stringify(lockedFeeder, null, 2));
 
-        console.log('[MPN CHECK]', { candidates, normalizedInput, internalTokens });
+        console.log("[MPN DEBUG] scanned raw:    |" + rawScanned + "|");
+        console.log("[MPN DEBUG] scanned normal: |" + normalizedScanned + "|");
+        console.log("[MPN DEBUG] bom.mpn1 raw:   |" + lockedFeeder?.mpn1 + "|");
+        console.log("[MPN DEBUG] bom.mpn2 raw:   |" + lockedFeeder?.mpn2 + "|");
+        console.log("[MPN DEBUG] bom.mpn3 raw:   |" + lockedFeeder?.mpn3 + "|");
+        console.log("[MPN DEBUG] bom.internalPn: |" + lockedFeeder?.internalPartNumber + "|");
+        console.log("[MPN DEBUG] field names:    ", Object.keys(lockedFeeder ?? {}));
 
-        // Check if scanned value matches any of the filtered candidates
-        const matchedMpnIndex = candidates.findIndex((mpn) => normalizedInput === mpn);
-        const matchedInternal = internalTokens.includes(normalizedInput);
+        if (!normalizedScanned) {
+          showErrorAlert("Empty scan — please scan the part MPN barcode", "high");
+          clearScanInput();
+          return;
+        }
 
-        if (matchedMpnIndex >= 0) {
-          if (matchedMpnIndex === 0) {
-            showSuccessAlert(`Primary MPN Match for feeder ${pendingFeeder}`);
-          } else {
-            showWarningAlert(`Alternate MPN Used for feeder ${pendingFeeder}`, "medium");
-          }
-        } else if (matchedInternal) {
-          showWarningAlert(`Internal ID Match for feeder ${pendingFeeder}`, "medium");
-        } else {
-          console.log('[MPN MISMATCH]', { scanned: normalizedInput, expected: candidates, displayList });
+        if (!lockedFeeder) {
+          showErrorAlert("No feeder locked — restart from feeder scan", "high");
+          setScanStep("feeder");
+          clearScanInput();
+          return;
+        }
+
+        const candidates = buildCandidates(lockedFeeder);
+
+        console.log("[MPN MATCH ATTEMPT] scanned:", normalizedScanned);
+        console.log("[MPN MATCH ATTEMPT] candidates:", candidates);
+
+        if (candidates.length === 0) {
+          showErrorAlert("BOM item has no MPN data — contact engineer", "high");
+          clearScanInput();
+          return;
+        }
+
+        const match = candidates.find((candidate) => candidate.value === normalizedScanned);
+
+        if (!match) {
+          const expectedDisplay = candidates.map((candidate) => candidate.value).join(" | ");
           showErrorAlert(
-            `MPN Mismatch for feeder ${pendingFeeder}. Expected: ${displayList || "N/A"}`,
+            `MPN Mismatch for Feeder ${lockedFeeder?.feederNumber ?? pendingFeeder}. Expected: ${expectedDisplay}`,
             "high",
           );
           clearScanInput();
           return;
         }
 
-        setInternalIdInput(normalizedInput);
-        setCaseConverted(caseConverted || val !== normalizedInput);
+        if (match.label === "Internal ID") {
+          setInternalIdType("internal_id");
+        } else {
+          setInternalIdType("mpn");
+        }
+
+        if (match.isPrimary) {
+          showSuccessAlert(`✓ Primary Match — ${match.label}: ${match.value}`);
+        } else {
+          showWarningAlert(`⚠ Alternate Match — ${match.label}: ${match.value}`, "medium");
+        }
+
+        setInternalIdInput(match.value);
+        setCaseConverted(caseConverted || rawScanned !== normalizedScanned);
         clearScanInput();
 
         const duration = feederScanTime ? Date.now() - feederScanTime : undefined;
-        setPendingMpnScan(normalizedInput);
+        setPendingMpnScan(match.value);
         setPendingScanDuration(duration);
         setScanStep("lot");
         focusNextFrame(inputRef);
@@ -705,7 +737,6 @@ export default function SessionActive() {
     setLastScanResult,
     setFeederScanTime,
     setPendingFeeder,
-    clearScanInput,
     setIsDuplicate,
     setCaseConverted,
     setPendingAvailableOptions,
@@ -719,10 +750,8 @@ export default function SessionActive() {
     showErrorAlert,
     showWarningAlert,
     showSuccessAlert,
-    handleAutoModeSubmit,
     notify,
     focusNextFrame,
-    inputRef,
     sessionId,
   ]);
 
