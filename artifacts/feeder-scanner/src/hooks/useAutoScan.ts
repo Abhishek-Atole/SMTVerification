@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 
 interface UseAutoScanOptions {
-  onScan: (value: string) => void;
+  onScan: (value: string) => void | Promise<void>;
   delayMs?: number;
   minLength?: number;
   enabled?: boolean;
@@ -14,6 +14,7 @@ export function useAutoScan(
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastValueRef = useRef("");
   const onScanRef = useRef(onScan);
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     onScanRef.current = onScan;
@@ -45,8 +46,20 @@ export function useAutoScan(
     }
 
     timerRef.current = setTimeout(() => {
+      if (inFlightRef.current) {
+        return;
+      }
+
+      inFlightRef.current = true;
       lastValueRef.current = normalizedValue;
-      onScanRef.current(normalizedValue);
+
+      try {
+        void Promise.resolve(onScanRef.current(normalizedValue)).finally(() => {
+          inFlightRef.current = false;
+        });
+      } catch {
+        inFlightRef.current = false;
+      }
     }, delayMs);
 
     return reset;

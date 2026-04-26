@@ -99,7 +99,7 @@ export function verifyMPN(scanned: string, bomRow: BomItemForVerification): Veri
       valid: true,
       matchedField: "internalPartNumber",
       matchedMake: null,
-      isPrimary: true,
+      isPrimary: false,
       errorCode: null,
     };
   }
