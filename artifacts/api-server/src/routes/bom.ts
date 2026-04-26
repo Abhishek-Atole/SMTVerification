@@ -161,7 +161,29 @@ router.get("/bom/:bomId", async (req, res) => {
       res.status(404).json({ error: "BOM not found" });
       return;
     }
-    const items = await db.select().from(bomItemsTable).where(eq(bomItemsTable.bomId, bomId));
+    const items = await db
+      .select({
+        id: bomItemsTable.id,
+        bomId: bomItemsTable.bomId,
+        feederNumber: bomItemsTable.feederNumber,
+        partNumber: bomItemsTable.partNumber,
+        itemName: bomItemsTable.itemName,
+        internalPartNumber: bomItemsTable.internalPartNumber,
+        make1: bomItemsTable.make1,
+        mpn1: bomItemsTable.mpn1,
+        make2: bomItemsTable.make2,
+        mpn2: bomItemsTable.mpn2,
+        make3: bomItemsTable.make3,
+        mpn3: bomItemsTable.mpn3,
+        description: bomItemsTable.description,
+        packageDescription: bomItemsTable.packageDescription,
+        requiredQty: bomItemsTable.requiredQty,
+        referenceLocation: bomItemsTable.referenceLocation,
+        location: bomItemsTable.location,
+        quantity: bomItemsTable.quantity,
+      })
+      .from(bomItemsTable)
+      .where(eq(bomItemsTable.bomId, bomId));
     res.json({ ...bom, items });
   } catch (err) {
     req.log.error(err);
@@ -189,7 +211,29 @@ router.patch("/bom/:bomId", async (req, res) => {
       return;
     }
     
-    const items = await db.select().from(bomItemsTable).where(eq(bomItemsTable.bomId, bomId));
+    const items = await db
+      .select({
+        id: bomItemsTable.id,
+        bomId: bomItemsTable.bomId,
+        feederNumber: bomItemsTable.feederNumber,
+        partNumber: bomItemsTable.partNumber,
+        itemName: bomItemsTable.itemName,
+        internalPartNumber: bomItemsTable.internalPartNumber,
+        make1: bomItemsTable.make1,
+        mpn1: bomItemsTable.mpn1,
+        make2: bomItemsTable.make2,
+        mpn2: bomItemsTable.mpn2,
+        make3: bomItemsTable.make3,
+        mpn3: bomItemsTable.mpn3,
+        description: bomItemsTable.description,
+        packageDescription: bomItemsTable.packageDescription,
+        requiredQty: bomItemsTable.requiredQty,
+        referenceLocation: bomItemsTable.referenceLocation,
+        location: bomItemsTable.location,
+        quantity: bomItemsTable.quantity,
+      })
+      .from(bomItemsTable)
+      .where(eq(bomItemsTable.bomId, bomId));
     const itemCount = items.length;
     
     res.json({

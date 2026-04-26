@@ -116,16 +116,16 @@ function normalizeMpn(val: string | null | undefined): string {
 function buildCandidates(bomItem: any): Array<{ value: string; label: string; isPrimary: boolean }> {
   const candidates: Array<{ value: string; label: string; isPrimary: boolean }> = [];
 
-  const m1 = normalizeMpn(bomItem?.mpn1);
+  const m1 = normalizeMpn(bomItem?.mpn1 ?? bomItem?.mpn_1);
   if (m1) candidates.push({ value: m1, label: "MPN 1", isPrimary: true });
 
-  const m2 = normalizeMpn(bomItem?.mpn2);
+  const m2 = normalizeMpn(bomItem?.mpn2 ?? bomItem?.mpn_2);
   if (m2) candidates.push({ value: m2, label: "MPN 2", isPrimary: false });
 
-  const m3 = normalizeMpn(bomItem?.mpn3);
+  const m3 = normalizeMpn(bomItem?.mpn3 ?? bomItem?.mpn_3);
   if (m3) candidates.push({ value: m3, label: "MPN 3", isPrimary: false });
 
-  const ipn = normalizeMpn(bomItem?.internalPartNumber);
+  const ipn = normalizeMpn(bomItem?.internalPartNumber ?? bomItem?.internal_part_number);
   if (ipn) {
     ipn
       .split(/\s+/)
