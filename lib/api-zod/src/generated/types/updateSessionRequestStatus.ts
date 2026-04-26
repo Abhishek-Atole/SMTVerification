@@ -12,4 +12,5 @@ export type UpdateSessionRequestStatus = typeof UpdateSessionRequestStatus[keyof
 export const UpdateSessionRequestStatus = {
   active: 'active',
   completed: 'completed',
+  cancelled: 'cancelled',
 } as const;

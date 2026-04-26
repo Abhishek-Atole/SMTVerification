@@ -309,7 +309,7 @@ router.post("/test/seed-boms-with-items", async (req, res) => {
           .insert(sessionsTable)
           .values({
             bomId: bom.id!,
-            companyName: "Test Company",
+            companyName: process.env.COMPANY_NAME ?? "UCAL ELECTRONICS PVT.LTD",
             customerName: "Test Customer",
             panelName: `Panel-${bom.id}-${s + 1}`,
             supervisorName: `SV-${Math.floor(Math.random() * 99)

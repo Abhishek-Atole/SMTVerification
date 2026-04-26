@@ -279,7 +279,7 @@ export class SeedDataService {
           .insert(sessionsTable)
           .values({
             bomId: bom.id,
-            companyName: "UCAL Electronics",
+            companyName: process.env.COMPANY_NAME ?? process.env.VITE_COMPANY_NAME ?? "UCAL ELECTRONICS PVT.LTD",
             customerName: "Test Customer",
             panelName: `PANEL-${Math.floor(Math.random() * 10000)
               .toString()
@@ -412,7 +412,7 @@ export class SeedDataService {
       bomItems: await getCount("bom_items"),
       sessions: await getCount("sessions"),
       scans: await getCount("scan_records"),
-      splices: await getCount("splices"),
+      splices: await getCount("splice_records"),
       auditLogs: await getCount("audit_logs"),
     };
 

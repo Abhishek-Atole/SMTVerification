@@ -238,7 +238,6 @@ export default function VerificationPage() {
                   </svg>
                   <div className="absolute inset-0 flex items-center justify-center text-center">
                     <div>
-                    </div>
                       <div className="text-3xl font-black">{progress.percentage}%</div>
                       <div className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Complete</div>
                     </div>
@@ -279,6 +278,7 @@ export default function VerificationPage() {
 
           <LogPanel />
         </div>
+      </div>
       </div>
 
       {showResetConfirm && (

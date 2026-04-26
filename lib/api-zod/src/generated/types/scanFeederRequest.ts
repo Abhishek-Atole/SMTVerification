@@ -5,8 +5,15 @@
  * SMT Feeder Scanning & Verification System API
  * OpenAPI spec version: 0.1.0
  */
+import type { ScanFeederRequestVerificationMode } from './scanFeederRequestVerificationMode';
 
 export interface ScanFeederRequest {
+  sessionId: number;
   feederNumber: string;
+  mpnOrInternalId?: string;
+  lotCode?: string;
+  internalIdType?: string;
+  verificationMode?: ScanFeederRequestVerificationMode;
+  selectedItemId?: number;
   spoolBarcode?: string;
 }

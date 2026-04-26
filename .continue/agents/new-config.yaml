@@ -1,0 +1,19 @@
+name: Example Config
+version: 1.0.0
+schema: v1
+
+models:
+  - name: MiniMax M2.7
+    provider: openai
+    model: minimaxai/minimax-m2.7
+    apiBase: https://integrate.api.nvidia.com/v1
+    apiKey: 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
+
+  - uses: minimaxai/minimax-m2.7
+
+  - uses: anthropic/claude-4-sonnet
+    with:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+mcpServers:
+  - uses: anthropic/memory-mcp

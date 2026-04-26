@@ -1,0 +1,33 @@
+
+> @workspace/feeder-scanner@0.0.0 build /media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/artifacts/feeder-scanner
+> vite build --config vite.config.ts
+
+vite v7.3.2 building client environment for production...
+transforming...
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/label.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/select.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+✓ 3484 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/public/index.html                              0.74 kB │ gzip:   0.41 kB
+dist/public/assets/index-dN9kiU8S.css             165.62 kB │ gzip:  25.11 kB
+dist/public/assets/purify.es-OpeaODd9.js           24.10 kB │ gzip:   9.05 kB
+dist/public/assets/index.es-HHjdU54q.js           158.79 kB │ gzip:  53.02 kB
+dist/public/assets/html2canvas.esm-DXEQVQnt.js    201.04 kB │ gzip:  47.43 kB
+dist/public/assets/index-C8fSCaJb.js            2,344.52 kB │ gzip: 585.73 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 22.41s
+
+> @workspace/feeder-scanner@0.0.0 serve /media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/artifacts/feeder-scanner
+> vite preview --config vite.config.ts --host 0.0.0.0 -- --port 5173 --host 0.0.0.0
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: http://192.168.2.106:5173/
+  ➜  Network: http://192.168.3.189:5173/
+Killed
+ ELIFECYCLE  Command failed with exit code 137.

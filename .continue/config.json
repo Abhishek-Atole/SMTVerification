@@ -1,0 +1,14 @@
+{
+  "models": [
+    {
+      "title": "MiniMax M2.7",
+      "provider": "openai",
+      "model": "minimaxai/minimax-m2.7",
+      "apiBase": "https://integrate.api.nvidia.com/v1",
+      "apiKey": "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"
+    }
+  ],
+  "tabAutocompleteModel": {
+      "title": "MiniMax M2.7"
+  }
+}

@@ -7,10 +7,12 @@
  */
 import type { BomItem } from './bomItem';
 import type { SessionDetail } from './sessionDetail';
+import type { SessionReportRow } from './sessionReportRow';
 import type { SessionSummary } from './sessionSummary';
 
 export interface SessionReport {
   session: SessionDetail;
   summary: SessionSummary;
   bomItems: BomItem[];
+  reportRows?: SessionReportRow[];
 }

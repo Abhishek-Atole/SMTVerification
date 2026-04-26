@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { Clock, AlertCircle } from "lucide-react";
 import { useAuth } from "@/context/auth-context";
+import { useSession } from "@/context/session-context";
 import { AppLogo } from "@/components/AppLogo";
 import { appConfig } from "@/lib/appConfig";
 
 interface AppShellProps {
   children: React.ReactNode;
-  jobId?: string;
 }
 
-export function AppShell({ children, jobId }: AppShellProps) {
+export function AppShell({ children }: AppShellProps) {
   const { user } = useAuth();
+  const { activeSession, loading: sessionLoading } = useSession();
   const [time, setTime] = useState<string>(new Date().toLocaleTimeString());
   const [lastActionTime, setLastActionTime] = useState<string>(new Date().toLocaleTimeString());
   const [bomLoaded, setBomLoaded] = useState(true);
@@ -59,9 +60,17 @@ export function AppShell({ children, jobId }: AppShellProps) {
             </div>
 
             {/* Job ID Badge */}
-            {jobId && (
+            {sessionLoading ? (
+              <div className="px-3 py-1.5 rounded-full bg-neutral-100 border border-neutral-300">
+                <p className="text-xs font-medium text-neutral-600">Session: Loading...</p>
+              </div>
+            ) : activeSession ? (
               <div className="px-3 py-1.5 rounded-full bg-teal-100 border border-teal-300">
-                <p className="text-xs font-medium text-teal-900">Job: {jobId}</p>
+                <p className="text-xs font-medium text-teal-900">Session: {activeSession.id}</p>
+              </div>
+            ) : (
+              <div className="px-3 py-1.5 rounded-full bg-amber-100 border border-amber-300">
+                <p className="text-xs font-medium text-amber-900">No active session</p>
               </div>
             )}
           </div>

@@ -7,9 +7,22 @@
  */
 
 export interface CreateBomItemRequest {
+  srNo?: string;
   feederNumber: string;
   partNumber: string;
+  itemName?: string;
+  rdeplyPartNo?: string;
+  referenceDesignator?: string;
   description?: string;
   location?: string;
+  packageDescription?: string;
+  dnpParts?: string;
+  supplier1?: string;
+  partNo1?: string;
+  supplier2?: string;
+  partNo2?: string;
+  supplier3?: string;
+  partNo3?: string;
+  remarks?: string;
   quantity: number;
 }

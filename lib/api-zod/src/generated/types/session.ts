@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SessionStatus } from './sessionStatus';
+import type { SessionVerificationMode } from './sessionVerificationMode';
 
 export interface Session {
   id: number;
@@ -20,7 +21,7 @@ export interface Session {
   shiftDate: string;
   logoUrl?: string;
   productionCount?: number;
-  verificationMode: 'AUTO' | 'MANUAL';
+  verificationMode?: SessionVerificationMode;
   status: SessionStatus;
   startTime: Date;
   endTime?: Date;

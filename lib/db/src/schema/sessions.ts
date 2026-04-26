@@ -91,6 +91,7 @@ export const changeoverSessionsTable = pgTable(
     bomId: integer("bom_id")
       .notNull()
       .references(() => bomsTable.id, { onDelete: "cascade" }),
+    verificationMode: text("verification_mode").notNull().default("AUTO"),
     status: changeoverSessionStatusEnum("status").notNull().default("active"),
     startedAt: timestamp("started_at").defaultNow().notNull(),
     completedAt: timestamp("completed_at"),
@@ -99,6 +100,7 @@ export const changeoverSessionsTable = pgTable(
   (table) => ({
     operatorIdIdx: index("changeover_sessions_operator_id_idx").on(table.operatorId),
     bomIdIdx: index("changeover_sessions_bom_id_idx").on(table.bomId),
+    verificationModeIdx: index("changeover_sessions_verification_mode_idx").on(table.verificationMode),
     statusIdx: index("changeover_sessions_status_idx").on(table.status),
   })
 );
@@ -115,6 +117,7 @@ export const feederScansTable = pgTable(
     matchedField: text("matched_field"),
     matchedMake: text("matched_make"),
     lotCode: text("lot_code"),
+    verificationMode: text("verification_mode").notNull().default("AUTO"),
     status: feederScanStatusEnum("status").notNull(),
     scannedAt: timestamp("scanned_at").defaultNow().notNull(),
     operatorId: integer("operator_id")
@@ -124,6 +127,7 @@ export const feederScansTable = pgTable(
   (table) => ({
     sessionIdIdx: index("feeder_scans_session_id_idx").on(table.sessionId),
     feederNumberIdx: index("feeder_scans_feeder_number_idx").on(table.feederNumber),
+    verificationModeIdx: index("feeder_scans_verification_mode_idx").on(table.verificationMode),
     statusIdx: index("feeder_scans_status_idx").on(table.status),
     operatorIdIdx: index("feeder_scans_operator_id_idx").on(table.operatorId),
   })

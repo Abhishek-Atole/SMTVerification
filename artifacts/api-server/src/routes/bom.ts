@@ -56,7 +56,8 @@ function normalizeInternalPartNumber(value: string): string {
 const HEADER_ALIASES: Record<string, string[]> = {
   feederNumber: ["Feeder Number", "Feeder", "Feeder No", "Feeder No."],
   internalPartNumber: [
-    "UCAL Internal Part Number",
+    "Internal Part Number",
+    "Company Internal Part Number",
     "Internal Part Number",
     "Part Number",
     "Part No",

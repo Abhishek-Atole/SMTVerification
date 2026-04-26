@@ -70,6 +70,231 @@ function buildExpectedMpnValues(bomRow: BomRowForMPN): string[] {
   return Array.from(new Set(values));
 }
 
+type SessionReportPayload = {
+  session: {
+    id: number;
+    startedAt: string | Date | null;
+    completedAt: string | Date | null;
+    status: string | null;
+    verificationMode: string | null;
+    panelId: string | null;
+    shift: string | null;
+    customer: string | null;
+    machine: string | null;
+    pcbPartNumber: string | null;
+    line: string | null;
+    bomVersion: string | null;
+    operatorName: string | null;
+    qaName: string | null;
+    supervisorName: string | null;
+    durationMinutes: number;
+  };
+  summary: {
+    sessionId: number;
+    totalBomItems: number;
+    scannedCount: number;
+    okCount: number;
+    rejectCount: number;
+    warningCount: number;
+    missingCount: number;
+    completionPercent: number;
+    durationMinutes: number;
+  };
+  reportRows: any[];
+};
+
+async function buildSessionReportPayload(sessionId: number): Promise<SessionReportPayload | null> {
+  const changeoverJoinResult = await db.execute(sql`
+      SELECT
+        cs.id,
+        cs.started_at AS "startedAt",
+        cs.completed_at AS "completedAt",
+        cs.status,
+        COALESCE(to_jsonb(cs)->>'verification_mode', 'manual') AS "verificationMode",
+        COALESCE(to_jsonb(bh)->>'panel_id', bh.name) AS "panelId",
+        to_jsonb(bh)->>'shift' AS shift,
+        to_jsonb(bh)->>'customer' AS customer,
+        to_jsonb(bh)->>'machine' AS machine,
+        COALESCE(to_jsonb(bh)->>'pcb_part_number', to_jsonb(bh)->>'pcbPartNumber') AS "pcbPartNumber",
+        to_jsonb(bh)->>'line' AS line,
+        COALESCE(to_jsonb(bh)->>'bom_version', bh.name) AS "bomVersion",
+        operator_user.display_name AS "operatorName",
+        qa_user.display_name AS "qaName",
+        supervisor_user.display_name AS "supervisorName",
+        fs.feeder_number AS "feederNumber",
+        fs.scanned_value AS "scannedValue",
+        fs.matched_field AS "matchedField",
+        fs.matched_make AS "matchedMake",
+        fs.lot_code AS "lotCode",
+        fs.status::text AS "scanStatus",
+        fs.scanned_at AS "scannedAt",
+        bi.reference_location AS "referenceLocation",
+        bi.description,
+        bi.package_description AS "packageDescription",
+        bi.internal_part_number AS "internalPartNumber",
+        bi.make_1 AS make1,
+        bi.mpn_1 AS mpn1,
+        bi.make_2 AS make2,
+        bi.mpn_2 AS mpn2,
+        bi.make_3 AS make3,
+        bi.mpn_3 AS mpn3
+      FROM changeover_sessions cs
+      LEFT JOIN boms bh ON cs.bom_id = bh.id
+      LEFT JOIN users operator_user ON cs.operator_id = operator_user.id
+      LEFT JOIN users qa_user ON qa_user.id = NULLIF(to_jsonb(cs)->>'qa_id', '')::int
+      LEFT JOIN users supervisor_user ON supervisor_user.id = NULLIF(to_jsonb(cs)->>'supervisor_id', '')::int
+      LEFT JOIN feeder_scans fs ON fs.session_id = cs.id
+      LEFT JOIN bom_items bi ON bi.feeder_number = fs.feeder_number AND bi.bom_id = cs.bom_id
+      WHERE cs.id = ${sessionId}
+      ORDER BY fs.scanned_at ASC NULLS LAST
+    `);
+
+  const joinedRows: any[] = Array.isArray(changeoverJoinResult?.rows)
+    ? changeoverJoinResult.rows
+    : (Array.isArray(changeoverJoinResult) ? changeoverJoinResult : []);
+
+  if (joinedRows.length > 0) {
+    const first = joinedRows[0];
+    const scansOnly = joinedRows.filter((r) => r.feederNumber != null);
+    const passCount = scansOnly.filter((r) => String(r.scanStatus).toLowerCase() === "verified").length;
+    const failCount = scansOnly.filter((r) => String(r.scanStatus).toLowerCase() === "failed").length;
+    const warnCount = scansOnly.filter((r) => String(r.scanStatus).toLowerCase() === "duplicate").length;
+    const durationMinutes = first.completedAt
+      ? Math.round((new Date(first.completedAt).getTime() - new Date(first.startedAt).getTime()) / 60000)
+      : 0;
+
+    return {
+      session: {
+        id: first.id,
+        startedAt: first.startedAt,
+        completedAt: first.completedAt,
+        status: first.status,
+        verificationMode: first.verificationMode,
+        panelId: first.panelId,
+        shift: first.shift,
+        customer: first.customer,
+        machine: first.machine,
+        pcbPartNumber: first.pcbPartNumber,
+        line: first.line,
+        bomVersion: first.bomVersion,
+        operatorName: first.operatorName,
+        qaName: first.qaName,
+        supervisorName: first.supervisorName,
+        durationMinutes,
+      },
+      summary: {
+        sessionId,
+        totalBomItems: scansOnly.length,
+        scannedCount: scansOnly.length,
+        okCount: passCount,
+        rejectCount: failCount,
+        warningCount: warnCount,
+        missingCount: 0,
+        completionPercent: scansOnly.length > 0 ? Math.round((passCount / scansOnly.length) * 100) : 0,
+        durationMinutes,
+      },
+      reportRows: scansOnly,
+    };
+  }
+
+  const sessions = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
+  const [session] = sessions;
+  if (!session) return null;
+
+  const scans = await db
+    .select()
+    .from(scanRecordsTable)
+    .where(eq(scanRecordsTable.sessionId, sessionId))
+    .orderBy(scanRecordsTable.scannedAt);
+  const bomItems = session.bomId
+    ? await db.select().from(bomItemsTable).where(eq(bomItemsTable.bomId, session.bomId))
+    : [];
+  const [bom] = session.bomId
+    ? await db.select().from(bomsTable).where(eq(bomsTable.id, session.bomId))
+    : [null];
+
+  const totalBomItems = bomItems.length;
+  const okCount = scans.filter((s) => s.status === "ok").length;
+  const rejectCount = scans.filter((s) => s.status === "reject").length;
+  const scannedFeederNumbers = new Set(scans.filter((s) => s.status === "ok").map((s) => s.feederNumber.trim().toLowerCase()));
+  const missingCount = bomItems.filter((item) => !scannedFeederNumbers.has(item.feederNumber.trim().toLowerCase())).length;
+  const completionPercent = totalBomItems > 0 ? Math.round((okCount / totalBomItems) * 100) : 0;
+  const start = new Date(session.startTime);
+  const end = session.endTime ? new Date(session.endTime) : new Date();
+  const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60000);
+
+  const reportRows = bomItems.map((item: any) => {
+    const feederScan = scans.find((s: any) => s.feederNumber?.trim()?.toUpperCase() === item.feederNumber?.trim()?.toUpperCase());
+    return {
+      id: sessionId,
+      startedAt: session.startTime,
+      completedAt: session.endTime,
+      status: session.status,
+      verificationMode: session.verificationMode ?? "manual",
+      panelId: session.panelName,
+      shift: session.shiftName,
+      customer: session.customerName,
+      machine: session.machineName ?? null,
+      pcbPartNumber: session.panelName,
+      line: session.supervisorName,
+      bomVersion: bom?.name ?? null,
+      operatorName: session.operatorName,
+      qaName: session.qaName ?? null,
+      supervisorName: session.supervisorName,
+      feederNumber: item.feederNumber,
+      scannedValue: feederScan?.spoolBarcode ?? feederScan?.scannedMpn ?? null,
+      matchedField: null,
+      matchedMake: null,
+      lotCode: feederScan?.lotNumber ?? null,
+      scanStatus: feederScan?.status === "ok" ? "verified" : feederScan?.status === "reject" ? "failed" : null,
+      scannedAt: feederScan?.scannedAt ?? null,
+      referenceLocation: item.referenceLocation,
+      description: item.description ?? item.itemName,
+      packageDescription: item.packageDescription,
+      internalPartNumber: item.internalPartNumber,
+      make1: item.make1,
+      mpn1: item.mpn1,
+      make2: item.make2,
+      mpn2: item.mpn2,
+      make3: item.make3,
+      mpn3: item.mpn3,
+    };
+  });
+
+  return {
+    session: {
+      id: session.id,
+      startedAt: session.startTime,
+      completedAt: session.endTime,
+      status: session.status,
+      verificationMode: session.verificationMode ?? "manual",
+      panelId: session.panelName,
+      shift: session.shiftName,
+      customer: session.customerName,
+      machine: session.machineName,
+      pcbPartNumber: session.panelName,
+      line: session.supervisorName,
+      bomVersion: bom?.name ?? null,
+      operatorName: session.operatorName,
+      qaName: session.qaName ?? null,
+      supervisorName: session.supervisorName,
+      durationMinutes,
+    },
+    summary: {
+      sessionId,
+      totalBomItems,
+      scannedCount: scans.length,
+      okCount,
+      rejectCount,
+      warningCount: 0,
+      missingCount,
+      completionPercent,
+      durationMinutes,
+    },
+    reportRows,
+  };
+}
+
 // Static routes
 router.get("/sessions", async (req, res) => {
   try {
@@ -863,200 +1088,18 @@ router.get("/sessions/:sessionId/summary", async (req, res) => {
 router.get("/sessions/:sessionId/report", async (req, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
-    const changeoverJoinResult = await db.execute(sql`
-      SELECT
-        cs.id,
-        cs.started_at AS "startedAt",
-        cs.completed_at AS "completedAt",
-        cs.status,
-        COALESCE(to_jsonb(cs)->>'verification_mode', 'manual') AS "verificationMode",
-        COALESCE(to_jsonb(bh)->>'panel_id', bh.name) AS "panelId",
-        to_jsonb(bh)->>'shift' AS shift,
-        to_jsonb(bh)->>'customer' AS customer,
-        to_jsonb(bh)->>'machine' AS machine,
-        COALESCE(to_jsonb(bh)->>'pcb_part_number', to_jsonb(bh)->>'pcbPartNumber') AS "pcbPartNumber",
-        to_jsonb(bh)->>'line' AS line,
-        COALESCE(to_jsonb(bh)->>'bom_version', bh.name) AS "bomVersion",
-        operator_user.display_name AS "operatorName",
-        qa_user.display_name AS "qaName",
-        supervisor_user.display_name AS "supervisorName",
-        fs.feeder_number AS "feederNumber",
-        fs.scanned_value AS "scannedValue",
-        fs.matched_field AS "matchedField",
-        fs.matched_make AS "matchedMake",
-        fs.lot_code AS "lotCode",
-        fs.status::text AS "scanStatus",
-        fs.scanned_at AS "scannedAt",
-        bi.reference_location AS "referenceLocation",
-        bi.description,
-        bi.package_description AS "packageDescription",
-        bi.internal_part_number AS "internalPartNumber",
-        bi.make_1 AS make1,
-        bi.mpn_1 AS mpn1,
-        bi.make_2 AS make2,
-        bi.mpn_2 AS mpn2,
-        bi.make_3 AS make3,
-        bi.mpn_3 AS mpn3
-      FROM changeover_sessions cs
-      LEFT JOIN boms bh ON cs.bom_id = bh.id
-      LEFT JOIN users operator_user ON cs.operator_id = operator_user.id
-      LEFT JOIN users qa_user ON qa_user.id = NULLIF(to_jsonb(cs)->>'qa_id', '')::int
-      LEFT JOIN users supervisor_user ON supervisor_user.id = NULLIF(to_jsonb(cs)->>'supervisor_id', '')::int
-      LEFT JOIN feeder_scans fs ON fs.session_id = cs.id
-      LEFT JOIN bom_items bi ON bi.feeder_number = fs.feeder_number AND bi.bom_id = cs.bom_id
-      WHERE cs.id = ${sessionId}
-      ORDER BY fs.scanned_at ASC NULLS LAST
-    `);
-
-    const joinedRows: any[] = Array.isArray(changeoverJoinResult?.rows)
-      ? changeoverJoinResult.rows
-      : (Array.isArray(changeoverJoinResult) ? changeoverJoinResult : []);
-
-    if (joinedRows.length > 0) {
-      const first = joinedRows[0];
-      const scansOnly = joinedRows.filter((r) => r.feederNumber != null);
-      const passCount = scansOnly.filter((r) => String(r.scanStatus).toLowerCase() === "verified").length;
-      const failCount = scansOnly.filter((r) => String(r.scanStatus).toLowerCase() === "failed").length;
-      const warnCount = scansOnly.filter((r) => String(r.scanStatus).toLowerCase() === "duplicate").length;
-      const durationMinutes = first.completedAt
-        ? Math.round((new Date(first.completedAt).getTime() - new Date(first.startedAt).getTime()) / 60000)
-        : 0;
-
-      res.json({
-        session: {
-          id: first.id,
-          startedAt: first.startedAt,
-          completedAt: first.completedAt,
-          status: first.status,
-          verificationMode: first.verificationMode,
-          panelId: first.panelId,
-          shift: first.shift,
-          customer: first.customer,
-          machine: first.machine,
-          pcbPartNumber: first.pcbPartNumber,
-          line: first.line,
-          bomVersion: first.bomVersion,
-          operatorName: first.operatorName,
-          qaName: first.qaName,
-          supervisorName: first.supervisorName,
-          durationMinutes,
-        },
-        summary: {
-          sessionId,
-          totalBomItems: scansOnly.length,
-          scannedCount: scansOnly.length,
-          okCount: passCount,
-          rejectCount: failCount,
-          warningCount: warnCount,
-          missingCount: 0,
-          completionPercent: scansOnly.length > 0 ? Math.round((passCount / scansOnly.length) * 100) : 0,
-          durationMinutes,
-        },
-        reportRows: scansOnly,
-      });
+    if (!Number.isFinite(sessionId)) {
+      res.status(400).json({ error: "Invalid sessionId" });
       return;
     }
 
-    const sessions = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
-    const [session] = sessions;
-
-    if (!session) {
+    const reportPayload = await buildSessionReportPayload(sessionId);
+    if (!reportPayload) {
       res.status(404).json({ error: "Session not found" });
       return;
     }
 
-    const scans = await db
-      .select()
-      .from(scanRecordsTable)
-      .where(eq(scanRecordsTable.sessionId, sessionId))
-      .orderBy(scanRecordsTable.scannedAt);
-    const bomItems = await db
-      .select()
-      .from(bomItemsTable)
-      .where(eq(bomItemsTable.bomId, session.bomId!));
-    const boms = await db.select().from(bomsTable).where(eq(bomsTable.id, session.bomId!));
-    const [bom] = boms;
-
-    const totalBomItems = bomItems.length;
-    const okCount = scans.filter((s) => s.status === "ok").length;
-    const rejectCount = scans.filter((s) => s.status === "reject").length;
-    const scannedFeederNumbers = new Set(scans.filter((s) => s.status === "ok").map((s) => s.feederNumber.trim().toLowerCase()));
-    const missingCount = bomItems.filter((item) => !scannedFeederNumbers.has(item.feederNumber.trim().toLowerCase())).length;
-    const completionPercent = totalBomItems > 0 ? Math.round((okCount / totalBomItems) * 100) : 0;
-    const start = new Date(session.startTime);
-    const end = session.endTime ? new Date(session.endTime) : new Date();
-    const durationMinutes = Math.round((end.getTime() - start.getTime()) / 60000);
-
-    const reportRows = bomItems.map((item: any) => {
-      const feederScan = scans.find((s: any) => s.feederNumber?.trim()?.toUpperCase() === item.feederNumber?.trim()?.toUpperCase());
-      return {
-        id: sessionId,
-        startedAt: session.startTime,
-        completedAt: session.endTime,
-        status: session.status,
-        verificationMode: session.verificationMode ?? "manual",
-        panelId: session.panelName,
-        shift: session.shiftName,
-        customer: session.customerName,
-        machine: session.machineName ?? null,
-        pcbPartNumber: session.panelName,
-        line: session.supervisorName,
-        bomVersion: bom?.name ?? null,
-        operatorName: session.operatorName,
-        qaName: session.qaName ?? null,
-        supervisorName: session.supervisorName,
-        feederNumber: item.feederNumber,
-        scannedValue: feederScan?.spoolBarcode ?? feederScan?.scannedMpn ?? null,
-        matchedField: null,
-        matchedMake: null,
-        lotCode: feederScan?.lotNumber ?? null,
-        scanStatus: feederScan?.status === "ok" ? "verified" : feederScan?.status === "reject" ? "failed" : null,
-        scannedAt: feederScan?.scannedAt ?? null,
-        referenceLocation: item.referenceLocation,
-        description: item.description ?? item.itemName,
-        packageDescription: item.packageDescription,
-        internalPartNumber: item.internalPartNumber,
-        make1: item.make1,
-        mpn1: item.mpn1,
-        make2: item.make2,
-        mpn2: item.mpn2,
-        make3: item.make3,
-        mpn3: item.mpn3,
-      };
-    });
-
-    res.json({
-      session: {
-        id: session.id,
-        startedAt: session.startTime,
-        completedAt: session.endTime,
-        status: session.status,
-        verificationMode: session.verificationMode ?? "manual",
-        panelId: session.panelName,
-        shift: session.shiftName,
-        customer: session.customerName,
-        machine: session.machineName,
-        pcbPartNumber: session.panelName,
-        line: session.supervisorName,
-        bomVersion: bom?.name ?? null,
-        operatorName: session.operatorName,
-        qaName: session.qaName ?? null,
-        supervisorName: session.supervisorName,
-        durationMinutes,
-      },
-      summary: {
-        sessionId,
-        totalBomItems,
-        scannedCount: scans.length,
-        okCount,
-        rejectCount,
-        warningCount: 0,
-        missingCount,
-        completionPercent,
-        durationMinutes,
-      },
-      reportRows,
-    });
+    res.json(reportPayload);
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to get session report" });
@@ -1071,51 +1114,36 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
       return;
     }
 
-    const [session] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
-    if (!session) {
+    const reportPayload = await buildSessionReportPayload(sessionId);
+    if (!reportPayload) {
       res.status(404).json({ error: "Session not found" });
       return;
     }
 
-    const [bom] = session.bomId
-      ? await db.select().from(bomsTable).where(eq(bomsTable.id, session.bomId))
+    const [baseSession] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
+    const [bom] = baseSession?.bomId
+      ? await db.select().from(bomsTable).where(eq(bomsTable.id, baseSession.bomId))
       : [null];
 
-    const scans = await db
-      .select()
-      .from(scanRecordsTable)
-      .where(eq(scanRecordsTable.sessionId, sessionId))
-      .orderBy(scanRecordsTable.scannedAt);
+    const { session: reportSession, summary, reportRows } = reportPayload;
 
-    const bomItems = session.bomId
-      ? await db.select().from(bomItemsTable).where(eq(bomItemsTable.bomId, session.bomId))
-      : [];
+    const rows = reportRows.map((row: any, rowIndex: number) => {
+      const scanStatus = String(row.scanStatus ?? "").toLowerCase();
+      const status = scanStatus === "verified" ? "verified" : scanStatus === "failed" ? "failed" : scanStatus === "duplicate" ? "duplicate" : "missing";
 
-    const bomByFeeder = new Map<string, any>();
-    for (const item of bomItems) {
-      const key = String(item.feederNumber ?? "").trim().toUpperCase();
-      if (!bomByFeeder.has(key)) bomByFeeder.set(key, item);
-    }
-
-    const rows = scans.map((scan, rowIndex) => {
-      const feederKey = String(scan.feederNumber ?? "").trim().toUpperCase();
-      const item = bomByFeeder.get(feederKey);
-      const scanStatus = String(scan.status ?? "").toLowerCase();
-      const status = scanStatus === "ok" ? "verified" : scanStatus === "reject" ? "failed" : "duplicate";
-
-      const matchedField = String(scan.validationResult ?? "").toLowerCase();
+      const matchedField = String(row.matchedField ?? "").toLowerCase();
       const matchedLabel = matchedField === "mpn1"
-        ? `MPN 1 (${item?.make1 ?? ""})`
+        ? `MPN 1 (${row.make1 ?? ""})`
         : matchedField === "mpn2"
-          ? `MPN 2 (${item?.make2 ?? ""})`
+          ? `MPN 2 (${row.make2 ?? ""})`
           : matchedField === "mpn3"
-            ? `MPN 3 (${item?.make3 ?? ""})`
+            ? `MPN 3 (${row.make3 ?? ""})`
             : matchedField === "internalpartnumber"
               ? "Internal P/N"
               : "No Match";
 
-      const expectedMpns = [item?.mpn1, item?.mpn2, item?.mpn3].filter(Boolean).join(" / ") || "—";
-      const scannedValue = scan.spoolBarcode || scan.scannedMpn || "—";
+      const expectedMpns = [row.mpn1, row.mpn2, row.mpn3].filter(Boolean).join(" / ") || "—";
+      const scannedValue = row.scannedValue || "—";
       const isAlternate = matchedField === "mpn2" || matchedField === "mpn3";
       const isFailed = status === "failed";
 
@@ -1127,32 +1155,35 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
 
       return {
         rowIndex,
-        feederNumber: scan.feederNumber,
-        refDes: item?.referenceLocation ?? "—",
-        component: item?.description ?? "—",
-        value: item?.description ?? "—",
-        pkgSize: item?.packageDescription ?? "—",
-        internalPartNo: item?.internalPartNumber ?? "—",
+        feederNumber: row.feederNumber,
+        refDes: row.referenceLocation ?? "—",
+        component: row.description ?? "—",
+        value: row.description ?? "—",
+        pkgSize: row.packageDescription ?? "—",
+        internalPartNo: row.internalPartNumber ?? "—",
         expectedMpns,
         scannedText,
         matchedLabel,
-        lotCode: scan.lotNumber ?? "—",
-        modeText: String(scan.verificationMode ?? "AUTO").toUpperCase() === "MANUAL" ? "MAN" : "AUTO",
+        lotCode: row.lotCode ?? "—",
+        modeText: String(row.verificationMode ?? reportSession.verificationMode ?? "AUTO").toUpperCase() === "MANUAL" ? "MAN" : "AUTO",
         status: status.toUpperCase(),
-        scannedAt: scan.scannedAt ? new Date(scan.scannedAt).toLocaleTimeString("en-US", { hour12: true }) : "—",
+        scannedAt: row.scannedAt ? new Date(row.scannedAt).toLocaleTimeString("en-US", { hour12: true }) : "—",
         isAlternate,
         isFailed,
       };
     });
 
-    const totalFeeders = rows.filter((r) => r.status !== "DUPLICATE").length;
-    const passCount = rows.filter((r) => r.status === "VERIFIED").length;
-    const failCount = rows.filter((r) => r.status === "FAILED").length;
-    const warnCount = rows.filter((r) => r.isAlternate && r.status === "VERIFIED").length;
+    const totalFeeders = Number(summary.totalBomItems ?? rows.length);
+    const passCount = Number(summary.okCount ?? rows.filter((r) => r.status === "VERIFIED").length);
+    const failCount = Number(summary.rejectCount ?? rows.filter((r) => r.status === "FAILED").length);
+    const warnCount = Number(summary.warningCount ?? rows.filter((r) => r.status === "DUPLICATE").length);
     const passRate = totalFeeders > 0 ? Math.round((passCount / totalFeeders) * 100) : 0;
-    const reportSessionId = formatSmtSessionId(session.startTime, session.id);
+    const reportSessionId = formatSmtSessionId(
+      reportSession.startedAt ? new Date(reportSession.startedAt) : new Date(),
+      reportSession.id,
+    );
 
-    const CO_NAME = process.env.COMPANY_NAME ?? process.env.VITE_COMPANY_NAME ?? session.companyName ?? "Your Company";
+    const CO_NAME = process.env.COMPANY_NAME ?? process.env.VITE_COMPANY_NAME ?? baseSession?.companyName ?? "Your Company";
     const CO_SHORT = process.env.COMPANY_SHORT ?? process.env.VITE_COMPANY_SHORT ?? "CO";
     const CO_LOGO = process.env.COMPANY_LOGO_PATH ?? process.env.VITE_LOGO_URL ?? null;
     const SYS_TITLE = process.env.SYSTEM_TITLE ?? process.env.VITE_SYSTEM_TITLE ?? "SMT Verification";
@@ -1233,7 +1264,9 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
       doc.fillColor("#BFDBFE").font("Helvetica").fontSize(8).text(CO_NAME, left + 70, y + 24, { width: 150, align: "center" });
       doc.fillColor("#93C5FD").fontSize(7).text("SMT Manufacturing Quality System", left + 70, y + 34, { width: 150, align: "center" });
 
-      const modeText = String(session.verificationMode ?? "AUTO").toUpperCase() === "MANUAL" ? "🔒 MANUAL MODE" : "⚡ AUTO — STRICT MODE";
+      const modeText = String(reportSession.verificationMode ?? baseSession?.verificationMode ?? "AUTO").toUpperCase() === "MANUAL"
+        ? "🔒 MANUAL MODE"
+        : "⚡ AUTO — STRICT MODE";
       const modeColor = modeText.includes("MANUAL") ? "#FCD34D" : "#86EFAC";
 
       doc.fillColor("#93C5FD").fontSize(8).font("Helvetica").text("Changeover ID", right - 95, y + 8, { width: 85, align: "right" });
@@ -1250,9 +1283,42 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
       const colW = (right - left) / totalCols;
 
       const kvRows = [
-        ["Changeover ID", reportSessionId, "Panel ID", String(session.panelName ?? "—"), "Shift", String(session.shiftName ?? "—"), "Date", String(session.shiftDate ?? "—"), "Duration", `${Math.round(((session.endTime ? new Date(session.endTime).getTime() : Date.now()) - new Date(session.startTime).getTime()) / 60000)} min`],
-        ["Customer", String(session.customerName ?? "—"), "Machine", String(session.machineName ?? "—"), "Operator", String(session.operatorName ?? "—"), "Start Time", session.startTime ? new Date(session.startTime).toLocaleTimeString("en-US", { hour12: true }) : "—", "BOM Version", String(bom?.name ?? "—")],
-        ["PCB / Part No.", String(session.panelName ?? "—"), "Line", String(session.supervisorName ?? "—"), "QA Engineer", String(session.qaName ?? "—"), "End Time", session.endTime ? new Date(session.endTime).toLocaleTimeString("en-US", { hour12: true }) : "In Progress", "Supervisor", String(session.supervisorName ?? "—")],
+        [
+          "Changeover ID",
+          reportSessionId,
+          "Panel ID",
+          String(reportSession.panelId ?? baseSession?.panelName ?? "—"),
+          "Shift",
+          String(reportSession.shift ?? baseSession?.shiftName ?? "—"),
+          "Date",
+          reportSession.startedAt ? new Date(reportSession.startedAt).toLocaleDateString("en-GB") : String(baseSession?.shiftDate ?? "—"),
+          "Duration",
+          `${Number(reportSession.durationMinutes ?? summary.durationMinutes ?? 0)} min`,
+        ],
+        [
+          "Customer",
+          String(reportSession.customer ?? baseSession?.customerName ?? "—"),
+          "Machine",
+          String(reportSession.machine ?? baseSession?.machineName ?? "—"),
+          "Operator",
+          String(reportSession.operatorName ?? baseSession?.operatorName ?? "—"),
+          "Start Time",
+          reportSession.startedAt ? new Date(reportSession.startedAt).toLocaleTimeString("en-US", { hour12: true }) : "—",
+          "BOM Version",
+          String(reportSession.bomVersion ?? bom?.name ?? "—"),
+        ],
+        [
+          "PCB / Part No.",
+          String(reportSession.pcbPartNumber ?? reportSession.panelId ?? baseSession?.panelName ?? "—"),
+          "Line",
+          String(reportSession.line ?? "—"),
+          "QA Engineer",
+          String(reportSession.qaName ?? baseSession?.qaName ?? "—"),
+          "End Time",
+          reportSession.completedAt ? new Date(reportSession.completedAt).toLocaleTimeString("en-US", { hour12: true }) : "In Progress",
+          "Supervisor",
+          String(reportSession.supervisorName ?? baseSession?.supervisorName ?? "—"),
+        ],
       ];
 
       doc.fillColor(C.GREY_LIGHT).rect(left, y, right - left, rowH * 3).fill();
@@ -1389,7 +1455,12 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
       doc.fillColor(C.NAVY).font("Helvetica-Bold").fontSize(9).text("▌ Approvals & Sign-off", left, y);
       y += 12;
       const roles = ["SUPERVISOR", "OPERATOR", "QA ENGINEER", "PRODUCTION MANAGER"];
-      const names = [session.supervisorName ?? "", session.operatorName ?? "", session.qaName ?? "", ""];
+      const names = [
+        reportSession.supervisorName ?? baseSession?.supervisorName ?? "",
+        reportSession.operatorName ?? baseSession?.operatorName ?? "",
+        reportSession.qaName ?? baseSession?.qaName ?? "",
+        "",
+      ];
       const cellW = (right - left) / 4;
 
       for (let i = 0; i < 4; i += 1) {
@@ -1409,7 +1480,7 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
       const now = new Date();
       doc.strokeColor(C.GREY_BORDER).lineWidth(0.5).moveTo(left, pageH - 22).lineTo(right, pageH - 22).stroke();
       doc.fillColor(C.GREY_MID).font("Helvetica").fontSize(5.5).text(
-        `${SYS_TITLE} — Electronically Generated Report | Changeover: ${reportSessionId} | Date: ${now.toLocaleDateString("en-GB")} | BOM Version: ${bom?.name ?? "—"} | Mode: ${String(session.verificationMode ?? "AUTO").toUpperCase()} — STRICT | This document is valid without physical signature when QR-verified.`,
+        `${SYS_TITLE} — Electronically Generated Report | Changeover: ${reportSessionId} | Date: ${now.toLocaleDateString("en-GB")} | BOM Version: ${reportSession.bomVersion ?? bom?.name ?? "—"} | Mode: ${String(reportSession.verificationMode ?? baseSession?.verificationMode ?? "AUTO").toUpperCase()} — STRICT | This document is valid without physical signature when QR-verified.`,
         left,
         pageH - 18,
         { width: right - left, align: "center" },

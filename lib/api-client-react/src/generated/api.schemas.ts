@@ -20,11 +20,32 @@ export interface Bom {
 export interface BomItem {
   id: number;
   bomId: number;
+  srNo?: string;
   feederNumber: string;
   partNumber: string;
+  itemName?: string;
+  rdeplyPartNo?: string;
+  referenceDesignator?: string;
   description?: string;
   location?: string;
+  packageDescription?: string;
+  dnpParts?: string;
+  supplier1?: string;
+  partNo1?: string;
+  supplier2?: string;
+  partNo2?: string;
+  supplier3?: string;
+  partNo3?: string;
+  remarks?: string;
   quantity: number;
+  expectedMpn?: string;
+  internalId?: string;
+  isAlternate?: boolean;
+  parentItemId?: number;
+  mpn?: string;
+  manufacturer?: string;
+  cost?: string;
+  leadTime?: number;
 }
 
 export interface BomDetail {
@@ -46,12 +67,33 @@ export interface UpdateBomRequest {
 }
 
 export interface CreateBomItemRequest {
+  srNo?: string;
   feederNumber: string;
   partNumber: string;
+  itemName?: string;
+  rdeplyPartNo?: string;
+  referenceDesignator?: string;
   description?: string;
   location?: string;
+  packageDescription?: string;
+  dnpParts?: string;
+  supplier1?: string;
+  partNo1?: string;
+  supplier2?: string;
+  partNo2?: string;
+  supplier3?: string;
+  partNo3?: string;
+  remarks?: string;
   quantity: number;
 }
+
+export type SessionVerificationMode = typeof SessionVerificationMode[keyof typeof SessionVerificationMode];
+
+
+export const SessionVerificationMode = {
+  AUTO: 'AUTO',
+  MANUAL: 'MANUAL',
+} as const;
 
 export type SessionStatus = typeof SessionStatus[keyof typeof SessionStatus];
 
@@ -74,11 +116,20 @@ export interface Session {
   shiftDate: string;
   logoUrl?: string;
   productionCount?: number;
+  verificationMode?: SessionVerificationMode;
   status: SessionStatus;
   startTime: string;
   endTime?: string;
   createdAt: string;
 }
+
+export type SessionDetailVerificationMode = typeof SessionDetailVerificationMode[keyof typeof SessionDetailVerificationMode];
+
+
+export const SessionDetailVerificationMode = {
+  AUTO: 'AUTO',
+  MANUAL: 'MANUAL',
+} as const;
 
 export type SessionDetailStatus = typeof SessionDetailStatus[keyof typeof SessionDetailStatus];
 
@@ -86,6 +137,7 @@ export type SessionDetailStatus = typeof SessionDetailStatus[keyof typeof Sessio
 export const SessionDetailStatus = {
   active: 'active',
   completed: 'completed',
+  cancelled: 'cancelled',
 } as const;
 
 export type ScanRecordStatus = typeof ScanRecordStatus[keyof typeof ScanRecordStatus];
@@ -112,18 +164,29 @@ export interface SessionDetail {
   id: number;
   bomId: number;
   bomName?: string;
+  panelId?: string;
   companyName: string;
   customerName?: string;
+  customer?: string;
   panelName: string;
   supervisorName: string;
   operatorName: string;
   shiftName: string;
+  shift?: string;
   shiftDate: string;
+  line?: string;
+  machine?: string;
+  qaName?: string;
   logoUrl?: string;
   productionCount?: number;
+  verificationMode?: SessionDetailVerificationMode;
   status: SessionDetailStatus;
   startTime: string;
+  startedAt?: string;
   endTime?: string;
+  completedAt?: string;
+  bomVersion?: string;
+  pcbPartNumber?: string;
   scans: ScanRecord[];
   createdAt: string;
 }
@@ -166,6 +229,7 @@ export type UpdateSessionRequestStatus = typeof UpdateSessionRequestStatus[keyof
 export const UpdateSessionRequestStatus = {
   active: 'active',
   completed: 'completed',
+  cancelled: 'cancelled',
 } as const;
 
 export interface UpdateSessionRequest {
@@ -175,8 +239,22 @@ export interface UpdateSessionRequest {
   logoUrl?: string;
 }
 
+export type ScanFeederRequestVerificationMode = typeof ScanFeederRequestVerificationMode[keyof typeof ScanFeederRequestVerificationMode];
+
+
+export const ScanFeederRequestVerificationMode = {
+  AUTO: 'AUTO',
+  MANUAL: 'MANUAL',
+} as const;
+
 export interface ScanFeederRequest {
+  sessionId: number;
   feederNumber: string;
+  mpnOrInternalId?: string;
+  lotCode?: string;
+  internalIdType?: string;
+  verificationMode?: ScanFeederRequestVerificationMode;
+  selectedItemId?: number;
   spoolBarcode?: string;
 }
 
@@ -205,10 +283,32 @@ export interface SessionSummary {
   durationMinutes?: number;
 }
 
+export interface SessionReportRow {
+  feederNumber?: string;
+  referenceLocation?: string;
+  location?: string;
+  description?: string;
+  packageDescription?: string;
+  internalPartNumber?: string;
+  make1?: string;
+  mpn1?: string;
+  make2?: string;
+  mpn2?: string;
+  make3?: string;
+  mpn3?: string;
+  scannedValue?: string;
+  lotCode?: string;
+  scanStatus?: string;
+  matchedField?: string;
+  matchedMake?: string;
+  scannedAt?: string;
+}
+
 export interface SessionReport {
   session: SessionDetail;
   summary: SessionSummary;
   bomItems: BomItem[];
+  reportRows?: SessionReportRow[];
 }
 
 export interface AnalyticsOverview {

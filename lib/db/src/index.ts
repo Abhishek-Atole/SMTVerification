@@ -4,10 +4,44 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
+function getDatabaseHost(): string | undefined {
+  try {
+    return new URL(process.env.DATABASE_URL ?? "").hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
 function shouldUseSsl(): false | { rejectUnauthorized: boolean } {
+  const isProduction = process.env.NODE_ENV === "production";
+  const dbHost = getDatabaseHost();
+  const isLocalDb = dbHost === "localhost" || dbHost === "127.0.0.1" || dbHost === "::1";
+  const rejectUnauthorized = process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false";
+
+  // In production, enforce SSL by default
+  if (isProduction) {
+    const explicitSsl = process.env.DB_SSL?.toLowerCase();
+    if (explicitSsl === "false") {
+      throw new Error("SSL cannot be disabled in production. Set DB_SSL=true or remove the variable.");
+    }
+    if (explicitSsl === "true") {
+      return { rejectUnauthorized };
+    }
+
+    // Local production-like restarts should not force TLS to localhost Postgres.
+    if (isLocalDb) {
+      return false;
+    }
+
+    // Production always uses SSL with certificate validation
+    return { rejectUnauthorized };
+  }
+
+  // Development: allow configurable SSL
   const explicitSsl = process.env.DB_SSL?.toLowerCase();
   if (explicitSsl === "true") {
-    return { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false" };
+    // In dev, allow disabling certificate verification for local development
+    return { rejectUnauthorized };
   }
 
   if (explicitSsl === "false") {
@@ -24,7 +58,7 @@ function shouldUseSsl(): false | { rejectUnauthorized: boolean } {
   })();
 
   if (sslMode === "require" || sslMode === "verify-full" || sslMode === "verify-ca") {
-    return { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false" };
+    return { rejectUnauthorized };
   }
 
   return false;

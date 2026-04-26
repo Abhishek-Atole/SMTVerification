@@ -425,15 +425,57 @@ components:
           type: integer
         bomId:
           type: integer
+        srNo:
+          type: string
         feederNumber:
           type: string
         partNumber:
+          type: string
+        itemName:
+          type: string
+        rdeplyPartNo:
+          type: string
+        referenceDesignator:
           type: string
         description:
           type: string
         location:
           type: string
+        packageDescription:
+          type: string
+        dnpParts:
+          type: string
+        supplier1:
+          type: string
+        partNo1:
+          type: string
+        supplier2:
+          type: string
+        partNo2:
+          type: string
+        supplier3:
+          type: string
+        partNo3:
+          type: string
+        remarks:
+          type: string
         quantity:
+          type: integer
+        expectedMpn:
+          type: string
+        internalId:
+          type: string
+        isAlternate:
+          type: boolean
+        parentItemId:
+          type: integer
+        mpn:
+          type: string
+        manufacturer:
+          type: string
+        cost:
+          type: string
+        leadTime:
           type: integer
       required: [id, bomId, feederNumber, partNumber, quantity]
 
@@ -475,13 +517,39 @@ components:
     CreateBomItemRequest:
       type: object
       properties:
+        srNo:
+          type: string
         feederNumber:
           type: string
         partNumber:
           type: string
+        itemName:
+          type: string
+        rdeplyPartNo:
+          type: string
+        referenceDesignator:
+          type: string
         description:
           type: string
         location:
+          type: string
+        packageDescription:
+          type: string
+        dnpParts:
+          type: string
+        supplier1:
+          type: string
+        partNo1:
+          type: string
+        supplier2:
+          type: string
+        partNo2:
+          type: string
+        supplier3:
+          type: string
+        partNo3:
+          type: string
+        remarks:
           type: string
         quantity:
           type: integer
@@ -514,6 +582,9 @@ components:
           type: string
         productionCount:
           type: integer
+        verificationMode:
+          type: string
+          enum: [AUTO, MANUAL]
         status:
           type: string
           enum: [active, completed]
@@ -537,9 +608,13 @@ components:
           type: integer
         bomName:
           type: string
+        panelId:
+          type: string
         companyName:
           type: string
         customerName:
+          type: string
+        customer:
           type: string
         panelName:
           type: string
@@ -549,21 +624,42 @@ components:
           type: string
         shiftName:
           type: string
+        shift:
+          type: string
         shiftDate:
+          type: string
+        line:
+          type: string
+        machine:
+          type: string
+        qaName:
           type: string
         logoUrl:
           type: string
         productionCount:
           type: integer
+        verificationMode:
+          type: string
+          enum: [AUTO, MANUAL]
         status:
           type: string
-          enum: [active, completed]
+          enum: [active, completed, cancelled]
         startTime:
+          type: string
+          format: date-time
+        startedAt:
           type: string
           format: date-time
         endTime:
           type: string
           format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        bomVersion:
+          type: string
+        pcbPartNumber:
+          type: string
         scans:
           type: array
           items:
@@ -670,18 +766,31 @@ components:
           type: integer
         status:
           type: string
-          enum: [active, completed]
+          enum: [active, completed, cancelled]
         logoUrl:
           type: string
 
     ScanFeederRequest:
       type: object
       properties:
+        sessionId:
+          type: integer
         feederNumber:
           type: string
+        mpnOrInternalId:
+          type: string
+        lotCode:
+          type: string
+        internalIdType:
+          type: string
+        verificationMode:
+          type: string
+          enum: [AUTO, MANUAL]
+        selectedItemId:
+          type: integer
         spoolBarcode:
           type: string
-      required: [feederNumber]
+      required: [sessionId, feederNumber]
 
     ScanResult:
       type: object
@@ -716,6 +825,47 @@ components:
           type: number
       required: [sessionId, totalBomItems, scannedCount, okCount, rejectCount, missingCount, completionPercent]
 
+    SessionReportRow:
+      type: object
+      properties:
+        feederNumber:
+          type: string
+        referenceLocation:
+          type: string
+        location:
+          type: string
+        description:
+          type: string
+        packageDescription:
+          type: string
+        internalPartNumber:
+          type: string
+        make1:
+          type: string
+        mpn1:
+          type: string
+        make2:
+          type: string
+        mpn2:
+          type: string
+        make3:
+          type: string
+        mpn3:
+          type: string
+        scannedValue:
+          type: string
+        lotCode:
+          type: string
+        scanStatus:
+          type: string
+        matchedField:
+          type: string
+        matchedMake:
+          type: string
+        scannedAt:
+          type: string
+          format: date-time
+
     SessionReport:
       type: object
       properties:
@@ -727,6 +877,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BomItem"
+        reportRows:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionReportRow"
       required: [session, summary, bomItems]
 
     AnalyticsOverview:

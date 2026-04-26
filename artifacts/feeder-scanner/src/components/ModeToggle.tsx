@@ -9,7 +9,9 @@ interface ModeToggleProps {
   sessionId: string;
 }
 
-const MANUAL_PASSWORD = import.meta.env.VITE_MANUAL_PASSWORD ?? "SMT@#123";
+const MANUAL_PASSWORD = import.meta.env.VITE_MANUAL_PASSWORD;
+
+const isManualModeEnabled = Boolean(MANUAL_PASSWORD);
 
 export function ModeToggle({ currentMode, onModeChange, sessionId }: ModeToggleProps) {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -28,6 +30,10 @@ export function ModeToggle({ currentMode, onModeChange, sessionId }: ModeToggleP
   }, [isChanging]);
 
   const handleToggle = useCallback(() => {
+    if (!isManualModeEnabled) {
+      return;
+    }
+
     setError("");
 
     if (currentMode === "AUTO") {
@@ -39,6 +45,11 @@ export function ModeToggle({ currentMode, onModeChange, sessionId }: ModeToggleP
   }, [currentMode, onModeChange]);
 
   const handlePasswordSubmit = useCallback(async () => {
+    if (!MANUAL_PASSWORD) {
+      setError("Manual mode is not configured.");
+      return;
+    }
+
     const normalizedPassword = passwordInput.trim();
     if (!normalizedPassword) {
       setError("Enter the password to unlock manual mode.");

@@ -13,6 +13,14 @@
     "node": ">=20.0.0",
     "pnpm": ">=8.0.0"
   },
+  "pnpm": {
+    "overrides": {
+      "@esbuild-kit/core-utils>esbuild": "0.25.12",
+      "@esbuild-kit/esm-loader>esbuild": "0.25.12",
+      "postcss": "8.5.10",
+      "uuid": "14.0.0"
+    }
+  },
   "devDependencies": {
     "typescript": "~5.9.2",
     "prettier": "^3.8.1"

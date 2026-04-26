@@ -167,6 +167,55 @@ router.get("/auth/me", (req, res) => {
   res.json(payload);
 });
 
+/**
+ * POST /api/auth/verify-override
+ * Verify supervisor/QA password for manual override approval
+ */
+router.post("/auth/verify-override", async (req, res) => {
+  try {
+    const { password, role } = req.body;
+
+    if (!password || (role !== "supervisor" && role !== "qa")) {
+      res.status(400).json({ error: "password and role (supervisor|qa) are required" });
+      return;
+    }
+
+    // Supervisor approvals are handled by engineer-role users in this system.
+    const mappedRole = role === "supervisor" ? "engineer" : "qa";
+
+    const userRecord = await db.query.usersTable.findFirst({
+      where: eq(usersTable.role, mappedRole),
+    });
+
+    if (!userRecord) {
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
+
+    const passwordValid = await bcrypt.compare(password, userRecord.password);
+    if (!passwordValid) {
+      res.status(401).json({ error: "Invalid credentials" });
+      return;
+    }
+
+    await auditLog({
+      event: "SCAN_VERIFIED",
+      operatorId: userRecord.id,
+      detail: `Manual override approval by ${userRecord.username} (${role})`,
+      ip: req.ip,
+    });
+
+    res.json({
+      valid: true,
+      approverName: userRecord.username,
+      approverRole: role,
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Verification failed" });
+  }
+});
+
 export function getAuthActorFromCookie(req: { cookies?: { smt_token?: string } }): AuthTokenPayload | null {
   const token = readTokenFromCookie(req);
   if (!token) {

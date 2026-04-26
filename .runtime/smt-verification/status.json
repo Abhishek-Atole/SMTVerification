@@ -1,0 +1,8 @@
+{
+  "status": "SUCCESS",
+  "message": "System started and operational",
+  "timestamp": "2026-04-25 18:44:34",
+  "api_port": 3000,
+  "app_port": 5173,
+  "log_file": "/media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/.runtime/smt-verification/logs/restart-recovery.log"
+}

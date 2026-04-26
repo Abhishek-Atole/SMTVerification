@@ -9,9 +9,30 @@
 export interface BomItem {
   id: number;
   bomId: number;
+  srNo?: string;
   feederNumber: string;
   partNumber: string;
+  itemName?: string;
+  rdeplyPartNo?: string;
+  referenceDesignator?: string;
   description?: string;
   location?: string;
+  packageDescription?: string;
+  dnpParts?: string;
+  supplier1?: string;
+  partNo1?: string;
+  supplier2?: string;
+  partNo2?: string;
+  supplier3?: string;
+  partNo3?: string;
+  remarks?: string;
   quantity: number;
+  expectedMpn?: string;
+  internalId?: string;
+  isAlternate?: boolean;
+  parentItemId?: number;
+  mpn?: string;
+  manufacturer?: string;
+  cost?: string;
+  leadTime?: number;
 }

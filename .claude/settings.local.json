@@ -1,8 +1,14 @@
 {
-  "env": {
-    "ANTHROPIC_BASE_URL": "https://openrouter.ai/api",
-    "ANTHROPIC_AUTH_TOKEN": "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",
-    "ANTHROPIC_API_KEY": "",
-    "ANTHROPIC_MODEL": "inclusionai/ling-2.6-flash:free"
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"/media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/\" status --porcelain)",
+      "Bash(git -C \"/media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/\" ls-files)",
+      "Bash(grep -E \"^\\\\.env$|^\\\\.env\\\\.\")",
+      "Bash(pnpm typecheck *)",
+      "Bash(netstat -tlnp)",
+      "Bash(kill 25199)",
+      "Bash(curl -s http://localhost:3000/api/health)",
+      "Bash(curl -s http://localhost:5173)"
+    ]
   }
 }

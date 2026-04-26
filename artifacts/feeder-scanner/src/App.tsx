@@ -23,6 +23,7 @@ import Reports from "@/pages/reports";
 import VerificationPage from "@/pages/verification";
 import SplicingPage from "@/pages/splicing";
 import { AuthProvider, useAuth } from "@/context/auth-context";
+import { SessionProvider } from "@/context/session-context";
 import { ThemeProvider } from "@/components/theme-provider";
 import { NotificationProvider } from "@/components/NotificationSystem";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -38,16 +39,22 @@ const queryClient = new QueryClient({
 });
 
 function ProtectedRoute({ component: Component, allowedRoles }: { component: any, allowedRoles?: string[] }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
+    if (loading) {
+      return;
+    }
+
     if (!user) {
       setLocation("/login");
     } else if (allowedRoles && !allowedRoles.includes(user.role)) {
       setLocation("/");
     }
-  }, [user, setLocation, allowedRoles]);
+  }, [user, loading, setLocation, allowedRoles]);
+
+  if (loading) return null;
 
   if (!user) return null;
   if (allowedRoles && !allowedRoles.includes(user.role)) return null;
@@ -56,7 +63,7 @@ function ProtectedRoute({ component: Component, allowedRoles }: { component: any
 }
 
 function Router() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [location] = useLocation();
 
   useEffect(() => {
@@ -93,8 +100,8 @@ function Router() {
     <Switch>
       <Route path="/login" component={Login} />
       <Route>
-        {user ? (
-          <AppShell jobId="SMT-JOB-001">
+        {loading ? null : user ? (
+          <AppShell>
             <Layout>
               <Switch>
                 <Route path="/">
@@ -158,7 +165,9 @@ function App() {
             <ErrorBoundary>
               <TooltipProvider>
                 <WouterRouter base={import.meta.env.BASE_URL?.replace(/\/$/, "") || ""}>
-                  <Router />
+                  <SessionProvider>
+                    <Router />
+                  </SessionProvider>
                 </WouterRouter>
                 <Toaster />
               </TooltipProvider>

@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import playFeedback from "@/utils/audio";
 import { useNotificationStore } from "@/store/useNotificationStore";
+import type { StoredNotification } from "@/store/useNotificationStore";
 import { useLogStore } from "@/store/useLogStore";
 import type { NotificationPayload } from "@/types";
 
@@ -17,7 +18,7 @@ export interface AlertNotification {
 interface UseNotificationReturn {
   notification: AlertNotification | null;
   showNotification: boolean;
-  notifications: AlertNotification[];
+  notifications: StoredNotification[];
   showAlert: (
     message: string,
     type: "error" | "warning" | "success",
@@ -28,6 +29,11 @@ interface UseNotificationReturn {
   showErrorAlert: (message: string, priority?: "critical" | "high" | "medium" | "low") => void;
   showWarningAlert: (message: string, priority?: "critical" | "high" | "medium" | "low") => void;
   showSuccessAlert: (message: string) => void;
+  notify: {
+    success: (title: string, message?: string) => void;
+    error: (title: string, message?: string) => void;
+    warning: (title: string, message?: string) => void;
+  };
   clearNotification: () => void;
   dismissNotification: (id: string) => void;
 }
@@ -101,6 +107,21 @@ export function useNotification(): UseNotificationReturn {
     [showAlert]
   );
 
+  const notify = useMemo(
+    () => ({
+      success: (title: string, message?: string) => {
+        showAlert(message || title, "success", "low", title, 2000);
+      },
+      error: (title: string, message?: string) => {
+        showAlert(message || title, "error", "high", title, 5000);
+      },
+      warning: (title: string, message?: string) => {
+        showAlert(message || title, "warning", "medium", title, 3000);
+      },
+    }),
+    [showAlert]
+  );
+
   const showWarningAlert = useCallback(
     (message: string, priority: "critical" | "high" | "medium" | "low" = "medium") => {
       showAlert(message, "warning", priority, "⚡ WARNING", 3000);
@@ -132,6 +153,7 @@ export function useNotification(): UseNotificationReturn {
     showErrorAlert,
     showWarningAlert,
     showSuccessAlert,
+    notify,
     clearNotification,
     dismissNotification: dismiss,
   };

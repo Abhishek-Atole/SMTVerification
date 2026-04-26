@@ -14,10 +14,13 @@ const createLogId = () =>
 const LOGS_STORAGE_KEY = "smt-verification-logs";
 const MAX_LOGS = 100;
 
-// Load logs from localStorage
+// Use sessionStorage for better security - cleared when tab/browser closes
+const storage = sessionStorage;
+
+// Load logs from sessionStorage
 const loadLogsFromStorage = (): LogEntry[] => {
   try {
-    const stored = localStorage.getItem(LOGS_STORAGE_KEY);
+    const stored = storage.getItem(LOGS_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
       // Convert timestamp strings back to Date objects
@@ -32,17 +35,17 @@ const loadLogsFromStorage = (): LogEntry[] => {
   return [];
 };
 
-// Save logs to localStorage
+// Save logs to sessionStorage
 const saveLogsToStorage = (logs: LogEntry[]): void => {
   try {
-    localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(logs));
+    storage.setItem(LOGS_STORAGE_KEY, JSON.stringify(logs));
   } catch (err) {
     console.warn("[LogStore] Failed to save logs to storage:", err);
   }
 };
 
 export const useLogStore = create<LogStore>((set, get) => {
-  // Load initial state from localStorage
+  // Load initial state from sessionStorage
   const initialLogs = loadLogsFromStorage();
 
   return {
@@ -56,16 +59,16 @@ export const useLogStore = create<LogStore>((set, get) => {
         };
 
         const cappedLogs = [...state.logs, next].slice(-MAX_LOGS);
-        // Persist to localStorage immediately
+        // Persist to sessionStorage immediately
         saveLogsToStorage(cappedLogs);
         return { logs: cappedLogs };
       });
     },
     clearLogs: () => {
       set({ logs: [] });
-      // Clear from localStorage
+      // Clear from sessionStorage
       try {
-        localStorage.removeItem(LOGS_STORAGE_KEY);
+        storage.removeItem(LOGS_STORAGE_KEY);
       } catch (err) {
         console.warn("[LogStore] Failed to clear logs from storage:", err);
       }

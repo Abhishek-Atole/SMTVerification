@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState } from "react";
 import { useRoute } from "wouter";
 import { useGetBom } from "@workspace/api-client-react";
@@ -71,11 +70,11 @@ export default function BomReport() {
     let yPos = 45;
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(12);
-    doc.setFont(undefined, "bold");
+    doc.setFont("helvetica", "bold");
     doc.text(`BOM: ${reportData.name}`, 15, yPos);
     yPos += 7;
     doc.setFontSize(10);
-    doc.setFont(undefined, "normal");
+    doc.setFont("helvetica", "normal");
     doc.text(`Description: ${reportData.description || "N/A"}`, 15, yPos);
     yPos += 7;
     doc.text(
@@ -104,7 +103,7 @@ export default function BomReport() {
       doc.text(box.label, xPos + 2, yPos + 3);
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(11);
-      doc.setFont(undefined, "bold");
+      doc.setFont("helvetica", "bold");
       doc.text(String(box.value), xPos + 20 - doc.getTextWidth(String(box.value)) / 2, yPos + 12);
       xPos += 45;
     });

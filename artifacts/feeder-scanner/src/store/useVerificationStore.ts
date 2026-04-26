@@ -31,6 +31,9 @@ interface VerificationStore {
 
 const VERIFICATION_STORAGE_KEY = "smt-verification-state";
 
+// Use sessionStorage for better security - cleared when tab/browser closes
+const storage = sessionStorage;
+
 // Serialize scannedFeeders Map to JSON
 const serializeScans = (scans: Map<string, FeederScan>): FeederScan[] => {
   return Array.from(scans.values()).map((scan) => ({
@@ -51,10 +54,10 @@ const deserializeScans = (scans: FeederScan[]): Map<string, FeederScan> => {
   return map;
 };
 
-// Load verification state from localStorage
+// Load verification state from sessionStorage
 const loadVerificationState = () => {
   try {
-    const stored = localStorage.getItem(VERIFICATION_STORAGE_KEY);
+    const stored = storage.getItem(VERIFICATION_STORAGE_KEY);
     if (stored) {
       const state = JSON.parse(stored);
       return {
@@ -75,7 +78,7 @@ const loadVerificationState = () => {
   };
 };
 
-// Save verification state to localStorage
+// Save verification state to sessionStorage
 const saveVerificationState = (state: {
   scannedFeeders: Map<string, FeederScan>;
   currentStep: VerificationStep;
@@ -83,7 +86,7 @@ const saveVerificationState = (state: {
   isVerificationComplete: boolean;
 }): void => {
   try {
-    localStorage.setItem(
+    storage.setItem(
       VERIFICATION_STORAGE_KEY,
       JSON.stringify({
         scannedFeeders: serializeScans(state.scannedFeeders),

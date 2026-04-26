@@ -1,0 +1,30 @@
+npm error code ENOSPC
+npm error syscall write
+npm error errno -28
+npm error nospc ENOSPC: no space left on device, write
+npm error nospc There appears to be insufficient space on your system to finish.
+npm error nospc Clear up some disk space and try again.
+npm error A complete log of this run can be found in: /home/abhishek-atole/.npm/_logs/2026-04-25T13_12_39_574Z-debug-0.log
+
+> @workspace/api-server@0.0.0 build /media/abhishek-atole/Courses/Final SMT MES SYSTEM/SMTVerification/artifacts/api-server
+> node ./build.mjs
+
+
+  dist/index.mjs                       4.4mb ⚠️
+  dist/pino-worker.mjs               153.5kb
+  dist/pino-file.mjs                 142.1kb
+  dist/pino-pretty.mjs               114.6kb
+  dist/thread-stream-worker.mjs        7.3kb
+  dist/index.mjs.map                   7.8mb
+  dist/pino-worker.mjs.map           256.9kb
+  dist/pino-file.mjs.map             229.1kb
+  dist/pino-pretty.mjs.map           204.0kb
+  dist/thread-stream-worker.mjs.map   12.0kb
+
+⚡ Done in 941ms
+[TimestampService] Initializing timestamp service...
+{"level":30,"time":1777122837247,"pid":52364,"hostname":"Infizent-Technologies","port":3000,"msg":"Server listening"}
+[TimestampService] System clock is accurate, no drift detected
+[TimestampService] Ready. Current time: 2026-04-25T13:13:57.787Z
+{"level":30,"time":1777122840634,"pid":52364,"hostname":"Infizent-Technologies","req":{"id":1,"method":"GET","url":"/api/health"},"res":{"statusCode":200},"responseTime":17,"msg":"request completed"}
+{"level":30,"time":1777122873945,"pid":52364,"hostname":"Infizent-Technologies","req":{"id":2,"method":"GET","url":"/api/health"},"res":{"statusCode":200},"responseTime":7,"msg":"request completed"}

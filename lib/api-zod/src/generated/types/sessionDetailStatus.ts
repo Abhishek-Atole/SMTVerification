@@ -12,4 +12,5 @@ export type SessionDetailStatus = typeof SessionDetailStatus[keyof typeof Sessio
 export const SessionDetailStatus = {
   active: 'active',
   completed: 'completed',
+  cancelled: 'cancelled',
 } as const;

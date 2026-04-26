@@ -11,6 +11,7 @@ import { Loader2, Trash2, Upload } from "lucide-react";
 import Papa from "papaparse";
 import { useLocation } from "wouter";
 import { AppLogo } from "@/components/AppLogo";
+import { appConfig } from "@/lib/appConfig";
 
 export default function BomDetail() {
   const [, params] = useRoute("/bom/:id");
@@ -324,7 +325,7 @@ export default function BomDetail() {
           <div className="bg-card p-6 border border-border rounded-sm">
             <h2 className="font-mono font-bold mb-4 border-b border-border pb-2 text-lg">UPLOAD CSV</h2>
             <p className="text-xs text-muted-foreground mb-4 font-mono">
-              Columns: SR NO, Feeder Number, UCAL Internal Part Number, Required Qty, Reference Location, Description, Package/Description, Supplier + MPN 1/2/3, Remarks
+              Columns: SR NO, Feeder Number, {appConfig.companyShort} Internal Part Number, Required Qty, Reference Location, Description, Package/Description, Supplier + MPN 1/2/3, Remarks
             </p>
             <div className="flex items-center gap-4">
               <Input 
@@ -352,7 +353,7 @@ export default function BomDetail() {
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="font-mono">SR NO</TableHead>
                     <TableHead className="font-mono">FEEDER#</TableHead>
-                    <TableHead className="font-mono">UCAL INTERNAL PART#</TableHead>
+                    <TableHead className="font-mono">{appConfig.companyShort.toUpperCase()} INTERNAL PART#</TableHead>
                     <TableHead className="font-mono text-right">QTY</TableHead>
                     <TableHead className="font-mono">REF LOCATION</TableHead>
                     <TableHead className="font-mono">DESCRIPTION</TableHead>

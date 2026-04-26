@@ -14,8 +14,33 @@ interface AuthSessionResponse {
   role: Role;
 }
 
+function normalizeAuthSession(payload: unknown): AuthSessionResponse | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const source = "user" in payload && typeof (payload as { user?: unknown }).user === "object"
+    ? (payload as { user: Record<string, unknown> }).user
+    : (payload as Record<string, unknown>);
+
+  const userId = Number(source.userId ?? source.id);
+  const username = typeof source.username === "string" ? source.username : "";
+  const role = source.role;
+
+  if (!Number.isFinite(userId) || !username || (role !== "engineer" && role !== "qa" && role !== "operator")) {
+    return null;
+  }
+
+  return {
+    userId,
+    username,
+    role,
+  };
+}
+
 interface AuthContextType {
   user: User | null;
+  loading: boolean;
   login: (username: string, role: Role, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -68,13 +93,24 @@ async function toAuthError(response: Response): Promise<Error> {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (typeof window !== "undefined" && window.location.pathname.endsWith("/login")) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     let active = true;
 
     void (async () => {
       try {
-        const session = await fetchWithCredentials<AuthSessionResponse>("/api/auth/me");
+        const sessionPayload = await fetchWithCredentials<unknown>("/api/auth/me");
+        const session = normalizeAuthSession(sessionPayload);
+        if (!session) {
+          throw new Error("Invalid auth session payload");
+        }
         if (active) {
           setUser({ userId: session.userId, name: session.username, role: session.role });
         }
@@ -89,6 +125,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (active) {
           setUser(null);
         }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
       }
     })();
 
@@ -99,30 +139,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, role: Role, password: string) => {
     let session: AuthSessionResponse;
+    setLoading(true);
     try {
-      session = await fetchWithCredentials<AuthSessionResponse>("/api/auth/login", {
+      const sessionPayload = await fetchWithCredentials<unknown>("/api/auth/login", {
         method: "POST",
         body: JSON.stringify({ username, password, role }),
       });
+
+      const normalized = normalizeAuthSession(sessionPayload);
+      if (!normalized) {
+        throw new Error("Login succeeded but user session payload is invalid.");
+      }
+      session = normalized;
     } catch (error) {
       if (error instanceof Response) {
         throw await toAuthError(error);
       }
       throw error;
+    } finally {
+      setLoading(false);
     }
 
     setUser({ userId: session.userId, name: session.username, role: session.role });
   };
 
   const logout = async () => {
+    setLoading(true);
     await fetchWithCredentials<{ success: boolean }>("/api/auth/logout", {
       method: "POST",
     });
     setUser(null);
+    setLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -10,7 +10,7 @@ export const ReportFiltersComponent: React.FC<ReportFiltersComponentProps> = ({
   onFiltersChange,
   loading = false,
 }) => {
-  const [dateFilter, setDateFilter] = useState<string>("last7");
+  const [dateFilter, setDateFilter] = useState<NonNullable<ReportFilters["dateFilter"]>>("last7");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [line, setLine] = useState<string>("");
@@ -18,7 +18,7 @@ export const ReportFiltersComponent: React.FC<ReportFiltersComponentProps> = ({
   const [operator, setOperator] = useState<string>("");
   const [shift, setShift] = useState<string>("");
 
-  const handleDateFilterChange = (value: string) => {
+  const handleDateFilterChange = (value: NonNullable<ReportFilters["dateFilter"]>) => {
     setDateFilter(value);
     if (value !== "custom") {
       handleApplyFilters(value, undefined, undefined);
@@ -26,7 +26,7 @@ export const ReportFiltersComponent: React.FC<ReportFiltersComponentProps> = ({
   };
 
   const handleApplyFilters = (
-    selectedDateFilter?: string,
+    selectedDateFilter?: NonNullable<ReportFilters["dateFilter"]>,
     selectedStartDate?: string,
     selectedEndDate?: string,
   ) => {
@@ -59,7 +59,7 @@ export const ReportFiltersComponent: React.FC<ReportFiltersComponentProps> = ({
           <label className="text-sm font-medium text-gray-700">Date Range</label>
           <select
             value={dateFilter}
-            onChange={(e) => handleDateFilterChange(e.target.value)}
+            onChange={(e) => handleDateFilterChange(e.target.value as NonNullable<ReportFilters["dateFilter"]>)}
             disabled={loading}
             className="mt-1 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >

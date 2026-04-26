@@ -7,24 +7,35 @@
  */
 import type { ScanRecord } from './scanRecord';
 import type { SessionDetailStatus } from './sessionDetailStatus';
+import type { SessionDetailVerificationMode } from './sessionDetailVerificationMode';
 
 export interface SessionDetail {
   id: number;
   bomId: number;
   bomName?: string;
+  panelId?: string;
   companyName: string;
   customerName?: string;
+  customer?: string;
   panelName: string;
   supervisorName: string;
   operatorName: string;
   shiftName: string;
+  shift?: string;
   shiftDate: string;
+  line?: string;
+  machine?: string;
+  qaName?: string;
   logoUrl?: string;
   productionCount?: number;
-  verificationMode: 'AUTO' | 'MANUAL';
+  verificationMode?: SessionDetailVerificationMode;
   status: SessionDetailStatus;
   startTime: Date;
+  startedAt?: Date;
   endTime?: Date;
+  completedAt?: Date;
+  bomVersion?: string;
+  pcbPartNumber?: string;
   scans: ScanRecord[];
   createdAt: Date;
 }
