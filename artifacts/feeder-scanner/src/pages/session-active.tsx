@@ -40,7 +40,7 @@ import { useNotificationStore } from "@/store/useNotificationStore";
 import type { FeederScan, SplicingRecord } from "@/types";
 import { AppLogo } from "@/components/AppLogo";
 
-type ScanStep = "feeder" | "spool";
+type ScanStep = "feeder" | "spool" | "lot";
 type SpliceStep = "feeder" | "oldSpool" | "newSpool";
 type Mode = "scan" | "splice";
 
@@ -88,8 +88,8 @@ function formatElapsed(sec: number) {
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
-function focusNextFrame(inputRef: React.RefObject<HTMLInputElement>) {
-  requestAnimationFrame(() => requestAnimationFrame(() => inputRef.current?.focus()));
+function focusNextFrame(inputRef: React.RefObject<HTMLInputElement | null>) {
+  setTimeout(() => inputRef.current?.focus(), 80);
 }
 
 export default function SessionActive() {
@@ -109,6 +109,14 @@ export default function SessionActive() {
     dismissNotification,
   } = useNotification();
   const notify = useToastNotification();
+  const scanNotifications = useMemo(
+    () =>
+      notifications.map((n) => ({
+        ...n,
+        title: n.title ?? (n.type === "error" ? "ERROR" : n.type === "success" ? "SUCCESS" : "NOTICE"),
+      })),
+    [notifications],
+  );
 
   const { data: session, isLoading: sessionLoading } = useGetSession(sessionId, {
     query: { enabled: !!sessionId, queryKey: getGetSessionQueryKey(sessionId) },
@@ -117,6 +125,60 @@ export default function SessionActive() {
   const { data: bomDetail, isLoading: bomLoading } = useGetBom(bomId!, {
     query: { enabled: !!bomId, queryKey: getGetBomQueryKey(bomId!) },
   });
+  const [sessionApiBom, setSessionApiBom] = useState<any[]>([]);
+
+  // DEBUG: Log session and BOM status
+  useEffect(() => {
+    console.log('[DEBUG] Session ID:', sessionId);
+    console.log('[DEBUG] Session loading:', sessionLoading);
+    console.log('[DEBUG] Session data:', session);
+    console.log('[DEBUG] BOM ID:', bomId);
+    console.log('[DEBUG] BOM loading:', bomLoading);
+    console.log('[DEBUG] BOM detail:', bomDetail);
+    console.log('[DEBUG] Session API BOM count:', sessionApiBom.length);
+  }, [sessionId, sessionLoading, session, bomId, bomLoading, bomDetail, sessionApiBom]);
+
+  useEffect(() => {
+    if (!sessionId) {
+      console.error('[ERROR] No session ID available for session load fetch');
+      return;
+    }
+
+    const loadSessionData = async () => {
+      console.log('[LOADING SESSION]', { sessionId });
+      try {
+        const response = await fetch(`/api/sessions/${sessionId}`, {
+          credentials: 'include',
+        });
+        console.log('[SESSION API]', {
+          status: response.status,
+          ok: response.ok,
+        });
+        if (!response.ok) {
+          throw new Error('Failed to load session');
+        }
+        const data = await response.json();
+        console.log('[SESSION LOADED]', {
+          bomId: data.session?.bomId,
+          bomItemCount: data.bom?.length || 0,
+          status: data.session?.status,
+        });
+        setSessionApiBom(data.bom || []);
+      } catch (err) {
+        console.error('[SESSION LOAD ERROR]', err);
+      }
+    };
+
+    loadSessionData();
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (bomDetail?.items && bomDetail.items.length > 0) {
+      console.log('[BOM FEEDERS]', bomDetail.items.map((item) => item.feederNumber));
+      console.log('[BOM SAMPLE]', bomDetail.items[0]);
+    }
+  }, [bomDetail]);
+
   const { data: splices, isLoading: splicesLoading } = useListSplices(sessionId, {
     query: { enabled: !!sessionId, queryKey: getListSplicesQueryKey(sessionId) },
   });
@@ -142,6 +204,8 @@ export default function SessionActive() {
   const [scanStep, setScanStep] = useState<ScanStep>("feeder");
   const [pendingFeeder, setPendingFeeder] = useState("");
   const [feederScanTime, setFeederScanTime] = useState<number | null>(null);
+  const [pendingMpnScan, setPendingMpnScan] = useState("");
+  const [pendingScanDuration, setPendingScanDuration] = useState<number | undefined>(undefined);
   
   // Internal ID / MPN verification state
   const [internalIdInput, setInternalIdInput] = useState("");
@@ -178,6 +242,7 @@ export default function SessionActive() {
 
     const response = await fetch(`/api/sessions/${sessionId}/mode`, {
       method: "PATCH",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode }),
     });
@@ -331,11 +396,230 @@ export default function SessionActive() {
     hydrateSplicingRecords(mappedRecords);
   }, [hydrateSplicingRecords, splices]);
 
+  const handleScanBarcode = async (val: string) => {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('[SCAN START]', {
+      input: val,
+      scanStep,
+      scanningRef: scanningRef.current,
+      verificationInProgress,
+      verificationLocked,
+      sessionId,
+      bomLoaded: !!bomDetail,
+    });
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    if (scanningRef.current) {
+      console.log('[BLOCKED] scanningRef.current is true');
+      return;
+    }
+
+    if (verificationInProgress) {
+      console.log('[BLOCKED] verificationInProgress is true');
+      return;
+    }
+
+    if (verificationLocked) {
+      console.log('[BLOCKED] verificationLocked is true');
+      return;
+    }
+
+    if (!bomDetail) {
+      console.log('[BLOCKED] BOM detail missing');
+      showErrorAlert('BOM not loaded yet. Please wait.', 'high');
+      clearScanInput();
+      return;
+    }
+
+    setVerificationInProgress(true);
+    scanningRef.current = true;
+    setScanning(true);
+    try {
+
+    // In auto mode at spool: allow empty val to skip MPN and move to lot step
+    if (verificationMode === "AUTO" && scanStep === "spool" && !val) {
+      const duration = feederScanTime ? Date.now() - feederScanTime : undefined;
+      setPendingMpnScan("");
+      setPendingScanDuration(duration);
+      setScanStep("lot");
+      clearScanInput();
+      focusNextFrame(inputRef);
+      return;
+    }
+
+    if (needsAlternateSelection) {
+      setScanStep("spool");
+      setNeedsAlternateSelection(false);
+
+      if (verificationMode === "AUTO") {
+        focusNextFrame(inputRef);
+      }
+      scanningRef.current = false;
+      setScanning(false);
+      return;
+    }
+
+    if (!val && scanStep !== "lot") {
+      scanningRef.current = false;
+      setScanning(false);
+      return;
+    }
+
+    if (scanStep === "feeder") {
+      console.log('[DEBUG] Processing feeder step');
+      // STEP 1: FEEDER SCAN
+      const bomItems = bomDetail?.items || [];
+      console.log('[DEBUG] BOM items count:', bomItems.length);
+      const normalizedFeederNumber = val.trim().toUpperCase();
+      console.log('[DEBUG] Normalized feeder number:', normalizedFeederNumber);
+      const matchingItems = bomItems.filter(
+        (item) =>
+          item.feederNumber.trim().toUpperCase() === normalizedFeederNumber
+      );
+      console.log('[DEBUG] Matching items count:', matchingItems.length);
+
+      // ===== VALIDATION 1: CHECK IF FEEDER EXISTS IN BOM =====
+      if (matchingItems.length === 0) {
+        console.log('[DEBUG] Feeder not found in BOM');
+        setLastScanResult({
+          status: "reject",
+          feeder: normalizedFeederNumber,
+          msg: `❌ ERROR: Feeder "${normalizedFeederNumber}" not found in BOM`,
+        });
+        clearScanInput();
+        showErrorAlert(
+          `Feeder "${normalizedFeederNumber}" does not exist in the loaded BOM.\n\nPlease check the feeder number and try again.`,
+          "high"
+        );
+        scanningRef.current = false;
+        setScanning(false);
+        return; // Block further processing
+      }
+
+      console.log('[DEBUG] Feeder found in BOM, checking for duplicates...');
+      // ===== VALIDATION 2: CHECK FOR DUPLICATE SCANS =====
+      const alreadyScanned = session?.scans.some(
+        (scan) => scan.feederNumber === normalizedFeederNumber && scan.status === "ok"
+      );
+      console.log('[DEBUG] Already scanned:', alreadyScanned);
+      if (alreadyScanned) {
+        console.log('[DEBUG] Duplicate feeder scan');
+        setLastScanResult({
+          status: "reject",
+          feeder: normalizedFeederNumber,
+          msg: `⚠️ DUPLICATE: Feeder "${normalizedFeederNumber}" already verified`,
+        });
+        clearScanInput();
+        setIsDuplicate(true);
+        lastNotifiedRef.current = `${normalizedFeederNumber}::⚠️ DUPLICATE: Feeder "${normalizedFeederNumber}" already verified`;
+        notify(
+          "duplicate",
+          `Feeder "${normalizedFeederNumber}" has already been verified.`,
+          "To re-scan, reject the existing scan first.",
+          () => focusNextFrame(inputRef)
+        );
+        scanningRef.current = false;
+        setScanning(false);
+        return; // Block duplicate scan
+      }
+
+      const primaryItems = matchingItems.filter((item) => !item.isAlternate);
+      const alternateItems = matchingItems.filter((item) => item.isAlternate);
+
+      setPendingFeeder(normalizedFeederNumber);
+      setFeederScanTime(Date.now());
+      clearScanInput();
+      setCaseConverted(val !== normalizedFeederNumber);
+      setIsDuplicate(false);
+
+      if (alternateItems.length > 0) {
+        // Show selector for choosing alternates
+        setPendingAvailableOptions({
+          primary: primaryItems,
+          alternates: alternateItems,
+        });
+        setSelectedItemIdForScan(primaryItems[0]?.id || alternateItems[0]?.id || null);
+        setNeedsAlternateSelection(true);
+        showWarningAlert(
+          `Feeder "${normalizedFeederNumber}" has ${alternateItems.length} alternative component option(s).\n\nSelect from primary or alternatives, then press ENTER.`,
+          "medium"
+        );
+      } else {
+        // No alternates - proceed directly to MPN step
+        // In AUTO mode: auto-advance to MPN step after brief delay
+        // In MANUAL mode: wait for user to press Enter again
+        showSuccessAlert(`Feeder "${normalizedFeederNumber}" found in BOM`);
+        if (verificationMode === "AUTO") {
+          setScanStep("spool");
+          setNeedsAlternateSelection(false);
+          focusNextFrame(inputRef);
+        } else {
+          setScanStep("spool");
+        }
+        scanningRef.current = false;
+        setScanning(false);
+      }
+    } else if (scanStep === "spool") {
+      // STEP 2: MPN/INTERNAL ID INPUT (Optional in both modes)
+      if (val) {
+        setInternalIdInput(val.trim().toUpperCase());
+        setCaseConverted(caseConverted || val !== val.trim().toUpperCase());
+      }
+      clearScanInput();
+
+      const matchingItem = bomDetail?.items.find(item => item.id === selectedItemIdForScan);
+      const duration = feederScanTime ? Date.now() - feederScanTime : undefined;
+      const normalizedMpn = val.trim().toUpperCase();
+
+      setPendingMpnScan(normalizedMpn);
+      setPendingScanDuration(duration);
+      setScanStep("lot");
+      scanningRef.current = false;
+      setScanning(false);
+      focusNextFrame(inputRef);
+      return;
+
+    } else if (scanStep === "lot") {
+      const lotCode = val ? val.trim().toUpperCase() : undefined;
+      const matchingItem = bomDetail?.items.find(item => item.id === selectedItemIdForScan);
+      const duration = pendingScanDuration;
+
+      if (verificationMode === "MANUAL") {
+        // Manual mode: show pending verification, wait for VERIFY button click
+        setPendingVerification({
+          feederNumber: pendingFeeder,
+          mpnOrInternalId: pendingMpnScan || null,
+          lotCode: lotCode || null,
+          internalIdType,
+          verificationMode: "MANUAL",
+          selectedItemId: selectedItemIdForScan || undefined,
+          partNumber: matchingItem?.partNumber,
+          duration,
+        });
+      } else {
+        // AUTO mode: immediately submit
+        await handleAutoModeSubmit(pendingMpnScan, duration, lotCode);
+      }
+      if (verificationMode === "MANUAL") {
+        scanningRef.current = false;
+        setScanning(false);
+      }
+    }
+  } catch (err: any) {
+    console.error('[SCAN ERROR]', err);
+    showErrorAlert(err?.message || 'Unexpected scan error', 'high');
+  } finally {
+    setVerificationInProgress(false);
+    scanningRef.current = false;
+    setScanning(false);
+    console.log('[SCAN COMPLETE] Flags reset');
+  }
+  };
+
   const {
     inputRef,
     value: scanInput,
     setValue: setScanInput,
-    handleKeyDown: handleScanKeyDown,
   } = useScanner({
     onSubmit: handleScanBarcode,
     autoFocus: session?.status === "active" && activeTab === "loading",
@@ -344,35 +628,32 @@ export default function SessionActive() {
 
   const { reset: resetAutoScan } = useAutoScan(scanInput, {
     onScan: (value) => {
-      if (scanningRef.current || verificationInProgress || verificationLocked || pendingVerification || needsAlternateSelection) {
+      if (
+        scanningRef.current ||
+        verificationInProgress ||
+        verificationLocked ||
+        pendingVerification ||
+        needsAlternateSelection ||
+        scanStep === "lot"
+      ) {
         return;
       }
 
-      scanningRef.current = true;
-      setScanning(true);
-      try {
-        handleScanBarcode(value);
-      } catch (error) {
-        scanningRef.current = false;
-        setScanning(false);
-        throw error;
-      }
+      void handleScanBarcode(value);
     },
     delayMs: 300,
     minLength: 3,
-    enabled: session?.status === "active" && activeTab === "loading",
+    enabled: session?.status === "active" && activeTab === "loading" && scanStep !== "lot",
   });
 
   useEffect(() => {
-    const focusInput = () => {
-      if (document.activeElement !== inputRef.current && session?.status === "active") {
-        inputRef.current?.focus();
-      }
-    };
-    focusInput();
-    const interval = setInterval(focusInput, 2000);
-    return () => clearInterval(interval);
-  }, [session?.status, mode]);
+    if (session?.status !== "active" || activeTab !== "loading") {
+      return;
+    }
+
+    const timer = setTimeout(() => inputRef.current?.focus(), 80);
+    return () => clearTimeout(timer);
+  }, [activeTab, scanStep, session?.status]);
 
   useEffect(() => {
     return () => {
@@ -477,8 +758,10 @@ export default function SessionActive() {
       await scanFeeder.mutateAsync({
         sessionId,
         data: {
+          sessionId,
           feederNumber: pendingVerification.feederNumber,
           mpnOrInternalId: pendingVerification.mpnOrInternalId || undefined,
+          lotCode: pendingVerification.lotCode || undefined,
           internalIdType: pendingVerification.internalIdType,
           verificationMode: "MANUAL",
           selectedItemId: pendingVerification.selectedItemId,
@@ -496,6 +779,8 @@ export default function SessionActive() {
       setPendingVerification(null);
       setScanStep("feeder");
       setPendingFeeder("");
+      setPendingMpnScan("");
+      setPendingScanDuration(undefined);
       setScanInput("");
       setInternalIdInput("");
       setCaseConverted(false);
@@ -520,178 +805,90 @@ export default function SessionActive() {
     resetAutoScan();
     scanningRef.current = false;
     setScanning(false);
+    setVerificationInProgress(false);
+    setVerificationLocked(false);
   };
 
-  function handleScanBarcode(val: string) {
-    if (scanningRef.current || verificationInProgress || verificationLocked) {
+  const handlePrimaryInputKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") {
       return;
     }
 
-    scanningRef.current = true;
-    setScanning(true);
-
-    // In auto mode at spool: allow empty val to skip MPN (auto-advance)
-    if (verificationMode === "AUTO" && scanStep === "spool" && !val) {
-      // Skip MPN scan in auto mode - auto-submit with no MPN value
-      handleAutoModeSubmit("", undefined);
-      return;
-    }
-
-    if (!val) {
-      scanningRef.current = false;
-      setScanning(false);
-      return;
-    }
-
-    if (scanStep === "feeder") {
-      // STEP 1: FEEDER SCAN
-      const bomItems = bomDetail?.items || [];
-      const normalizedFeederNumber = val.trim().toUpperCase();
-      const matchingItems = bomItems.filter(
-        (item) =>
-          item.feederNumber.trim().toUpperCase() === normalizedFeederNumber
-      );
-
-      // ===== VALIDATION 1: CHECK IF FEEDER EXISTS IN BOM =====
-      if (matchingItems.length === 0) {
-        setLastScanResult({
-          status: "reject",
-          feeder: normalizedFeederNumber,
-          msg: `❌ ERROR: Feeder "${normalizedFeederNumber}" not found in BOM`,
-        });
-        clearScanInput();
-        showErrorAlert(
-          `Feeder "${normalizedFeederNumber}" does not exist in the loaded BOM.\n\nPlease check the feeder number and try again.`,
-          "high"
-        );
-        scanningRef.current = false;
-        setScanning(false);
-        return; // Block further processing
-      }
-
-      // ===== VALIDATION 2: CHECK FOR DUPLICATE SCANS =====
-      const alreadyScanned = session?.scans.some(
-        (scan) => scan.feederNumber === normalizedFeederNumber && scan.status === "ok"
-      );
-      if (alreadyScanned) {
-        setLastScanResult({
-          status: "reject",
-          feeder: normalizedFeederNumber,
-          msg: `⚠️ DUPLICATE: Feeder "${normalizedFeederNumber}" already verified`,
-        });
-        clearScanInput();
-        setIsDuplicate(true);
-        lastNotifiedRef.current = `${normalizedFeederNumber}::⚠️ DUPLICATE: Feeder "${normalizedFeederNumber}" already verified`;
-        notify(
-          "duplicate",
-          `Feeder "${normalizedFeederNumber}" has already been verified.`,
-          "To re-scan, reject the existing scan first.",
-          () => focusNextFrame(inputRef)
-        );
-        scanningRef.current = false;
-        setScanning(false);
-        return; // Block duplicate scan
-      }
-
-      const primaryItems = matchingItems.filter((item) => !item.isAlternate);
-      const alternateItems = matchingItems.filter((item) => item.isAlternate);
-
-      setPendingFeeder(normalizedFeederNumber);
-      setFeederScanTime(Date.now());
-      clearScanInput();
-      setCaseConverted(val !== normalizedFeederNumber);
-      setIsDuplicate(false);
-
-      if (alternateItems.length > 0) {
-        // Show selector for choosing alternates
-        setPendingAvailableOptions({
-          primary: primaryItems,
-          alternates: alternateItems,
-        });
-        setSelectedItemIdForScan(primaryItems[0]?.id || alternateItems[0]?.id || null);
-        setNeedsAlternateSelection(true);
-        showWarningAlert(
-          `Feeder "${normalizedFeederNumber}" has ${alternateItems.length} alternative component option(s).\n\nSelect from primary or alternatives, then press ENTER.`,
-          "medium"
-        );
-      } else {
-        // No alternates - proceed directly to MPN step
-        // In AUTO mode: auto-advance to MPN step after brief delay
-        // In MANUAL mode: wait for user to press Enter again
-        showSuccessAlert(`Feeder "${normalizedFeederNumber}" found in BOM`);
-        if (verificationMode === "AUTO") {
-          setScanStep("spool");
-          setNeedsAlternateSelection(false);
-          focusNextFrame(inputRef);
-        } else {
-          setScanStep("spool");
-        }
-        scanningRef.current = false;
-        setScanning(false);
-      }
-    } else if (needsAlternateSelection) {
-      setScanStep("spool");
-      setNeedsAlternateSelection(false);
-      
-      if (verificationMode === "AUTO") {
-        focusNextFrame(inputRef);
-      }
-      scanningRef.current = false;
-      setScanning(false);
-    } else if (scanStep === "spool") {
-      // STEP 2: MPN/INTERNAL ID INPUT (Optional in both modes)
-      if (val) {
-        setInternalIdInput(val.trim().toUpperCase());
-        setCaseConverted(caseConverted || val !== val.trim().toUpperCase());
-      }
-      clearScanInput();
-
-      const matchingItem = bomDetail?.items.find(item => item.id === selectedItemIdForScan);
-      const duration = feederScanTime ? Date.now() - feederScanTime : undefined;
-
-      if (verificationMode === "MANUAL") {
-        // Manual mode: show pending verification, wait for VERIFY button click
-        setPendingVerification({
-          feederNumber: pendingFeeder,
-          mpnOrInternalId: internalIdInput || val.trim().toUpperCase() || null,
-          internalIdType,
-          verificationMode: "MANUAL",
-          selectedItemId: selectedItemIdForScan || undefined,
-          partNumber: matchingItem?.partNumber,
-          duration,
-        });
-      } else {
-        // AUTO mode: immediately submit
-        handleAutoModeSubmit(val.trim().toUpperCase(), duration);
-      }
-      if (verificationMode === "MANUAL") {
-        scanningRef.current = false;
-        setScanning(false);
-      }
-    }
-  }
-
-  const handleScanSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (scanStep !== "lot") {
+      return;
+    }
+
     if (scanningRef.current) {
       return;
     }
+
     const val = scanInput.trim();
-    
-    // In auto mode at spool step with empty ENTER: auto-skip (advance without MPN)
+
+    if (needsAlternateSelection) {
+      await handleScanBarcode("");
+      return;
+    }
+
+    // In auto mode at spool step with empty ENTER: skip MPN and move to lot step
     if (verificationMode === "AUTO" && scanStep === "spool" && !val) {
-      handleScanBarcode(""); // Empty val auto-advances in auto mode
+      await handleScanBarcode("");
+      return;
+    }
+
+    // Lot code is explicitly enter/skip-driven (empty Enter means skip)
+    if (scanStep === "lot" && !val) {
+      await handleScanBarcode("");
+      return;
+    }
+
+    if (!val) {
+      return;
+    }
+
+    await handleScanBarcode(val);
+  };
+
+  const handleScanSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('[FORM SUBMIT]', { value: scanInput, scanStep, sessionId });
+
+    if (scanStep !== "lot") {
+      return;
+    }
+
+    if (scanningRef.current) {
+      console.log('[FORM SUBMIT BLOCKED] scanningRef.current true');
+      return;
+    }
+    const val = scanInput.trim();
+
+    if (needsAlternateSelection) {
+      await handleScanBarcode("");
+      return;
+    }
+    
+    // In auto mode at spool step with empty ENTER: skip MPN and move to lot step
+    if (verificationMode === "AUTO" && scanStep === "spool" && !val) {
+      await handleScanBarcode("");
+      return;
+    }
+
+    // Lot code is explicitly enter/skip-driven (no auto-submit)
+    if (scanStep === "lot" && !val) {
+      await handleScanBarcode("");
       return;
     }
     
     if (!val) {
       return;
     }
-    handleScanBarcode(val);
+    await handleScanBarcode(val);
   };
 
   // New helper for auto-mode submission
-  const handleAutoModeSubmit = async (mpnScanned: string, duration?: number) => {
+  const handleAutoModeSubmit = async (mpnScanned: string, duration?: number, lotCode?: string) => {
     if (verificationInProgress) return;
     setVerificationInProgress(true);
 
@@ -699,8 +896,10 @@ export default function SessionActive() {
       const res = await scanFeeder.mutateAsync({
         sessionId,
         data: {
+          sessionId,
           feederNumber: pendingFeeder,
           mpnOrInternalId: mpnScanned || undefined,
+          lotCode: lotCode || undefined,
           internalIdType,
           verificationMode: "AUTO",
           selectedItemId: selectedItemIdForScan || undefined,
@@ -721,6 +920,8 @@ export default function SessionActive() {
         setPendingFeeder("");
         setFeederScanTime(null);
         setScanStep("feeder");
+        setPendingMpnScan("");
+        setPendingScanDuration(undefined);
         setPendingAvailableOptions(null);
         setSelectedItemIdForScan(null);
         setInternalIdInput("");
@@ -1021,10 +1222,16 @@ export default function SessionActive() {
         ? "STEP 1 — Scan FEEDER NUMBER (Auto-Advance)" 
         : "STEP 1 / 2 — Scan FEEDER NUMBER";
     }
-    const stepLabel = verificationMode === "AUTO" 
-      ? "STEP 2 (Auto-Submit)" 
-      : "STEP 2 / 3";
-    return `${stepLabel} — Scan MPN / INTERNAL ID or press ENTER to skip (Feeder: ${pendingFeeder})`;
+    if (scanStep === "spool") {
+      const stepLabel = verificationMode === "AUTO" 
+        ? "STEP 2 (Auto-Submit)" 
+        : "STEP 2 / 3";
+      return `${stepLabel} — Scan MPN / INTERNAL ID or press ENTER to skip (Feeder: ${pendingFeeder})`;
+    }
+    const stepLabel = verificationMode === "AUTO"
+      ? "STEP 3 — Enter LOT CODE (Enter/Skip)"
+      : "STEP 3 / 3 — Enter LOT CODE (Enter/Skip)";
+    return `${stepLabel} (Feeder: ${pendingFeeder})`;
   };
 
   return (
@@ -1067,6 +1274,13 @@ export default function SessionActive() {
                 onClick={() => setShowResetDialog(true)}
               >
                 RESET
+              </Button>
+              <Button
+                variant="secondary"
+                className="font-bold tracking-widest text-xs sm:text-sm py-1 sm:py-2 px-2 sm:px-4 h-auto"
+                onClick={clearScanInput}
+              >
+                UNLOCK
               </Button>
               <Button variant="destructive" className="font-bold tracking-widest text-xs sm:text-sm py-1 sm:py-2 px-2 sm:px-4 h-auto" onClick={handleEndSession}>
                 END
@@ -1232,8 +1446,8 @@ export default function SessionActive() {
                   </div>
 
                   <div className="w-full flex gap-0.5 sm:gap-1 lg:gap-2 items-center justify-center min-h-12 sm:min-h-14 lg:min-h-16">
-                    {scanStep === "spool" && !needsAlternateSelection && !pendingVerification && (
-                      <Button type="button" variant="ghost" size="icon" className="shrink-0 h-10 sm:h-12 lg:h-14 xl:h-16 w-10 sm:w-12 lg:w-14 xl:w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); setInternalIdInput(""); setCaseConverted(false); }}>
+                    {(scanStep === "spool" || scanStep === "lot") && !needsAlternateSelection && !pendingVerification && (
+                      <Button type="button" variant="ghost" size="icon" className="shrink-0 h-10 sm:h-12 lg:h-14 xl:h-16 w-10 sm:w-12 lg:w-14 xl:w-16" onClick={() => { setScanStep("feeder"); setPendingFeeder(""); setFeederScanTime(null); setScanInput(""); setNeedsAlternateSelection(false); setPendingAvailableOptions(null); setSelectedItemIdForScan(null); setInternalIdInput(""); setPendingMpnScan(""); setPendingScanDuration(undefined); setCaseConverted(false); }}>
                         <ArrowLeft className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 xl:w-6 xl:h-6" />
                       </Button>
                     )}
@@ -1247,12 +1461,21 @@ export default function SessionActive() {
                         ref={inputRef}
                         value={scanInput}
                         onChange={(e) => setScanInput(e.target.value)}
-                        onKeyDown={handleScanKeyDown}
+                        onKeyDown={handlePrimaryInputKeyDown}
                         className="flex-1 text-center text-lg sm:text-2xl lg:text-3xl xl:text-4xl h-10 sm:h-12 lg:h-16 xl:h-20 font-mono tracking-[0.15em] sm:tracking-[0.2em] bg-background border-2 border-border focus-visible:border-primary rounded-lg shadow-inner text-xs sm:text-sm"
-                        placeholder={needsAlternateSelection ? "Press ENTER..." : (scanStep === "feeder" ? "SCAN FEEDER..." : verificationMode === "AUTO" ? "SCAN MPN/ID" : "SCAN MPN/ID...")}
-                        autoFocus
+                        placeholder={needsAlternateSelection ? "Press ENTER..." : (scanStep === "feeder" ? "SCAN FEEDER..." : scanStep === "spool" ? (verificationMode === "AUTO" ? "SCAN MPN/ID" : "SCAN MPN/ID...") : "SCAN LOT CODE (ENTER=SKIP)")}
                         autoComplete="off"
                       />
+                    )}
+                    {scanStep === "lot" && !needsAlternateSelection && !pendingVerification && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="shrink-0 h-10 sm:h-12 lg:h-14 px-3 sm:px-4"
+                        onClick={() => handleScanBarcode("")}
+                      >
+                        Skip
+                      </Button>
                     )}
                   </div>
                   {scanStep === "spool" && !needsAlternateSelection && !pendingVerification && (
@@ -1271,6 +1494,23 @@ export default function SessionActive() {
                         </p>
                         <p className="text-xs text-blue-700 dark:text-blue-300 mt-2 italic">
                           ⓘ Required MPN/Internal ID is enforced in both AUTO and MANUAL modes
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {scanStep === "lot" && !needsAlternateSelection && !pendingVerification && (
+                    <div className="w-full space-y-1 sm:space-y-2">
+                      <div className="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 p-1.5 sm:p-2 lg:p-3 rounded text-center">
+                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2">Feeder <strong className="text-foreground font-mono">{pendingFeeder}</strong> selected</p>
+                      </div>
+
+                      <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 p-2 sm:p-3 rounded-lg">
+                        <p className="text-xs font-bold text-blue-900 dark:text-blue-100 mb-2">🏷️ STEP 3: LOT CODE</p>
+                        <p className="text-xs text-blue-800 dark:text-blue-200">
+                          • Scan lot code or press <strong>Skip</strong>
+                        </p>
+                        <p className="text-xs text-blue-800 dark:text-blue-200">
+                          • Press <strong>ENTER</strong> to submit value
                         </p>
                       </div>
                     </div>
@@ -1600,7 +1840,11 @@ export default function SessionActive() {
                         {/* Row 1: Feeder Number & Status */}
                         <div className="flex items-center gap-1 min-w-0">
                           <span className="font-bold font-mono text-xs shrink-0">{feederNum}</span>
-                          {hasSplice && <Scissors className="w-3 h-3 text-amber-500 shrink-0" title="Spool replaced" />}
+                          {hasSplice && (
+                            <span title="Spool replaced">
+                              <Scissors className="w-3 h-3 text-amber-500 shrink-0" />
+                            </span>
+                          )}
                           {!primary?.isAlternate && <span className="text-xs font-bold text-success px-1.5 py-0.5 bg-success/10 rounded-full shrink-0 whitespace-nowrap">PRIMARY</span>}
                         </div>
                         
@@ -1711,7 +1955,7 @@ export default function SessionActive() {
       </div>
 
       <ScanNotification
-        notifications={notifications}
+        notifications={scanNotifications}
         onDismiss={dismissNotification}
       />
 
