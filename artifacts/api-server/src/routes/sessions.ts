@@ -225,6 +225,48 @@ async function buildSessionReportPayload(sessionId: number): Promise<SessionRepo
 
   const reportRows = bomItems.map((item: any) => {
     const feederScan = scans.find((s: any) => s.feederNumber?.trim()?.toUpperCase() === item.feederNumber?.trim()?.toUpperCase());
+    
+    // Determine scanned value and matched field
+    const scannedVal = feederScan?.spoolBarcode ?? feederScan?.internalIdScanned ?? feederScan?.scannedMpn ?? null;
+    
+    // Match the scanned value against BOM MPNs to determine matched field and make
+    let matchedField = null;
+    let matchedMake = null;
+    
+    if (scannedVal && feederScan?.status === "ok") {
+      const normalizedScanned = String(scannedVal).trim().toUpperCase();
+      
+      // Check internal part number
+      if (item.internalPartNumber) {
+        const internalTokens = String(item.internalPartNumber)
+          .split(/\s+/)
+          .map((t: string) => t.trim().toUpperCase())
+          .filter(Boolean);
+        if (internalTokens.includes(normalizedScanned)) {
+          matchedField = "internalPartNumber";
+          matchedMake = null;
+        }
+      }
+      
+      // Check MPN1 (primary)
+      if (!matchedField && item.mpn1 && String(item.mpn1).trim().toUpperCase() === normalizedScanned) {
+        matchedField = "mpn1";
+        matchedMake = item.make1 ?? null;
+      }
+      
+      // Check MPN2 (alternate)
+      if (!matchedField && item.mpn2 && String(item.mpn2).trim().toUpperCase() === normalizedScanned) {
+        matchedField = "mpn2";
+        matchedMake = item.make2 ?? null;
+      }
+      
+      // Check MPN3 (alternate)
+      if (!matchedField && item.mpn3 && String(item.mpn3).trim().toUpperCase() === normalizedScanned) {
+        matchedField = "mpn3";
+        matchedMake = item.make3 ?? null;
+      }
+    }
+    
     return {
       id: sessionId,
       startedAt: session.startTime,
@@ -242,9 +284,9 @@ async function buildSessionReportPayload(sessionId: number): Promise<SessionRepo
       qaName: session.qaName ?? null,
       supervisorName: session.supervisorName,
       feederNumber: item.feederNumber,
-      scannedValue: feederScan?.spoolBarcode ?? feederScan?.scannedMpn ?? null,
-      matchedField: null,
-      matchedMake: null,
+      scannedValue: scannedVal,
+      matchedField: matchedField,
+      matchedMake: matchedMake,
       lotCode: feederScan?.lotNumber ?? null,
       scanStatus: feederScan?.status === "ok" ? "verified" : feederScan?.status === "reject" ? "failed" : null,
       scannedAt: feederScan?.scannedAt ?? null,
@@ -1140,9 +1182,18 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
             ? `MPN 3 (${row.make3 ?? ""})`
             : matchedField === "internalpartnumber"
               ? "Internal P/N"
-              : "No Match";
+              : "—";
 
-      const expectedMpns = [row.mpn1, row.mpn2, row.mpn3].filter(Boolean).join(" / ") || "—";
+      // Format expected MPNs with ALL valid options separated by " / "
+      const expectedMpns = [
+        row.internalPartNumber,
+        row.mpn1,
+        row.mpn2,
+        row.mpn3,
+      ]
+        .filter((val: any) => val && String(val).trim())
+        .join(" / ") || "—";
+
       const scannedValue = row.scannedValue || "—";
       const isAlternate = matchedField === "mpn2" || matchedField === "mpn3";
       const isFailed = status === "failed";
@@ -1265,13 +1316,13 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
       doc.fillColor("#93C5FD").fontSize(7).text("SMT Manufacturing Quality System", left + 70, y + 34, { width: 150, align: "center" });
 
       const modeText = String(reportSession.verificationMode ?? baseSession?.verificationMode ?? "AUTO").toUpperCase() === "MANUAL"
-        ? "🔒 MANUAL MODE"
-        : "⚡ AUTO — STRICT MODE";
+        ? "MANUAL — STRICT"
+        : "AUTO — STRICT";
       const modeColor = modeText.includes("MANUAL") ? "#FCD34D" : "#86EFAC";
 
-      doc.fillColor("#93C5FD").fontSize(8).font("Helvetica").text("Changeover ID", right - 95, y + 8, { width: 85, align: "right" });
-      doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(12).text(reportSessionId, right - 95, y + 18, { width: 85, align: "right" });
-      doc.fillColor(modeColor).font("Helvetica").fontSize(8).text(modeText, right - 95, y + 31, { width: 85, align: "right" });
+      doc.fillColor("#93C5FD").fontSize(8).font("Helvetica").text("Changeover ID", right - 110, y + 8, { width: 100, align: "right" });
+      doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(11).text(reportSessionId, right - 110, y + 18, { width: 100, align: "right", ellipsis: false });
+      doc.fillColor(modeColor).font("Helvetica-Bold").fontSize(7.5).text(modeText, right - 110, y + 31, { width: 100, align: "right" });
 
       doc.fillColor(C.BLUE_ACCENT).rect(left, y + bandH + 2, right - left, 3).fill();
       y += bandH + 8;
