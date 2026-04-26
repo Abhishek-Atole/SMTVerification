@@ -10,6 +10,7 @@ export interface VerifyResult {
   feederNumber: string;
   matchedField: VerifyMatchedField | null;
   matchedMake: string | null;
+  isPrimary: boolean;
   hasAlternates: boolean;
   alternateCount: number;
   errorCode: VerifyErrorCode | null;
@@ -44,13 +45,13 @@ function tokenizeInternalPartNumber(value: string | null): string[] {
 }
 
 function buildBaseResult(feederNumber: string, item: BomItemForVerification): Omit<VerifyResult, "valid" | "errorCode"> {
-  const mpnValues = [item.mpn1, item.mpn2, item.mpn3].filter(isNonEmpty);
   return {
     feederNumber,
     matchedField: null,
     matchedMake: null,
+    isPrimary: false,
     hasAlternates: isNonEmpty(item.mpn2) || isNonEmpty(item.mpn3),
-    alternateCount: mpnValues.length,
+    alternateCount: [item.mpn2, item.mpn3].filter(isNonEmpty).length,
   };
 }
 
@@ -58,23 +59,13 @@ export function verifyMPN(scanned: string, bomRow: BomItemForVerification): Veri
   const normalizedScannedValue = normalize(scanned);
   const base = buildBaseResult(bomRow.feederNumber, bomRow);
 
-  const internalTokens = tokenizeInternalPartNumber(bomRow.internalPartNumber).map(normalize);
-  if (internalTokens.includes(normalizedScannedValue)) {
-    return {
-      ...base,
-      valid: true,
-      matchedField: "internalPartNumber",
-      matchedMake: null,
-      errorCode: null,
-    };
-  }
-
   if (isNonEmpty(bomRow.mpn1) && normalize(bomRow.mpn1) === normalizedScannedValue) {
     return {
       ...base,
       valid: true,
       matchedField: "mpn1",
       matchedMake: isNonEmpty(bomRow.make1) ? bomRow.make1.trim() : null,
+      isPrimary: true,
       errorCode: null,
     };
   }
@@ -85,6 +76,7 @@ export function verifyMPN(scanned: string, bomRow: BomItemForVerification): Veri
       valid: true,
       matchedField: "mpn2",
       matchedMake: isNonEmpty(bomRow.make2) ? bomRow.make2.trim() : null,
+      isPrimary: false,
       errorCode: null,
     };
   }
@@ -95,6 +87,19 @@ export function verifyMPN(scanned: string, bomRow: BomItemForVerification): Veri
       valid: true,
       matchedField: "mpn3",
       matchedMake: isNonEmpty(bomRow.make3) ? bomRow.make3.trim() : null,
+      isPrimary: false,
+      errorCode: null,
+    };
+  }
+
+  const internalTokens = tokenizeInternalPartNumber(bomRow.internalPartNumber).map(normalize);
+  if (internalTokens.includes(normalizedScannedValue)) {
+    return {
+      ...base,
+      valid: true,
+      matchedField: "internalPartNumber",
+      matchedMake: null,
+      isPrimary: true,
       errorCode: null,
     };
   }
@@ -125,6 +130,7 @@ export async function verifyFeederScan(
       feederNumber: normalizedFeederNumber,
       matchedField: null,
       matchedMake: null,
+      isPrimary: false,
       hasAlternates: false,
       alternateCount: 0,
       errorCode: "FEEDER_NOT_FOUND",
@@ -156,6 +162,7 @@ export async function verifyFeederScan(
       feederNumber: normalizedFeederNumber,
       matchedField: null,
       matchedMake: null,
+      isPrimary: false,
       hasAlternates: false,
       alternateCount: 0,
       errorCode: "FEEDER_NOT_FOUND",
@@ -180,6 +187,7 @@ export async function verifyFeederScan(
     return {
       ...base,
       valid: false,
+      isPrimary: false,
       errorCode: "ALREADY_SCANNED",
     };
   }
