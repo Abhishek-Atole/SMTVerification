@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRoute, useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -104,6 +104,33 @@ function tokenizeInternalPartNumber(value: string | null | undefined): string[] 
     .map((token) => token.trim())
     .filter(Boolean)
     .map((token) => token.toUpperCase());
+}
+
+/**
+ * Normalize MPN/internal ID values, filtering out "N/A" placeholders and null/empty values
+ */
+function normalizeMpn(value: any): string {
+  if (!value || value === "N/A" || value === "n/a") return "";
+  return normalizeScanValue(String(value));
+}
+
+/**
+ * Get filtered candidates from BOM MPN fields, excluding "N/A" and empty values
+ */
+function getFilteredMpnCandidates(
+  mpn1?: any,
+  mpn2?: any,
+  mpn3?: any,
+): { displayList: string; candidates: string[] } {
+  const candidates = [mpn1, mpn2, mpn3]
+    .map(normalizeMpn)
+    .filter(Boolean);
+  
+  const displayList = [mpn1, mpn2, mpn3]
+    .filter(v => v && v !== "N/A" && v !== "n/a")
+    .join(" | ");
+  
+  return { displayList, candidates };
 }
 
 export default function SessionActive() {
@@ -410,7 +437,7 @@ export default function SessionActive() {
     hydrateSplicingRecords(mappedRecords);
   }, [hydrateSplicingRecords, splices]);
 
-  const handleScanBarcode = async (val: string) => {
+  const handleScanBarcode = useCallback(async (val: string) => {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('[SCAN START]', {
       input: val,
@@ -420,6 +447,7 @@ export default function SessionActive() {
       verificationLocked,
       sessionId,
       bomLoaded: !!bomDetail,
+      bomItemsCount: bomDetail?.items?.length ?? 0,
     });
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
@@ -462,7 +490,7 @@ export default function SessionActive() {
       }
 
       if (scanStep === "feeder") {
-        console.log('[DEBUG] Processing feeder step');
+        console.log('[DEBUG] Processing feeder step', { normalizedInput, uiBomItemsCount: bomDetail?.items?.length });
 
         const uiBomItems = bomDetail?.items || [];
         const sessionBomItems = sessionApiBom || [];
@@ -553,6 +581,8 @@ export default function SessionActive() {
       }
 
       if (scanStep === "spool") {
+        console.log('[DEBUG] Processing MPN step', { pendingFeeder, normalizedInput });
+
         const sessionMatchedBomItem =
           sessionApiBom.find(
             (item) =>
@@ -573,29 +603,35 @@ export default function SessionActive() {
             (item) => normalizeScanValue(item.feederNumber) === normalizeScanValue(pendingFeeder),
           );
 
-        const mpn1 = normalizeScanValue(String(sessionMatchedBomItem?.mpn1 ?? uiMatchedBomItem?.expectedMpn ?? ""));
-        const mpn2 = normalizeScanValue(String(sessionMatchedBomItem?.mpn2 ?? ""));
-        const mpn3 = normalizeScanValue(String(sessionMatchedBomItem?.mpn3 ?? ""));
+        // BUG FIX: Use normalizeMpn to filter out "N/A" and empty values from BOM fields
+        const { displayList, candidates } = getFilteredMpnCandidates(
+          sessionMatchedBomItem?.mpn1 ?? uiMatchedBomItem?.expectedMpn,
+          sessionMatchedBomItem?.mpn2,
+          sessionMatchedBomItem?.mpn3,
+        );
+
         const internalTokens = tokenizeInternalPartNumber(
           String(sessionMatchedBomItem?.internalPartNumber ?? uiMatchedBomItem?.internalId ?? ""),
         );
-        const expectedMpns = [
-          sessionMatchedBomItem?.mpn1 ?? uiMatchedBomItem?.expectedMpn ?? null,
-          sessionMatchedBomItem?.mpn2 ?? null,
-          sessionMatchedBomItem?.mpn3 ?? null,
-        ]
-          .filter(Boolean)
-          .join(" | ");
 
-        if (mpn1 && normalizedInput === mpn1) {
-          showSuccessAlert(`Primary MPN Match for feeder ${pendingFeeder}`);
-        } else if ((mpn2 && normalizedInput === mpn2) || (mpn3 && normalizedInput === mpn3)) {
-          showWarningAlert(`Alternate MPN Used for feeder ${pendingFeeder}`, "medium");
-        } else if (internalTokens.includes(normalizedInput)) {
+        console.log('[MPN CHECK]', { candidates, normalizedInput, internalTokens });
+
+        // Check if scanned value matches any of the filtered candidates
+        const matchedMpnIndex = candidates.findIndex((mpn) => normalizedInput === mpn);
+        const matchedInternal = internalTokens.includes(normalizedInput);
+
+        if (matchedMpnIndex >= 0) {
+          if (matchedMpnIndex === 0) {
+            showSuccessAlert(`Primary MPN Match for feeder ${pendingFeeder}`);
+          } else {
+            showWarningAlert(`Alternate MPN Used for feeder ${pendingFeeder}`, "medium");
+          }
+        } else if (matchedInternal) {
           showWarningAlert(`Internal ID Match for feeder ${pendingFeeder}`, "medium");
         } else {
+          console.log('[MPN MISMATCH]', { scanned: normalizedInput, expected: candidates, displayList });
           showErrorAlert(
-            `MPN Mismatch for feeder ${pendingFeeder}. Expected: ${expectedMpns || "N/A"}`,
+            `MPN Mismatch for feeder ${pendingFeeder}. Expected: ${displayList || "N/A"}`,
             "high",
           );
           clearScanInput();
@@ -615,6 +651,8 @@ export default function SessionActive() {
       }
 
       if (scanStep === "lot") {
+        console.log('[DEBUG] Processing lot step', { normalizedInput, pendingFeeder, pendingMpnScan });
+
         const lotCode = normalizedInput || null;
         const matchingItem = bomDetail?.items.find((item) => item.id === selectedItemIdForScan);
         const duration = pendingScanDuration;
@@ -643,7 +681,50 @@ export default function SessionActive() {
       setScanning(false);
       console.log('[SCAN COMPLETE] Flags reset');
     }
-  };
+  }, [
+    // State values
+    scanStep,
+    bomDetail,
+    pendingFeeder,
+    sessionApiBom,
+    session?.scans,
+    scanLogRows,
+    selectedItemIdForScan,
+    needsAlternateSelection,
+    verificationInProgress,
+    verificationLocked,
+    caseConverted,
+    feederScanTime,
+    pendingScanDuration,
+    internalIdType,
+    verificationMode,
+    // State setters
+    setVerificationInProgress,
+    setScanStep,
+    setNeedsAlternateSelection,
+    setLastScanResult,
+    setFeederScanTime,
+    setPendingFeeder,
+    clearScanInput,
+    setIsDuplicate,
+    setCaseConverted,
+    setPendingAvailableOptions,
+    setSelectedItemIdForScan,
+    setInternalIdInput,
+    setPendingMpnScan,
+    setPendingScanDuration,
+    setPendingVerification,
+    setScanning,
+    // Callbacks and refs
+    showErrorAlert,
+    showWarningAlert,
+    showSuccessAlert,
+    handleAutoModeSubmit,
+    notify,
+    focusNextFrame,
+    inputRef,
+    sessionId,
+  ]);
 
   const {
     inputRef,
