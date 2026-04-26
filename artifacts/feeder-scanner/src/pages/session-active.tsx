@@ -622,7 +622,6 @@ export default function SessionActive() {
     setValue: setScanInput,
   } = useScanner({
     onSubmit: handleScanBarcode,
-    autoFocus: session?.status === "active" && activeTab === "loading",
     resetAfterMs: 10000,
   });
 
@@ -647,13 +646,11 @@ export default function SessionActive() {
   });
 
   useEffect(() => {
-    if (session?.status !== "active" || activeTab !== "loading") {
-      return;
-    }
-
-    const timer = setTimeout(() => inputRef.current?.focus(), 80);
-    return () => clearTimeout(timer);
-  }, [activeTab, scanStep, session?.status]);
+    const t = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 80);
+    return () => clearTimeout(t);
+  }, [scanStep]);
 
   useEffect(() => {
     return () => {
@@ -1701,7 +1698,6 @@ export default function SessionActive() {
                     onChange={(e) => setSpliceInput(e.target.value)}
                     className="flex-1 text-center text-lg sm:text-2xl lg:text-3xl xl:text-4xl h-10 sm:h-12 lg:h-16 xl:h-20 font-mono tracking-[0.15em] sm:tracking-[0.2em] bg-background border-2 border-border focus-visible:border-amber-500 rounded-lg shadow-inner text-xs sm:text-sm"
                     placeholder={spliceStep === "feeder" ? "SCAN FEEDER..." : spliceStep === "oldSpool" ? "SCAN OLD SPOOL..." : "SCAN NEW SPOOL..."}
-                    autoFocus
                     autoComplete="off"
                   />
                 </div>
@@ -1956,7 +1952,19 @@ export default function SessionActive() {
 
       <ScanNotification
         notifications={scanNotifications}
-        onDismiss={dismissNotification}
+        onDismiss={(id) => {
+          const dismissed = notifications.find((n) => n.id === id);
+          dismissNotification(id);
+
+          if (!dismissed) {
+            return;
+          }
+
+          const text = `${dismissed.title ?? ""} ${dismissed.message ?? ""}`.toLowerCase();
+          if (dismissed.type === "error" || text.includes("duplicate")) {
+            setTimeout(() => inputRef.current?.focus(), 50);
+          }
+        }}
       />
 
       {showCompletionOverlay && session.status === "active" && (
