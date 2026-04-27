@@ -54,8 +54,8 @@ function formatDateTime(value: unknown): string {
 function getColWidths(pageWidth: number): Record<number, { cellWidth: number }> {
   const margin = 10;
   const usable = pageWidth - margin * 2;
-  // Normalized ratios that sum to 1.0 for 11 columns
-  const ratios = [0.08, 0.08, 0.13, 0.08, 0.12, 0.15, 0.10, 0.07, 0.05, 0.04, 0.10];
+  // Normalized ratios that sum to 1.0 for 10 columns
+  const ratios = [0.09, 0.08, 0.14, 0.10, 0.14, 0.12, 0.09, 0.07, 0.07, 0.10];
   const total = ratios.reduce((a, b) => a + b, 0);
   
   return ratios.reduce((acc, ratio, index) => {
@@ -135,11 +135,54 @@ export default function SessionReport() {
     }
   }
 
+  function buildExpectedMpn(scan: any): string {
+    const parts: string[] = [];
+    if (scan?.mpn1?.trim()) parts.push(scan.mpn1.trim());
+    if (scan?.mpn2?.trim()) parts.push(scan.mpn2.trim());
+    if (scan?.mpn3?.trim()) parts.push(scan.mpn3.trim());
+    return parts.length > 0 ? parts.join(" / ") : scan?.internalPartNumber ?? "\u2014";
+  }
+
+  function buildMatchedAs(scan: any): string {
+    if (scan?.matchedAs && String(scan.matchedAs).trim()) return String(scan.matchedAs);
+
+    const field = String(scan?.matchedField ?? "").toLowerCase();
+    if (field === "mpn1") return `MPN 1${scan?.make1 ? ` (${scan.make1})` : ""}`;
+    if (field === "mpn2") return `MPN 2${scan?.make2 ? ` (${scan.make2})` : ""}`;
+    if (field === "mpn3") return `MPN 3${scan?.make3 ? ` (${scan.make3})` : ""}`;
+    if (field === "internalpartnumber") return "Internal P/N";
+    return "\u2014";
+  }
+
   const filteredScans = (latestOnly ? [...bestScanMap.values()] : session.scans).filter((s) => {
     if (s.status === "ok" && !showOk) return false;
     if (s.status === "reject" && !showReject) return false;
     return true;
   });
+
+  const tableRows = normalizedRows.length > 0
+    ? normalizedRows
+    : (report.bomItems ?? []).map((item: any) => {
+      const scan = bestScanMap.get(String(item.feederNumber ?? "").toLowerCase());
+      return {
+        feederNumber: item.feederNumber,
+        referenceLocation: item.location,
+        description: item.description,
+        packageDescription: item.packageDescription,
+        internalPartNumber: item.internalPartNumber,
+        mpn1: item.mpn1,
+        mpn2: item.mpn2,
+        mpn3: item.mpn3,
+        make1: item.make1,
+        make2: item.make2,
+        make3: item.make3,
+        scannedValue: (scan as any)?.spoolBarcode ?? null,
+        matchedAs: "\u2014",
+        lotCode: null,
+        scanStatus: scan?.status === "ok" ? "verified" : scan?.status === "reject" ? "failed" : "missing",
+        scannedAt: scan?.scannedAt ?? null,
+      };
+    });
 
   // Helper function to load logo from URL as data URL
   const loadLogoAsDataUrl = async (logoUrl: string): Promise<string> => {
@@ -193,179 +236,199 @@ export default function SessionReport() {
       const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      const margin = 10;
-      const changeoverId = String(session.id); // ID is already in format SMT_YYYYMMDD_NNNNNN
-      const verificationMode = String(session.verificationMode ?? "manual").toUpperCase();
+      const margin = 12;
+      const changeoverId = String(session.id ?? "").padStart(8, "0");
+      const verificationMode = String(session.verificationMode ?? "AUTO").toUpperCase() === "AUTO" ? "AUTO" : "MANUAL";
 
-      const companyName = dash(session.companyName || appConfig.companyName);
-      const logoPath = String(appConfig.logoUrl || session.logoUrl || "");
+      const companyName = "UCAL FUEL SYSTEMS LIMITED";
+      const reportTitle = "SMT CHANGEOVER VERIFICATION REPORT";
 
-      const rows = (report.reportRows ?? report.bomItems ?? []).map((row: any) => {
-        const expected = [
-          row.internalPartNumber,
-          row.mpn1,
-          row.mpn2,
-          row.mpn3,
-        ]
-          .filter(Boolean)
-          .join(" / ");
+      // ===== SECTION 1: HEADER =====
+      let currentY = margin;
+      
+      // Title
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(...toRgb(C_NAVY));
+      doc.text(reportTitle, pageWidth / 2, currentY + 4, { align: "center" });
+      
+      currentY += 7;
+      doc.setFontSize(10);
+      doc.text(companyName, pageWidth / 2, currentY, { align: "center" });
 
-        const normalizedStatus =
-          String(row.scanStatus ?? "").toLowerCase() === "verified"
-            ? "PASS"
-            : String(row.scanStatus ?? "").toLowerCase() === "failed"
-              ? "FAIL"
-              : "WARNING";
+      // Right side: Changeover ID box
+      const idBoxX = pageWidth - margin - 50;
+      const idBoxY = margin + 1;
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(...toRgb(C_GREY_LIGHT));
+      doc.setLineWidth(0.5);
+      doc.rect(idBoxX, idBoxY, 45, 15, "FD");
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...toRgb(C_GREY));
+      doc.text("Changeover ID", idBoxX + 22.5, idBoxY + 2, { align: "center" });
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(...toRgb(C_NAVY));
+      doc.text(changeoverId, idBoxX + 22.5, idBoxY + 7, { align: "center" });
+      
+      const modeColor = verificationMode === "AUTO" ? "#15803D" : "#B45309";
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...toRgb(modeColor));
+      doc.text(`Mode: ${verificationMode} — STRICT`, idBoxX + 22.5, idBoxY + 12.5, { align: "center" });
+
+      // Separator line
+      currentY = margin + 19;
+      doc.setDrawColor(...toRgb(C_NAVY));
+      doc.setLineWidth(1);
+      doc.line(margin, currentY, pageWidth - margin, currentY);
+
+      // ===== SECTION 2: SESSION INFO GRID (3 rows × 5 columns) =====
+      currentY += 3;
+      
+      const sessionInfoData = [
+        [
+          { label: "Changeover ID", value: changeoverId },
+          { label: "Panel ID", value: dash(session.panelId) },
+          { label: "Shift", value: dash(session.shift) },
+          { label: "Date", value: session.startedAt ? format(new Date(session.startedAt), "dd-MMM-yyyy") : "—" },
+          { label: "Duration", value: `${summary.durationMinutes || 0} min` },
+        ],
+        [
+          { label: "Customer", value: dash(session.customer) },
+          { label: "Machine", value: dash(session.machine) },
+          { label: "Operator", value: dash(session.operatorName) },
+          { label: "Start Time", value: session.startedAt ? format(new Date(session.startedAt), "HH:mm:ss") : "—" },
+          { label: "BOM Version", value: dash(session.bomVersion) },
+        ],
+        [
+          { label: "PCB / Part No.", value: dash(session.pcbPartNumber) },
+          { label: "Line", value: dash(session.line) },
+          { label: "QA Engineer", value: dash(session.qaName) },
+          { label: "End Time", value: session.completedAt ? format(new Date(session.completedAt), "HH:mm:ss") : "—" },
+          { label: "Supervisor", value: dash(session.supervisorName) },
+        ],
+      ];
+
+      const colWidth = (pageWidth - margin * 2) / 5;
+      sessionInfoData.forEach((row) => {
+        let colX = margin;
+        row.forEach((cell) => {
+          doc.setDrawColor(...toRgb(C_GREY_LIGHT));
+          doc.setLineWidth(0.2);
+          doc.rect(colX, currentY, colWidth, 11);
+          
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7);
+          doc.setTextColor(...toRgb(C_GREY));
+          doc.text(cell.label, colX + 1, currentY + 2);
+          
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(8);
+          doc.setTextColor(...toRgb(C_NAVY));
+          doc.text(cell.value, colX + 1, currentY + 6.5);
+          
+          colX += colWidth;
+        });
+        currentY += 11;
+      });
+
+      // ===== SECTION 3: COMPONENT VERIFICATION TABLE =====
+      currentY += 2;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(...toRgb(C_NAVY));
+      doc.text("■ Component Verification Details", margin, currentY);
+      currentY += 3;
+
+      const verifyTableData = tableRows.map((row: any) => {
+        const expectedMpns = [row.mpn1, row.mpn2, row.mpn3]
+          .filter((v) => v && String(v).trim())
+          .map((v) => String(v).trim());
+        
+        const expectedMpnText = expectedMpns.join("\n") || dash(row.internalPartNumber);
+        
+        let scannedSpoolText = row.scannedValue ?? "—";
+        let matchedLabel = buildMatchedAs(row);
+        
+        if (String(row.matchedField ?? "").toLowerCase() === "mpn2" || String(row.matchedField ?? "").toLowerCase() === "mpn3") {
+          scannedSpoolText += " ▲";
+        }
+
+        const status = String(row.scanStatus ?? "").toLowerCase() === "verified"
+          ? "PASS"
+          : String(row.scanStatus ?? "").toLowerCase() === "failed"
+            ? "FAIL"
+            : "MISSING";
+
+        const lotCode = row.lotCode ?? "—";
+        const scanTime = row.scannedAt ? format(new Date(row.scannedAt), "HH:mm:ss") : "—";
 
         return [
-          dash(row.feederNumber),
-          dash(row.referenceLocation ?? row.location),
-          dash(row.description),
-          dash(row.packageDescription),
-          dash(expected),
-          dash(row.scannedValue),
-          dash(row.lotCode),
-          normalizedStatus,
-          dash(row.matchedField),
-          dash(row.matchedMake),
-          formatDateTime(row.scannedAt),
+          row.feederNumber || "—",
+          row.referenceLocation ?? "—",
+          row.description || "—",
+          row.description ? (row.description.match(/[\d.]+[a-zA-Z/]*/)?.[0] || "") : "—",
+          row.packageDescription || "—",
+          row.internalPartNumber || "—",
+          expectedMpnText,
+          scannedSpoolText,
+          matchedLabel,
+          lotCode,
+          status,
+          scanTime,
         ];
       });
 
-      const passCount = rows.filter((row: any[]) => row[7] === "PASS").length;
-      const failCount = rows.filter((row: any[]) => row[7] === "FAIL").length;
-      const warningCount = rows.filter((row: any[]) => row[7] === "WARNING").length;
-      const total = rows.length;
-      const passRate = total > 0 ? `${((passCount / total) * 100).toFixed(1)}%` : "0%";
-
-      const drawPageFrame = () => {
-        doc.setDrawColor(...toRgb(C_GREY_LIGHT));
-        doc.setLineWidth(0.4);
-        doc.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2);
-      };
-
-      const drawHeader = () => {
-        const yTop = 14;
-        const logoW = 34;
-        const logoH = 12;
-
-        doc.setFillColor(...toRgb(C_WHITE));
-        doc.setDrawColor(...toRgb(C_GREY_LIGHT));
-        doc.roundedRect(margin + 2, yTop, logoW, logoH, 1.2, 1.2, "FD");
-
-        doc.setTextColor(...toRgb(C_GREY));
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.text(companyName, margin + 40, yTop + 8);
-
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(17);
-        doc.setTextColor(...toRgb(C_NAVY));
-        doc.text(appConfig.systemTitle.toUpperCase(), pageWidth / 2, yTop + 7, { align: "center" });
-
-        const idLabelX = pageWidth - margin - 66;
-        doc.setFontSize(8);
-        doc.setTextColor(...toRgb(C_BLUE_LIGHT));
-        doc.text("Changeover ID", idLabelX, yTop + 2);
-        doc.setFillColor(...toRgb(C_NAVY));
-        doc.roundedRect(idLabelX, yTop + 3, 44, 7, 1, 1, "F");
-        doc.setTextColor(...toRgb(C_WHITE));
-        doc.setFont("helvetica", "bold");
-        doc.text(changeoverId, idLabelX + 22, yTop + 7.8, { align: "center" });
-
-        const modeColor = verificationMode === "AUTO" ? C_GREEN : C_AMBER;
-        doc.setFillColor(...toRgb(modeColor));
-        doc.roundedRect(pageWidth - margin - 18, yTop + 3, 16, 7, 1, 1, "F");
-        doc.setTextColor(...toRgb(C_WHITE));
-        doc.setFontSize(7.5);
-        doc.text(verificationMode, pageWidth - margin - 10, yTop + 7.8, { align: "center" });
-
-        doc.setDrawColor(...toRgb(C_CYAN));
-        doc.setLineWidth(1.5);
-        doc.line(margin + 2, yTop + 14, pageWidth - margin - 2, yTop + 14);
-
-        if (logoPath) {
-          loadLogoAsDataUrl(logoPath)
-            .then((logoData) => {
-              if (!logoData) return;
-              const formatName = logoData.startsWith("data:image/png") ? "PNG" : "JPEG";
-              doc.addImage(logoData, formatName, margin + 3, yTop + 1.2, logoW - 2, logoH - 2);
-            })
-            .catch(() => undefined);
-        }
-      };
-
-      drawPageFrame();
-      drawHeader();
-
-      const details = [
-        ["Panel ID", dash(session.panelId ?? session.panelName)],
-        ["Shift", dash(session.shift)],
-        ["Date", formatDateTime(session.startedAt ?? session.startTime)],
-        ["Duration", `${Number(summary.durationMinutes ?? 0)} mins`],
-        ["Customer", dash(session.customer)],
-        ["Machine", dash(session.machine)],
-        ["Operator", dash(session.operatorName)],
-        ["Start Time", formatDateTime(session.startedAt ?? session.startTime)],
-        ["BOM Version", dash(session.bomVersion ?? session.bomName)],
-        ["PCB Part Number", dash(session.pcbPartNumber)],
-        ["Line", dash(session.line)],
-        ["QA", dash(session.qaName)],
-        ["End Time", formatDateTime(session.completedAt ?? session.endTime)],
-        ["Supervisor", dash(session.supervisorName)],
-      ];
-
       autoTable(doc, {
-        startY: 32,
-        margin: { left: margin, right: margin },
-        theme: "grid",
-        tableWidth: pageWidth - margin * 2,
-        body: [details.slice(0, 7), details.slice(7, 14)].map((row) => row.map((entry) => `${entry[0]}: ${entry[1]}`)),
-        bodyStyles: {
-          fontSize: 8,
-          textColor: toRgb(C_GREY),
-          fillColor: toRgb(C_WHITE),
-          lineColor: toRgb(C_GREY_LIGHT),
-          lineWidth: 0.2,
-        },
-      });
-
-      const componentStartY = (doc as any).lastAutoTable.finalY + 6;
-      doc.setTextColor(...toRgb(C_NAVY));
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.text("Component Verification Details", margin, componentStartY);
-
-      autoTable(doc, {
-        startY: componentStartY + 2,
-        margin: { left: margin, right: margin, top: 18, bottom: 20 },
+        startY: currentY,
+        margin: { left: margin, right: margin, top: 2, bottom: 5 },
         theme: "grid",
         tableWidth: pageWidth - margin * 2,
         head: [[
           "Feeder No.",
           "Ref / Des",
-          "Component",
-          "Package",
-          "Expected Part Number(s)",
-          "Scanned Part Number",
+          "Component\nDescription",
+          "Value",
+          "Pkg Size",
+          "Internal Part No.\n(BOM)",
+          "Expected MPN\n(BOM — valid options)",
+          "Scanned Spool\n(Actual)",
+          "Matched Field",
           "Lot Code",
           "Status",
-          "Matched Field",
-          "Matched Make",
-          "Scanned At",
+          "Time",
         ]],
-        body: rows,
-        columnStyles: getColWidths(pageWidth),
+        body: verifyTableData,
+        columnStyles: {
+          0: { cellWidth: 14 },
+          1: { cellWidth: 12 },
+          2: { cellWidth: 16 },
+          3: { cellWidth: 12 },
+          4: { cellWidth: 10 },
+          5: { cellWidth: 14 },
+          6: { cellWidth: 18 },
+          7: { cellWidth: 16 },
+          8: { cellWidth: 16 },
+          9: { cellWidth: 10 },
+          10: { cellWidth: 10 },
+          11: { cellWidth: 12 },
+        },
         headStyles: {
           fillColor: toRgb(C_NAVY),
           textColor: toRgb(C_WHITE),
           fontStyle: "bold",
-          fontSize: 8,
+          fontSize: 7,
+          cellPadding: 1,
           lineColor: toRgb(C_GREY_LIGHT),
           lineWidth: 0.2,
         },
         bodyStyles: {
-          fontSize: 7.5,
+          fontSize: 7,
+          cellPadding: 1,
           textColor: toRgb(C_GREY),
           lineColor: toRgb(C_GREY_LIGHT),
           lineWidth: 0.2,
@@ -374,7 +437,27 @@ export default function SessionReport() {
           fillColor: toRgb(C_BLUE_LIGHT),
         },
         didParseCell: (hookData: any) => {
-          if (hookData.section === "body" && hookData.column.index === 7) {
+          if (hookData.section !== "body") return;
+          
+          // Color code Scanned Spool column (index 7)
+          if (hookData.column.index === 7) {
+            const matchedField = tableRows[hookData.row.index]?.matchedField;
+            if (String(matchedField ?? "").toLowerCase() === "mpn1" || 
+                String(matchedField ?? "").toLowerCase() === "internalpartnumber") {
+              hookData.cell.styles.textColor = toRgb(C_GREEN);
+              hookData.cell.styles.fontStyle = "bold";
+            } else if (String(matchedField ?? "").toLowerCase() === "mpn2" || 
+                       String(matchedField ?? "").toLowerCase() === "mpn3") {
+              hookData.cell.styles.textColor = toRgb(C_AMBER);
+              hookData.cell.styles.fontStyle = "bold";
+            } else {
+              hookData.cell.styles.textColor = toRgb(C_RED);
+              hookData.cell.styles.fontStyle = "bold";
+            }
+          }
+          
+          // Color code Status column (index 10)
+          if (hookData.column.index === 10) {
             if (hookData.cell.raw === "PASS") {
               hookData.cell.styles.textColor = toRgb(C_GREEN);
               hookData.cell.styles.fontStyle = "bold";
@@ -386,49 +469,68 @@ export default function SessionReport() {
               hookData.cell.styles.fontStyle = "bold";
             }
           }
-          if (hookData.section === "body" && hookData.column.index === 6 && hookData.cell.raw === "\u2014") {
-            hookData.cell.styles.textColor = [203, 213, 225];
+          
+          // Color code Expected MPN column (index 6)
+          if (hookData.column.index === 6) {
+            hookData.cell.styles.textColor = toRgb("#1e40af");
           }
-        },
-        didDrawPage: () => {
-          drawPageFrame();
-          drawHeader();
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(7.5);
-          doc.setTextColor(...toRgb(C_GREY));
-          doc.text(`Generated by ${appConfig.systemTitle} | UTC timestamp`, margin, pageHeight - 7);
         },
       });
 
-      const summaryY = (doc as any).lastAutoTable.finalY + 6;
+      currentY = (doc as any).lastAutoTable.finalY + 2;
+
+      // Legend
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(...toRgb(C_GREY));
+      const legendText = "Legend — Scanned Spool column: Green = Primary MPN matched | Amber ▲ = Alternate MPN used (BOM-approved) | Red ✗ = Mismatch (scan rejected) | Blue text = Expected MPN options from BOM | AUTO STRICT: Exact match only — fuzzy matching disabled";
+      doc.text(legendText, margin, currentY, { maxWidth: pageWidth - margin * 2 });
+
+      // ===== SECTION 4: VERIFICATION SUMMARY =====
+      currentY += 8;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(...toRgb(C_NAVY));
+      doc.text("■ Verification Summary", margin, currentY);
+      currentY += 4;
+
+      const passCount = tableRows.filter((r: any) => String(r.scanStatus ?? "").toLowerCase() === "verified").length;
+      const failCount = tableRows.filter((r: any) => String(r.scanStatus ?? "").toLowerCase() === "failed").length;
+      const warnCount = 0;
+      const total = tableRows.length;
+      const passRate = total > 0 ? ((passCount / total) * 100).toFixed(1) : "0.0";
+
       autoTable(doc, {
-        startY: summaryY,
+        startY: currentY,
         margin: { left: margin, right: margin },
         theme: "grid",
         tableWidth: pageWidth - margin * 2,
-        head: [["Total Feeders Scanned", "PASS", "FAIL", "WARNING", "Pass Rate", "Status"]],
-        body: [[
-          String(total),
-          String(passCount),
-          String(failCount),
-          String(warningCount),
-          passRate,
-          total > 0 && failCount === 0 ? "COMPLETE" : "INCOMPLETE",
-        ]],
+        head: [["Total Feeders", "PASS", "FAIL", "WARNING", "Pass Rate", "Status"]],
+        body: [[String(total), String(passCount), String(failCount), String(warnCount), `${passRate}%`, failCount === 0 ? "COMPLETE" : "INCOMPLETE"]],
+        columnStyles: {
+          0: { cellWidth: 20 },
+          1: { cellWidth: 20 },
+          2: { cellWidth: 20 },
+          3: { cellWidth: 20 },
+          4: { cellWidth: 20 },
+          5: { cellWidth: 20 },
+        },
         headStyles: {
           fillColor: toRgb(C_NAVY),
           textColor: toRgb(C_WHITE),
           fontStyle: "bold",
           fontSize: 8,
+          cellPadding: 2,
           lineColor: toRgb(C_GREY_LIGHT),
           lineWidth: 0.2,
         },
         bodyStyles: {
           fontSize: 9,
           fontStyle: "bold",
+          cellPadding: 2,
+          textColor: toRgb(C_GREY),
           lineColor: toRgb(C_GREY_LIGHT),
           lineWidth: 0.2,
-          textColor: toRgb(C_GREY),
         },
         didParseCell: (hookData: any) => {
           if (hookData.section !== "body") return;
@@ -436,48 +538,61 @@ export default function SessionReport() {
           if (hookData.column.index === 2) hookData.cell.styles.textColor = toRgb(C_RED);
           if (hookData.column.index === 3) hookData.cell.styles.textColor = toRgb(C_AMBER);
           if (hookData.column.index === 5) {
-            hookData.cell.styles.textColor =
-              String(hookData.cell.raw) === "COMPLETE" ? toRgb(C_GREEN) : toRgb(C_RED);
+            hookData.cell.styles.textColor = String(hookData.cell.raw).includes("COMPLETE") ? toRgb(C_GREEN) : toRgb(C_RED);
           }
-          if (hookData.column.index === 0) hookData.cell.styles.fillColor = toRgb(C_BLUE_LIGHT);
         },
       });
 
-      const legendY = (doc as any).lastAutoTable.finalY + 5;
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(...toRgb(C_GREEN));
-      doc.text("PASS = Verified", margin, legendY);
-      doc.setTextColor(...toRgb(C_RED));
-      doc.text("FAIL = Mismatch", margin + 36, legendY);
-      doc.setTextColor(...toRgb(C_AMBER));
-      doc.text("WARNING = Needs Review", margin + 72, legendY);
-
-      const approvalsY = legendY + 12;
-      doc.setTextColor(...toRgb(C_NAVY));
+      // ===== SECTION 5: APPROVALS & SIGN-OFF =====
+      currentY = (doc as any).lastAutoTable.finalY + 6;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text("Approvals", margin, approvalsY);
+      doc.setTextColor(...toRgb(C_NAVY));
+      doc.text("■ Approvals & Sign-off", margin, currentY);
+      currentY += 5;
 
-      const sigY = approvalsY + 10;
-      const sections = [
-        ["Supervisor", dash(session.supervisorName)],
-        ["Operator", dash(session.operatorName)],
-        ["QA", dash(session.qaName)],
+      const approvalsData = [
+        ["SUPERVISOR", dash(session.supervisorName)],
+        ["OPERATOR", dash(session.operatorName)],
+        ["QA ENGINEER", dash(session.qaName)],
+        ["PRODUCTION MANAGER", "________________________"],
       ];
-      const colGap = (pageWidth - margin * 2) / 3;
-      sections.forEach((entry, idx) => {
-        const x = margin + idx * colGap + colGap / 2;
-        doc.setDrawColor(...toRgb(C_GREY));
-        doc.setLineWidth(0.2);
-        doc.line(x - 35, sigY, x + 35, sigY);
+
+      const approvalColW = (pageWidth - margin * 2) / 4;
+      approvalsData.forEach((cell, idx) => {
+        const xPos = margin + idx * approvalColW;
+        
+        doc.setFillColor(...toRgb(C_NAVY));
+        doc.setDrawColor(...toRgb(C_NAVY));
+        doc.rect(xPos + 2, currentY, approvalColW - 4, 4, "FD");
+        
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(8.5);
-        doc.setTextColor(...toRgb(C_GREY));
-        doc.text(entry[0], x, sigY + 4, { align: "center" });
+        doc.setFontSize(8);
+        doc.setTextColor(...toRgb(C_WHITE));
+        doc.text(cell[0], xPos + approvalColW / 2, currentY + 2.5, { align: "center" });
+        
         doc.setFont("helvetica", "normal");
-        doc.text(entry[1], x, sigY + 8, { align: "center" });
+        doc.setFontSize(7);
+        doc.setTextColor(...toRgb(C_GREY));
+        doc.text(cell[1], xPos + approvalColW / 2, currentY + 8, { align: "center" });
+        
+        doc.setDrawColor(...toRgb(C_GREY_LIGHT));
+        doc.setLineWidth(0.3);
+        doc.line(xPos + 5, currentY + 12, xPos + approvalColW - 5, currentY + 12);
+        
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7);
+        doc.setTextColor(...toRgb(C_GREY));
+        doc.text("Name / Signature / Date", xPos + approvalColW / 2, currentY + 15, { align: "center" });
       });
+
+      // ===== SECTION 6: FOOTER =====
+      const footerY = pageHeight - 5;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(...toRgb(C_GREY));
+      const footerText = `SMTVerification System — Electronically Generated Report | Changeover: CHG${changeoverId} | Date: ${format(new Date(session.startedAt || new Date()), "dd-MMM-yyyy")} | BOM: ${dash(session.bomVersion)} | Mode: ${verificationMode} — STRICT | This document is valid without physical signature when QR-verified.`;
+      doc.text(footerText, margin, footerY, { maxWidth: pageWidth - margin * 2 });
 
       doc.save(`smt-changeover-report-${session.id}.pdf`);
     } catch (error) {
@@ -653,7 +768,7 @@ export default function SessionReport() {
                   </>
                 ) : (
                   <>
-                    {["Feeder No.", "Ref / Des", "Component", "Part Number", showSpoolBarcode ? "Scanned Number" : null, "Lot", "Status", "Time"]
+                    {["Feeder No.", "Ref / Des", "Component", "Expected MPN", showSpoolBarcode ? "Scanned Spool" : null, "Matched As", "Lot", "Status", "Time"]
                       .filter(Boolean).map((h) => (
                       <TableHead key={h} className="font-mono font-bold text-white text-center border-r border-blue-800 last:border-0 text-xs sm:text-sm p-2 sm:p-3">{h}</TableHead>
                     ))}
@@ -677,22 +792,33 @@ export default function SessionReport() {
                   ))
                 )
               ) : (
-                report.bomItems.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-6 sm:py-8 text-muted-foreground text-xs sm:text-sm">No BOM items</TableCell></TableRow>
+                tableRows.length === 0 ? (
+                  <TableRow><TableCell colSpan={showSpoolBarcode ? 9 : 8} className="text-center py-6 sm:py-8 text-muted-foreground text-xs sm:text-sm">No BOM items</TableCell></TableRow>
                 ) : (
-                  report.bomItems.map((item, idx) => {
-                    const scan = bestScanMap.get(item.feederNumber.toLowerCase());
-                    const status = scan?.status === "ok" ? "PASS" : scan?.status === "reject" ? "FAIL" : "MISSING";
+                  tableRows.map((scan: any, idx: number) => {
+                    const status = String(scan.scanStatus ?? "").toLowerCase() === "verified"
+                      ? "PASS"
+                      : String(scan.scanStatus ?? "").toLowerCase() === "failed"
+                        ? "FAIL"
+                        : "MISSING";
+                    const matchedAs = buildMatchedAs(scan);
+                    const scannedSpoolClass = matchedAs.includes("MPN 1") || matchedAs.includes("Primary")
+                      ? "text-green-600 font-semibold"
+                      : matchedAs.includes("MPN 2") || matchedAs.includes("MPN 3")
+                        ? "text-amber-600 font-semibold"
+                        : "text-red-600 font-semibold";
+
                     return (
-                      <TableRow key={item.id} className={idx % 2 === 1 ? "bg-blue-50 dark:bg-blue-950/20" : ""}>
-                        <TableCell className="font-mono font-bold text-center text-xs sm:text-sm p-2 sm:p-3">{item.feederNumber}</TableCell>
-                        <TableCell className="font-mono text-center text-muted-foreground text-xs p-2 sm:p-3">{item.location || "N/A"}</TableCell>
-                        <TableCell className="font-mono text-center text-xs sm:text-sm p-2 sm:p-3">{item.description || item.partNumber}</TableCell>
-                        <TableCell className="font-mono text-center text-xs sm:text-sm p-2 sm:p-3 truncate">{item.partNumber}</TableCell>
-                        {showSpoolBarcode && <TableCell className="font-mono text-center text-xs text-muted-foreground p-2 sm:p-3 truncate">{(scan as any)?.spoolBarcode || scan?.feederNumber || "-"}</TableCell>}
-                        <TableCell className="font-mono text-center text-muted-foreground text-xs p-2 sm:p-3">N/A</TableCell>
+                      <TableRow key={`${scan.feederNumber}-${idx}`} className={idx % 2 === 1 ? "bg-blue-50 dark:bg-blue-950/20" : ""}>
+                        <TableCell className="font-mono font-bold text-center text-xs sm:text-sm p-2 sm:p-3">{scan.feederNumber}</TableCell>
+                        <TableCell className="font-mono text-center text-xs p-2 sm:p-3">{scan.referenceLocation ?? "\u2014"}</TableCell>
+                        <TableCell className="font-mono text-center text-xs sm:text-sm p-2 sm:p-3">{scan.description ?? "\u2014"}</TableCell>
+                        <TableCell className="font-mono text-blue-600 text-xs sm:text-sm p-2 sm:p-3 truncate">{buildExpectedMpn(scan)}</TableCell>
+                        {showSpoolBarcode && <TableCell className={`font-mono text-center text-xs p-2 sm:p-3 truncate ${scannedSpoolClass}`}>{scan.scannedValue ?? "\u2014"}</TableCell>}
+                        <TableCell className="font-mono text-center text-xs p-2 sm:p-3">{matchedAs}</TableCell>
+                        <TableCell className="font-mono text-center text-muted-foreground text-xs p-2 sm:p-3">{scan.lotCode ?? "\u2014"}</TableCell>
                         <TableCell className={`font-mono font-black text-center text-xs sm:text-sm p-2 sm:p-3 ${status === "PASS" ? "text-success" : status === "FAIL" ? "text-destructive" : "text-amber-600"}`}>{status}</TableCell>
-                        <TableCell className="font-mono text-center text-muted-foreground text-xs p-2 sm:p-3">{scan ? format(new Date(scan.scannedAt), "HH:mm:ss") : "-"}</TableCell>
+                        <TableCell className="font-mono text-center text-muted-foreground text-xs p-2 sm:p-3">{scan.scannedAt ? format(new Date(scan.scannedAt), "HH:mm:ss") : "\u2014"}</TableCell>
                       </TableRow>
                     );
                   })
