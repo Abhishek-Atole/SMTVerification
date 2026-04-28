@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { bomsTable, bomItemsTable } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { bomsTable, bomItemsTable, changeoverSessionsTable, sessionsTable } from "@workspace/db/schema";
+import { eq, sql, isNull, isNotNull } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -109,20 +109,54 @@ function cell(row: CsvRow, index?: number): string {
 
 router.get("/bom", async (req, res) => {
   try {
-    const boms = await db.select().from(bomsTable).orderBy(bomsTable.createdAt);
+    const showDeleted = req.query.deleted === "true";
+    
+    let query = db.select().from(bomsTable);
+    
+    if (showDeleted) {
+      query = query.where(sql`${bomsTable.deletedAt} IS NOT NULL`);
+    } else {
+      query = query.where(sql`${bomsTable.deletedAt} IS NULL`);
+    }
+    
+    const boms = await query.orderBy(bomsTable.createdAt);
+    
+    // Get item counts
     const counts = await db
       .select({ bomId: bomItemsTable.bomId, count: sql<number>`count(*)::int` })
       .from(bomItemsTable)
+      .where(isNull(bomItemsTable.deletedAt))
       .groupBy(bomItemsTable.bomId);
 
     const countMap = new Map(counts.map((c) => [c.bomId, c.count]));
+
+    // Get all makes for calculating unique manufacturers per BOM
+    const makesData = await db
+      .select({ bomId: bomItemsTable.bomId, make1: bomItemsTable.make1, make2: bomItemsTable.make2, make3: bomItemsTable.make3 })
+      .from(bomItemsTable)
+      .where(isNull(bomItemsTable.deletedAt));
+
+    // Calculate makes count per BOM
+    const makesCountMap = new Map<number, number>();
+    for (const item of makesData) {
+      if (!makesCountMap.has(item.bomId)) {
+        makesCountMap.set(item.bomId, new Set());
+      }
+      const makesSet = makesCountMap.get(item.bomId) as Set<string>;
+      if (item.make1) makesSet.add(item.make1);
+      if (item.make2) makesSet.add(item.make2);
+      if (item.make3) makesSet.add(item.make3);
+    }
 
     const result = boms.map((b) => ({
       id: b.id,
       name: b.name,
       description: b.description,
       itemCount: countMap.get(b.id) ?? 0,
+      makesCount: (makesCountMap.get(b.id) as Set<string>)?.size ?? 0,
       createdAt: b.createdAt,
+      deletedAt: b.deletedAt,
+      deletedBy: b.deletedBy,
     }));
 
     res.json(result);
@@ -161,27 +195,9 @@ router.get("/bom/:bomId", async (req, res) => {
       res.status(404).json({ error: "BOM not found" });
       return;
     }
+    // Fetch ALL fields from bomItemsTable (complete data synchronization)
     const items = await db
-      .select({
-        id: bomItemsTable.id,
-        bomId: bomItemsTable.bomId,
-        feederNumber: bomItemsTable.feederNumber,
-        partNumber: bomItemsTable.partNumber,
-        itemName: bomItemsTable.itemName,
-        internalPartNumber: bomItemsTable.internalPartNumber,
-        make1: bomItemsTable.make1,
-        mpn1: bomItemsTable.mpn1,
-        make2: bomItemsTable.make2,
-        mpn2: bomItemsTable.mpn2,
-        make3: bomItemsTable.make3,
-        mpn3: bomItemsTable.mpn3,
-        description: bomItemsTable.description,
-        packageDescription: bomItemsTable.packageDescription,
-        requiredQty: bomItemsTable.requiredQty,
-        referenceLocation: bomItemsTable.referenceLocation,
-        location: bomItemsTable.location,
-        quantity: bomItemsTable.quantity,
-      })
+      .select()
       .from(bomItemsTable)
       .where(eq(bomItemsTable.bomId, bomId));
     res.json({ ...bom, items });
@@ -211,37 +227,17 @@ router.patch("/bom/:bomId", async (req, res) => {
       return;
     }
     
+    // Fetch ALL fields from bomItemsTable (complete data synchronization)
     const items = await db
-      .select({
-        id: bomItemsTable.id,
-        bomId: bomItemsTable.bomId,
-        feederNumber: bomItemsTable.feederNumber,
-        partNumber: bomItemsTable.partNumber,
-        itemName: bomItemsTable.itemName,
-        internalPartNumber: bomItemsTable.internalPartNumber,
-        make1: bomItemsTable.make1,
-        mpn1: bomItemsTable.mpn1,
-        make2: bomItemsTable.make2,
-        mpn2: bomItemsTable.mpn2,
-        make3: bomItemsTable.make3,
-        mpn3: bomItemsTable.mpn3,
-        description: bomItemsTable.description,
-        packageDescription: bomItemsTable.packageDescription,
-        requiredQty: bomItemsTable.requiredQty,
-        referenceLocation: bomItemsTable.referenceLocation,
-        location: bomItemsTable.location,
-        quantity: bomItemsTable.quantity,
-      })
+      .select()
       .from(bomItemsTable)
       .where(eq(bomItemsTable.bomId, bomId));
     const itemCount = items.length;
     
     res.json({
-      id: updatedBom.id,
-      name: updatedBom.name,
-      description: updatedBom.description,
+      ...updatedBom,
+      items,
       itemCount,
-      createdAt: updatedBom.createdAt,
     });
   } catch (err) {
     req.log.error(err);
@@ -252,15 +248,25 @@ router.patch("/bom/:bomId", async (req, res) => {
 router.delete("/bom/:bomId", async (req, res) => {
   try {
     const bomId = Number(req.params.bomId);
-    const [bom] = await db.select({ id: bomsTable.id }).from(bomsTable).where(eq(bomsTable.id, bomId));
+    const deletedBy = req.user?.username || "system";
+
+    const [bom] = await db.select().from(bomsTable).where(eq(bomsTable.id, bomId));
     if (!bom) {
       res.status(404).json({ error: "BOM not found" });
       return;
     }
 
-    await db.delete(bomItemsTable).where(eq(bomItemsTable.bomId, bomId));
-    await db.delete(bomsTable).where(eq(bomsTable.id, bomId));
-    res.status(204).send();
+    if (bom.deletedAt) {
+      res.status(400).json({ error: "BOM already in trash" });
+      return;
+    }
+
+    // Soft delete - move to trash
+    await db.update(bomsTable)
+      .set({ deletedAt: new Date(), deletedBy })
+      .where(eq(bomsTable.id, bomId));
+
+    res.json({ success: true, message: "BOM moved to trash" });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to delete BOM" });
@@ -367,10 +373,63 @@ router.post("/bom/:bomId/items", async (req, res) => {
 router.post("/bom/:bomId/import", async (req, res) => {
   try {
     const bomId = Number(req.params.bomId);
-    const csv = typeof req.body?.csv === "string" ? req.body.csv : "";
+    // Support both CSV string and JSON array of items from frontend
+    let items: any[] = [];
+    
+    if (Array.isArray(req.body)) {
+      // Frontend sends array of parsed items
+      items = req.body.filter((item: any) => item && item.feederNumber);
+    } else if (typeof req.body?.csv === "string") {
+      // Legacy: raw CSV string support
+      const csv = req.body.csv;
+      if (!csv.trim()) {
+        res.status(400).json({ error: "csv is required", imported: 0, skipped: 0, errors: ["Missing csv payload"] });
+        return;
+      }
+      const rows = parseCsvRows(csv);
+      if (rows.length < 2) {
+        res.status(400).json({ error: "CSV must contain at least header row", imported: 0, skipped: 0, errors: ["Insufficient rows"] });
+        return;
+      }
+      
+      const headerRow = rows[rows.length > 1 ? 1 : 0] ?? [];
+      const headerIndex = buildHeaderIndex(headerRow);
+      
+      if (headerIndex.feederNumber === undefined) {
+        res.status(400).json({ error: "Feeder Number column not found", imported: 0, skipped: 0, errors: ["Missing required column"] });
+        return;
+      }
+      
+      for (let i = (rows.length > 1 ? 2 : 1); i < rows.length; i++) {
+        const row = rows[i] ?? [];
+        const isBlankRow = row.every((value) => !String(value ?? "").trim());
+        if (isBlankRow) continue;
+        
+        items.push({
+          feederNumber: cell(row, headerIndex.feederNumber),
+          srNo: cell(row, headerIndex.srNo),
+          internalPartNumber: cell(row, headerIndex.internalPartNumber),
+          requiredQty: cell(row, headerIndex.requiredQty),
+          referenceLocation: cell(row, headerIndex.referenceLocation),
+          description: cell(row, headerIndex.description),
+          values: cell(row, headerIndex.values),
+          packageDescription: cell(row, headerIndex.packageDescription),
+          make1: cell(row, headerIndex.make1),
+          mpn1: cell(row, headerIndex.mpn1),
+          make2: cell(row, headerIndex.make2),
+          mpn2: cell(row, headerIndex.mpn2),
+          make3: cell(row, headerIndex.make3),
+          mpn3: cell(row, headerIndex.mpn3),
+          remarks: cell(row, headerIndex.remarks),
+        });
+      }
+    } else {
+      res.status(400).json({ error: "Invalid request format", imported: 0, skipped: 0, errors: ["Expected array or csv field"] });
+      return;
+    }
 
-    if (!csv.trim()) {
-      res.status(400).json({ error: "csv is required", imported: 0, skipped: 0, errors: ["Missing csv payload"] });
+    if (!items.length) {
+      res.status(400).json({ error: "No valid items to import", imported: 0, skipped: 0, errors: ["No items parsed"] });
       return;
     }
 
@@ -380,64 +439,25 @@ router.post("/bom/:bomId/import", async (req, res) => {
       return;
     }
 
-    const rows = parseCsvRows(csv);
-    if (rows.length < 2) {
-      res.status(400).json({ error: "CSV must contain at least two header rows", imported: 0, skipped: 0, errors: ["Insufficient rows"] });
-      return;
-    }
-
-    // Per spec: row 1 is metadata/customer info, row 2 contains column headers.
-    const headerRow = rows[1] ?? [];
-    const headerIndex = buildHeaderIndex(headerRow);
-
-    if (headerIndex.feederNumber === undefined) {
-      res.status(400).json({ error: "Feeder Number column not found", imported: 0, skipped: 0, errors: ["Missing required column: Feeder Number"] });
-      return;
-    }
-
     let imported = 0;
-    let skipped = 0;
     const errors: string[] = [];
 
-    for (let i = 2; i < rows.length; i++) {
-      const row = rows[i] ?? [];
-      const isBlankRow = row.every((value) => !String(value ?? "").trim());
-      if (isBlankRow) {
-        skipped++;
-        continue;
-      }
-
-      const feederNumber = cell(row, headerIndex.feederNumber);
-      const internalPartNumber = normalizeInternalPartNumber(cell(row, headerIndex.internalPartNumber));
-      const requiredQty = cell(row, headerIndex.requiredQty);
-      const referenceLocation = cell(row, headerIndex.referenceLocation);
-      const description = cell(row, headerIndex.description);
-      const packageDescription = cell(row, headerIndex.packageDescription);
-      const make1 = cell(row, headerIndex.make1);
-      const mpn1 = cell(row, headerIndex.mpn1);
-      const make2 = cell(row, headerIndex.make2);
-      const mpn2 = cell(row, headerIndex.mpn2);
-      const make3 = cell(row, headerIndex.make3);
-      const mpn3 = cell(row, headerIndex.mpn3);
-      const remarks = cell(row, headerIndex.remarks);
-
-      if (!feederNumber) {
-        skipped++;
-        errors.push(`Row ${i + 1}: missing feeder number`);
-        continue;
-      }
-
-      const hasMpnData = [internalPartNumber, mpn1, mpn2, mpn3].some(hasMeaningfulBomValue);
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const feederNumber = (item.feederNumber || "").trim();
+      
+      if (!feederNumber) continue;
+      
+      const internalPartNumber = normalizeInternalPartNumber((item.internalPartNumber || "").trim());
+      const hasMpnData = [internalPartNumber, item.mpn1, item.mpn2, item.mpn3].some(hasMeaningfulBomValue);
+      
       if (!hasMpnData) {
-        skipped++;
-        const warning = `Row ${i + 1}: feeder ${feederNumber} has no MPN/internal part number data`;
-        errors.push(warning);
-        req.log.warn({ bomId, row: i + 1, feederNumber }, "Skipping BOM row with feeder but no MPN/internal data before insert");
+        errors.push(`Row ${i + 1}: feeder "${feederNumber}" has no MPN/part number`);
         continue;
       }
 
-      const fallbackPart = internalPartNumber || mpn1 || mpn2 || mpn3 || description || feederNumber;
-      const parsedQuantity = Number(requiredQty);
+      const fallbackPart = internalPartNumber || item.mpn1 || item.mpn2 || item.mpn3 || item.description || feederNumber;
+      const parsedQuantity = parseInt(item.requiredQty) || 1;
 
       try {
         await db.insert(bomItemsTable).values({
@@ -445,33 +465,34 @@ router.post("/bom/:bomId/import", async (req, res) => {
           feederNumber,
           partNumber: fallbackPart,
           itemName: fallbackPart,
+          srNo: item.srNo,
           internalPartNumber,
-          requiredQty,
-          referenceLocation,
-          description,
-          packageDescription,
-          make1,
-          mpn1,
-          make2,
-          mpn2,
-          make3,
-          mpn3,
-          remarks,
-          quantity: Number.isFinite(parsedQuantity) && parsedQuantity > 0 ? parsedQuantity : 1,
-          location: referenceLocation,
+          requiredQty: item.requiredQty,
+          referenceLocation: item.referenceLocation,
+          description: item.description,
+          values: item.values,
+          packageDescription: item.packageDescription,
+          make1: item.make1,
+          mpn1: item.mpn1,
+          make2: item.make2,
+          mpn2: item.mpn2,
+          make3: item.make3,
+          mpn3: item.mpn3,
+          remarks: item.remarks,
+          quantity: parsedQuantity > 0 ? parsedQuantity : 1,
+          location: item.referenceLocation,
         });
         imported++;
       } catch (error) {
-        skipped++;
         const message = error instanceof Error ? error.message : String(error);
         errors.push(`Row ${i + 1}: ${message}`);
       }
     }
 
-    res.json({ imported, skipped, errors });
+    res.json({ imported, skipped: items.length - imported, errors });
   } catch (err) {
     req.log.error(err);
-    res.status(500).json({ error: "Failed to import BOM CSV", imported: 0, skipped: 0, errors: ["Internal server error"] });
+    res.status(500).json({ error: "Failed to import items", imported: 0, skipped: 0, errors: ["Internal server error"] });
   }
 });
 
@@ -493,5 +514,120 @@ router.delete("/bom/:bomId/items/:itemId", async (req, res) => {
     res.status(500).json({ error: "Failed to delete BOM item" });
   }
 });
+
+// Soft delete - move BOM to trash
+router.patch("/bom/:bomId/delete", async (req, res) => {
+  try {
+    const bomId = Number(req.params.bomId);
+    const deletedBy = req.user?.username || "system";
+    
+    const [bom] = await db.select().from(bomsTable).where(eq(bomsTable.id, bomId));
+    if (!bom) {
+      res.status(404).json({ error: "BOM not found" });
+      return;
+    }
+    
+    if (bom.deletedAt) {
+      res.status(400).json({ error: "BOM already in trash" });
+      return;
+    }
+    
+    await db.update(bomsTable)
+      .set({ deletedAt: new Date(), deletedBy })
+      .where(eq(bomsTable.id, bomId));
+    
+    res.json({ success: true, message: "BOM moved to trash" });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to delete BOM" });
+  }
+});
+
+// Restore from trash
+router.patch("/bom/:bomId/restore", async (req, res) => {
+  try {
+    const bomId = Number(req.params.bomId);
+    
+    const [bom] = await db.select().from(bomsTable).where(eq(bomsTable.id, bomId));
+    if (!bom) {
+      res.status(404).json({ error: "BOM not found" });
+      return;
+    }
+    
+    if (!bom.deletedAt) {
+      res.status(400).json({ error: "BOM is not in trash" });
+      return;
+    }
+    
+    await db.update(bomsTable)
+      .set({ deletedAt: null, deletedBy: null })
+      .where(eq(bomsTable.id, bomId));
+    
+    res.json({ success: true, message: "BOM restored from trash" });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to restore BOM" });
+  }
+});
+
+// Hard delete - permanently delete BOM
+router.delete("/bom/:bomId/permanent", async (req, res) => {
+  try {
+    const bomId = Number(req.params.bomId);
+
+    const [bom] = await db.select().from(bomsTable).where(eq(bomsTable.id, bomId));
+    if (!bom) {
+      res.status(404).json({ error: "BOM not found" });
+      return;
+    }
+
+    if (!bom.deletedAt) {
+      res.status(400).json({ error: "Only deleted BOMs can be permanently deleted" });
+      return;
+    }
+
+    await db.transaction(async (tx) => {
+      const subtreeIds: number[] = [];
+      const visited = new Set<number>();
+
+      const collectSubtree = async (currentBomId: number) => {
+        if (visited.has(currentBomId)) return;
+        visited.add(currentBomId);
+
+        const children = await tx
+          .select({ id: bomsTable.id })
+          .from(bomsTable)
+          .where(eq(bomsTable.parentBomId, currentBomId));
+
+        for (const child of children) {
+          await collectSubtree(child.id);
+        }
+
+        subtreeIds.push(currentBomId);
+      };
+
+      await collectSubtree(bomId);
+
+      for (const id of subtreeIds) {
+        await tx.delete(sessionsTable).where(eq(sessionsTable.bomId, id));
+        await tx.delete(changeoverSessionsTable).where(eq(changeoverSessionsTable.bomId, id));
+      }
+
+      for (const id of subtreeIds) {
+        await tx.delete(bomItemsTable).where(eq(bomItemsTable.bomId, id));
+      }
+
+      for (const id of subtreeIds) {
+        await tx.delete(bomsTable).where(eq(bomsTable.id, id));
+      }
+    });
+
+    res.status(204).send();
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ error: "Failed to permanently delete BOM" });
+  }
+});
+
 
 export default router;

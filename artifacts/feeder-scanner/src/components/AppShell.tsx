@@ -4,6 +4,7 @@ import { useAuth } from "@/context/auth-context";
 import { useSession } from "@/context/session-context";
 import { AppLogo } from "@/components/AppLogo";
 import { appConfig } from "@/lib/appConfig";
+import { formatSmtSessionCode } from "@/lib/session-code";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -15,6 +16,7 @@ export function AppShell({ children }: AppShellProps) {
   const [time, setTime] = useState<string>(new Date().toLocaleTimeString());
   const [lastActionTime, setLastActionTime] = useState<string>(new Date().toLocaleTimeString());
   const [bomLoaded, setBomLoaded] = useState(true);
+  const displaySessionId = activeSession ? formatSmtSessionCode(activeSession.startedAt, activeSession.id) : null;
 
   // Update clock every second
   useEffect(() => {
@@ -66,7 +68,7 @@ export function AppShell({ children }: AppShellProps) {
               </div>
             ) : activeSession ? (
               <div className="px-3 py-1.5 rounded-full bg-teal-100 border border-teal-300">
-                <p className="text-xs font-medium text-teal-900">Session: {activeSession.id}</p>
+                <p className="text-xs font-medium text-teal-900">Session: {displaySessionId}</p>
               </div>
             ) : (
               <div className="px-3 py-1.5 rounded-full bg-amber-100 border border-amber-300">

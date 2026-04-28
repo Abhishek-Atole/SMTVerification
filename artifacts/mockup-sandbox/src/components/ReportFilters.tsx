@@ -142,14 +142,14 @@ export const ReportFiltersComponent: React.FC<ReportFiltersProps> = ({ onFilters
               setStartDate("");
               setEndDate("");
             }}
-            className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition"
+            className="px-4 py-2 bg-white hover:bg-gray-50 text-navy border-navy border-2 rounded-lg font-medium transition-colors"
           >
             Clear Dates
           </button>
           <button
             onClick={handleApplyFilters}
             disabled={loading}
-            className="px-4 py-2 text-white bg-blue-500 rounded-md hover:bg-blue-600 disabled:opacity-50 transition"
+            className="px-4 py-2 bg-white hover:bg-gray-50 text-navy border-navy border-2 rounded-lg font-medium transition-colors disabled:opacity-50"
           >
             {loading ? "Loading..." : "Apply Filters"}
           </button>

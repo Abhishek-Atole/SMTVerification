@@ -118,8 +118,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const isExpectedUnauthenticated =
           error instanceof Response && error.status === 401;
 
+        // 401 errors are expected when user is not logged in - no need to warn
         if (!isExpectedUnauthenticated) {
-          console.warn("[AuthContext] Failed to restore session", error);
+          console.error("[AuthContext] Failed to restore session", error);
         }
 
         if (active) {

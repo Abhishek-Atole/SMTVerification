@@ -308,9 +308,9 @@ export const Reports = () => {
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold mb-4">Select Report Type</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {REPORT_TYPES.map((report) => (<button key={report.id} onClick={() => setSelectedReport(report.id)} className={`p-4 rounded-lg border-2 transition text-left ${selectedReport === report.id
-                ? "border-blue-500 bg-blue-50"
-                : "border-gray-200 bg-white hover:border-gray-300"}`}>
+            {REPORT_TYPES.map((report) => (<button key={report.id} onClick={() => setSelectedReport(report.id)} className={`p-4 rounded-lg border-2 transition text-left font-medium ${selectedReport === report.id
+                ? "bg-white text-navy border-navy"
+                : "bg-white text-navy border-navy hover:bg-gray-50"}`}>
                 <h3 className="font-semibold">{report.name}</h3>
                 <p className="text-sm text-gray-600">{report.description}</p>
               </button>))}

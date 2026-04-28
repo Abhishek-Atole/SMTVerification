@@ -327,7 +327,7 @@ export default function Dashboard() {
                         <div className="text-xs text-muted-foreground bg-muted/40 px-2 py-1 rounded line-clamp-1">
                           BOM: {session.bomName || session.bomId}
                         </div>
-                        <Button asChild className="w-full font-bold py-2 h-10 rounded-lg bg-blue-600 hover:bg-blue-700 hover:shadow-md transition-all duration-200" data-testid={`btn-resume-session-${session.id}`}>
+                        <Button asChild className="w-full font-bold py-2 h-10 rounded-lg bg-white text-navy border-navy border-2 hover:bg-gray-50 hover:shadow-md transition-all duration-200" data-testid={`btn-resume-session-${session.id}`}>
                           <Link href={`/session/${session.id}`}>▶ RESUME</Link>
                         </Button>
                       </CardContent>
@@ -364,10 +364,10 @@ export default function Dashboard() {
                             BOM: {session.bomName || "N/A"}
                           </div>
                           <div className="flex gap-2 w-full">
-                            <Button asChild className="flex-1 font-semibold py-2 h-9 text-sm rounded-lg bg-blue-600 hover:bg-blue-700" size="sm">
+                            <Button asChild className="flex-1 font-semibold py-2 h-9 text-sm rounded-lg bg-white text-navy border-navy border-2 hover:bg-gray-50" size="sm">
                               <Link href={`/session/${session.id}/report`}>📋 VIEW</Link>
                             </Button>
-                            <Button className="font-semibold py-2 h-9 text-sm rounded-lg bg-red-600 hover:bg-red-700 transition-all duration-200" size="sm" disabled={deleteSessionMutation.isPending && deletingSessionId === session.id} onClick={() => handleDeleteSession(session.id)}>
+                            <Button className="font-semibold py-2 h-9 text-sm rounded-lg bg-white text-navy border-navy border-2 hover:bg-gray-50 transition-all duration-200" size="sm" disabled={deleteSessionMutation.isPending && deletingSessionId === session.id} onClick={() => handleDeleteSession(session.id)}>
                               {deleteSessionMutation.isPending && deletingSessionId === session.id ? (
                                 <Loader2 className="w-3 h-3 animate-spin" />
                               ) : (
@@ -573,7 +573,7 @@ export default function Dashboard() {
                           <CardContent>
                             <div className="flex gap-2 w-full">
                               <Button 
-                                className="flex-1 font-semibold py-2 h-9 text-sm rounded-lg bg-green-600 hover:bg-green-700 transition-all duration-200" 
+                                className="flex-1 font-semibold py-2 h-9 text-sm rounded-lg bg-white text-navy border-navy border-2 hover:bg-gray-50 transition-all duration-200" 
                                 size="sm" 
                                 disabled={isRecovering || isDeleting}
                                 onClick={() => handleRecoverTrashItem(item.type, item.id, item.name)}
@@ -585,7 +585,7 @@ export default function Dashboard() {
                                 )}
                               </Button>
                               <Button 
-                                className="font-semibold py-2 h-9 text-sm rounded-lg bg-gray-600 hover:bg-gray-700 transition-all duration-200" 
+                                className="font-semibold py-2 h-9 text-sm rounded-lg bg-white text-navy border-navy border-2 hover:bg-gray-50 transition-all duration-200" 
                                 size="sm" 
                                 disabled={isRecovering || isDeleting}
                                 onClick={() => handlePermanentDeleteTrashItem(item.type, item.id, item.name)}
@@ -646,7 +646,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground line-clamp-2">Create & manage bill of materials</p>
-                <Button asChild className="w-full font-bold py-2 h-10 rounded-lg bg-blue-600 hover:bg-blue-700 hover:shadow-md transition-all duration-200">
+                <Button asChild className="w-full font-bold py-2 h-10 rounded-lg bg-white text-navy border-navy border-2 hover:bg-gray-50 hover:shadow-md transition-all duration-200">
                   <Link href="/bom">📦 Manage</Link>
                 </Button>
               </CardContent>
@@ -662,7 +662,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground line-clamp-2">Analytics & export data</p>
-                <Button asChild className="w-full font-bold py-2 h-10 rounded-lg bg-purple-600 hover:bg-purple-700 hover:shadow-md transition-all duration-200">
+                <Button asChild className="w-full font-bold py-2 h-10 rounded-lg bg-white text-navy border-navy border-2 hover:bg-gray-50 hover:shadow-md transition-all duration-200">
                   <Link href="/analytics">📊 View</Link>
                 </Button>
               </CardContent>
@@ -678,7 +678,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xs text-muted-foreground line-clamp-2">Recover or delete items</p>
-                <Button asChild className="w-full font-bold py-2 h-10 rounded-lg bg-red-600 hover:bg-red-700 hover:shadow-md transition-all duration-200">
+                <Button asChild className="w-full font-bold py-2 h-10 rounded-lg bg-white text-navy border-navy border-2 hover:bg-gray-50 hover:shadow-md transition-all duration-200">
                   <Link href="/trash">🗑️ Access</Link>
                 </Button>
               </CardContent>

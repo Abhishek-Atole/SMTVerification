@@ -2,22 +2,25 @@ import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatSmtSessionCode } from "@/lib/session-code";
 
 interface ModeToggleProps {
   currentMode: "AUTO" | "MANUAL";
   onModeChange: (mode: "AUTO" | "MANUAL") => void | Promise<void>;
   sessionId: string;
+  sessionStartedAt: string;
 }
 
 const MANUAL_PASSWORD = import.meta.env.VITE_MANUAL_PASSWORD;
 
 const isManualModeEnabled = Boolean(MANUAL_PASSWORD);
 
-export function ModeToggle({ currentMode, onModeChange, sessionId }: ModeToggleProps) {
+export function ModeToggle({ currentMode, onModeChange, sessionId, sessionStartedAt }: ModeToggleProps) {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [error, setError] = useState("");
   const [isChanging, setIsChanging] = useState(false);
+  const displaySessionId = formatSmtSessionCode(sessionStartedAt, sessionId);
 
   const closeModal = useCallback(() => {
     if (isChanging) {
@@ -90,7 +93,7 @@ export function ModeToggle({ currentMode, onModeChange, sessionId }: ModeToggleP
           <Card className="w-full max-w-md border-2 border-border shadow-2xl">
             <CardHeader>
               <CardTitle className="text-lg font-bold tracking-wide">Unlock Manual Mode</CardTitle>
-              <div className="text-xs text-muted-foreground font-mono truncate">Session {sessionId}</div>
+              <div className="text-xs text-muted-foreground font-mono truncate">Session {displaySessionId}</div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">

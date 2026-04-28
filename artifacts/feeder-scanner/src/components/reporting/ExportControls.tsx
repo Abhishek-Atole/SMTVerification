@@ -57,7 +57,7 @@ export const ExportControls: React.FC<ExportControlsProps> = ({
         <button
           onClick={handleExport}
           disabled={exporting || loading}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 transition"
+          className="flex items-center gap-2 px-4 py-2 bg-white text-navy border-navy border-2 rounded-md hover:bg-gray-50 disabled:bg-gray-100 transition"
         >
           {exporting ? "Exporting..." : "📥 Export"}
         </button>

@@ -8,8 +8,8 @@ import { Layout } from "@/components/layout";
 import { AppShell } from "@/components/AppShell";
 
 import Dashboard from "@/pages/dashboard";
-import Boms from "@/pages/boms";
-import BomDetail from "@/pages/bom-detail";
+import BomManager from "@/pages/bom-manager";
+import BomDetailV2 from "@/pages/bom-detail-v2";
 import BomReport from "@/pages/bom-report";
 import SessionNew from "@/pages/session-new";
 import SessionActive from "@/pages/session-active";
@@ -20,7 +20,6 @@ import Analytics from "@/pages/analytics";
 import TrashBin from "@/pages/trash-bin";
 import RealTimeDashboard from "@/pages/real-time-dashboard";
 import Reports from "@/pages/reports";
-import VerificationPage from "@/pages/verification";
 import SplicingPage from "@/pages/splicing";
 import { AuthProvider, useAuth } from "@/context/auth-context";
 import { SessionProvider } from "@/context/session-context";
@@ -73,13 +72,7 @@ function Router() {
       "/bom": "BOM",
       "/session/new": "New Session",
       "/session": "Session",
-      "/verification": "Verification",
-      "/splicing": "Splicing",
-      "/sessions": "Session History",
-      "/analytics": "Analytics",
-      "/reports": "Reports",
-      "/trash": "Trash",
-      "/real-time-dashboard": "Real-Time Dashboard",
+        "/verification": "New Session",
     };
 
     const exact = routeLabelMap[location];
@@ -108,10 +101,10 @@ function Router() {
                   {() => <ProtectedRoute component={Dashboard} allowedRoles={["engineer", "operator", "qa"]} />}
                 </Route>
                 <Route path="/bom">
-                  {() => <ProtectedRoute component={Boms} allowedRoles={["engineer"]} />}
+                  {() => <ProtectedRoute component={BomManager} allowedRoles={["engineer"]} />}
                 </Route>
                 <Route path="/bom/:id">
-                  {() => <ProtectedRoute component={BomDetail} allowedRoles={["engineer"]} />}
+                  {() => <ProtectedRoute component={BomDetailV2} allowedRoles={["engineer"]} />}
                 </Route>
                 <Route path="/bom/:id/report">
                   {() => <ProtectedRoute component={BomReport} allowedRoles={["engineer"]} />}
@@ -120,7 +113,7 @@ function Router() {
                   {() => <ProtectedRoute component={SessionNew} allowedRoles={["engineer", "operator"]} />}
                 </Route>
                 <Route path="/verification">
-                  {() => <ProtectedRoute component={VerificationPage} allowedRoles={["engineer", "operator", "qa"]} />}
+                  {() => <ProtectedRoute component={SessionNew} allowedRoles={["engineer", "operator"]} />}
                 </Route>
                 <Route path="/splicing">
                   {() => <ProtectedRoute component={SplicingPage} allowedRoles={["engineer", "operator", "qa"]} />}

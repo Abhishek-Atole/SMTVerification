@@ -157,7 +157,7 @@ function NavBar({ user, onLogout }) {
             <p className="text-sm font-medium text-gray-900">{user?.name}</p>
             <p className="text-xs text-gray-500">{user?.email}</p>
           </div>
-          <button onClick={onLogout} className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg font-medium transition-colors">
+          <button onClick={onLogout} className="px-4 py-2 bg-white hover:bg-gray-50 text-navy border-navy border-2 rounded-lg font-medium transition-colors">
             Logout
           </button>
         </div>

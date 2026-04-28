@@ -18,8 +18,6 @@ export function Layout({ children }: { children: ReactNode }) {
   const NAV_ITEMS = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["engineer", "qa", "operator"] },
     { href: "/session/new", label: "New Session", icon: PlusSquare, roles: ["engineer", "operator"] },
-    { href: "/verification", label: "Verification", icon: ScanLine, roles: ["engineer", "qa", "operator"] },
-    { href: "/splicing", label: "Splicing", icon: Scissors, roles: ["engineer", "qa", "operator"] },
     { href: "/bom", label: "BOM Manager", icon: Boxes, roles: ["engineer"] },
     { href: "/analytics", label: "Analytics", icon: BarChart3, roles: ["engineer", "qa"] },
     { href: "/reports", label: "Reports", icon: FileText, roles: ["engineer", "qa"] },

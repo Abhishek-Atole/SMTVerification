@@ -329,6 +329,7 @@ export default function Boms() {
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
               <TableHead className="font-mono">NAME</TableHead>
+              <TableHead className="font-mono">REV TAG</TableHead>
               <TableHead className="font-mono">DESCRIPTION</TableHead>
               <TableHead className="font-mono text-right">ITEMS</TableHead>
               <TableHead className="font-mono text-right">CREATED</TableHead>
@@ -338,15 +339,32 @@ export default function Boms() {
           <TableBody>
             {filteredBoms.length === 0 ? (
               <TableRow className="border-border hover:bg-transparent">
-                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground font-mono">
+                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground font-mono">
                   {bomsArray.length === 0 ? "No BOMs configured." : "No BOMs match your search."}
                 </TableCell>
               </TableRow>
             ) : (
               filteredBoms.map(bom => (
                 <Fragment key={bom.id}>
-                  <TableRow className="border-border hover:bg-secondary/50">
-                    <TableCell className="font-mono font-medium">{bom.name}</TableCell>
+                  <TableRow className="border-border hover:bg-orange-50/70 transition-colors">
+                    <TableCell className="font-mono font-semibold text-navy">
+                      <div className="flex flex-col gap-1">
+                        <span className="truncate">{bom.name}</span>
+                        <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">BOM Card</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center rounded-full bg-orange-100 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-orange-700 border border-orange-200">
+                          {bom.revisionLabel || "Original"}
+                        </span>
+                        {bom.isLatest && (
+                          <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-green-700 border border-green-200">
+                            Latest
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-sm max-w-xs truncate">{bom.description}</TableCell>
                     <TableCell className="font-mono text-right">{bom.itemCount}</TableCell>
                     <TableCell className="font-mono text-right text-sm text-muted-foreground">
@@ -404,8 +422,8 @@ export default function Boms() {
                   </TableRow>
 
                   {expandedBomId === bom.id && (
-                    <TableRow className="border-border bg-secondary/20 hover:bg-secondary/20">
-                      <TableCell colSpan={5} className="py-3">
+                    <TableRow className="border-border bg-orange-50/40 hover:bg-orange-50/40">
+                      <TableCell colSpan={6} className="py-3">
                         {loadingItemsBomId === bom.id ? (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground font-mono">
                             <Loader2 className="w-4 h-4 animate-spin" />

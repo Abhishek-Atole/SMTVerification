@@ -335,10 +335,10 @@ export const Reports: React.FC = () => {
               <button
                 key={report.id}
                 onClick={() => setSelectedReport(report.id)}
-                className={`p-4 rounded-lg border-2 transition text-left ${
+                className={`p-4 rounded-lg border-2 transition text-left font-medium ${
                   selectedReport === report.id
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 bg-white hover:border-gray-300"
+                    ? "bg-white text-navy border-navy"
+                    : "bg-white text-navy border-navy hover:bg-gray-50"
                 }`}
               >
                 <h3 className="font-semibold">{report.name}</h3>

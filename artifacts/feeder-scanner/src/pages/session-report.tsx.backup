@@ -17,22 +17,53 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { AppLogo } from "@/components/AppLogo";
 import { appConfig } from "@/lib/appConfig";
-import { formatSmtSessionCode } from "@/lib/session-code";
 
 const C_NAVY = "#0F172A";
+const C_WHITE = "#FFFFFF";
+const C_CYAN = "#06B6D4";
+const C_GREY = "#334155";
+const C_GREY_LIGHT = "#E2E8F0";
+const C_BLUE_LIGHT = "#DBEAFE";
+const C_GREEN = "#15803D";
+const C_RED = "#B91C1C";
+const C_AMBER = "#B45309";
 
-function formatDateOnly(value: unknown): string {
-  if (!value) return "N/A";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return "N/A";
-  return format(date, "dd-MM-yyyy");
+const FALLBACK_DASH = "-";
+
+function toRgb(hex: string): [number, number, number] {
+  const h = hex.replace("#", "");
+  return [
+    Number.parseInt(h.slice(0, 2), 16),
+    Number.parseInt(h.slice(2, 4), 16),
+    Number.parseInt(h.slice(4, 6), 16),
+  ];
 }
 
-function formatTimeOnly(value: unknown): string {
-  if (!value) return "N/A";
+function dash(value: unknown): string {
+  const str = String(value ?? "").trim();
+  return str.length > 0 ? str : "\u2014";
+}
+
+function formatDateTime(value: unknown): string {
+  if (!value) return "\u2014";
   const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return "N/A";
-  return format(date, "HH:mm:ss");
+  if (Number.isNaN(date.getTime())) return "\u2014";
+  return format(date, "dd-MM-yyyy HH:mm");
+}
+
+function getColWidths(pageWidth: number): Record<number, { cellWidth: number }> {
+  const margin = 10;
+  const usable = pageWidth - margin * 2;
+  // Normalized ratios that sum to 1.0 for 10 columns
+  const ratios = [0.09, 0.08, 0.14, 0.10, 0.14, 0.12, 0.09, 0.07, 0.07, 0.10];
+  const total = ratios.reduce((a, b) => a + b, 0);
+  
+  return ratios.reduce((acc, ratio, index) => {
+    const normalized = ratio / total;
+    const width = usable * normalized;
+    acc[index] = { cellWidth: Math.round(width * 100) / 100 };
+    return acc;
+  }, {} as Record<number, { cellWidth: number }>);
 }
 
 export default function SessionReport() {
@@ -94,14 +125,6 @@ export default function SessionReport() {
       mpn3: row.mpn3,
     }));
   }
-
-  const panelValue = session.panelName || session.panelId || "\u2014";
-  const shiftValue = session.shiftName || session.shift || "\u2014";
-  const dateValue = session.shiftDate || session.startedAt || session.startTime;
-  const customerValue = session.customerName || session.customer || "\u2014";
-  const startTimeValue = session.startTime || session.startedAt;
-  const endTimeValue = session.endTime || session.completedAt;
-  const displaySessionCode = formatSmtSessionCode(session.startedAt || session.startTime || session.shiftDate, session.id);
 
   const bestScanMap = new Map<string, typeof session.scans[0]>();
   for (const scan of session.scans) {
@@ -213,65 +236,112 @@ export default function SessionReport() {
       const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
-      const verificationMode = String(session.verificationMode ?? "AUTO").toUpperCase() === "AUTO" ? "AUTO" : "MANUAL";
       const margin = 12;
+      const changeoverId = String(session.id ?? "").padStart(8, "0");
+      const verificationMode = String(session.verificationMode ?? "AUTO").toUpperCase() === "AUTO" ? "AUTO" : "MANUAL";
+
+      const companyName = "UCAL FUEL SYSTEMS LIMITED";
+      const reportTitle = "SMT CHANGEOVER VERIFICATION REPORT";
+
+      // ===== SECTION 1: HEADER =====
       let currentY = margin;
-      const changeoverId = displaySessionCode;
-      const drawInfoGrid = () => {
-        const infoCards = [
+      
+      // Title
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(...toRgb(C_NAVY));
+      doc.text(reportTitle, pageWidth / 2, currentY + 4, { align: "center" });
+      
+      currentY += 7;
+      doc.setFontSize(10);
+      doc.text(companyName, pageWidth / 2, currentY, { align: "center" });
+
+      // Right side: Changeover ID box
+      const idBoxX = pageWidth - margin - 50;
+      const idBoxY = margin + 1;
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(...toRgb(C_GREY_LIGHT));
+      doc.setLineWidth(0.5);
+      doc.rect(idBoxX, idBoxY, 45, 15, "FD");
+      
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...toRgb(C_GREY));
+      doc.text("Changeover ID", idBoxX + 22.5, idBoxY + 2, { align: "center" });
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(...toRgb(C_NAVY));
+      doc.text(changeoverId, idBoxX + 22.5, idBoxY + 7, { align: "center" });
+      
+      const modeColor = verificationMode === "AUTO" ? "#15803D" : "#B45309";
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...toRgb(modeColor));
+      doc.text(`Mode: ${verificationMode} — STRICT`, idBoxX + 22.5, idBoxY + 12.5, { align: "center" });
+
+      // Separator line
+      currentY = margin + 19;
+      doc.setDrawColor(...toRgb(C_NAVY));
+      doc.setLineWidth(1);
+      doc.line(margin, currentY, pageWidth - margin, currentY);
+
+      // ===== SECTION 2: SESSION INFO GRID (3 rows × 5 columns) =====
+      currentY += 3;
+      
+      const sessionInfoData = [
+        [
           { label: "Changeover ID", value: changeoverId },
-          { label: "Panel", value: panelValue },
-          { label: "Shift", value: shiftValue },
-          { label: "Date", value: formatDateOnly(dateValue) },
+          { label: "Panel ID", value: dash(session.panelId) },
+          { label: "Shift", value: dash(session.shift) },
+          { label: "Date", value: session.startedAt ? format(new Date(session.startedAt), "dd-MMM-yyyy") : "—" },
           { label: "Duration", value: `${summary.durationMinutes || 0} min` },
-          { label: "Customer", value: customerValue },
+        ],
+        [
+          { label: "Customer", value: dash(session.customer) },
           { label: "Machine", value: dash(session.machine) },
           { label: "Operator", value: dash(session.operatorName) },
-          { label: "Start Time", value: formatTimeOnly(startTimeValue) },
+          { label: "Start Time", value: session.startedAt ? format(new Date(session.startedAt), "HH:mm:ss") : "—" },
           { label: "BOM Version", value: dash(session.bomVersion) },
+        ],
+        [
           { label: "PCB / Part No.", value: dash(session.pcbPartNumber) },
           { label: "Line", value: dash(session.line) },
           { label: "QA Engineer", value: dash(session.qaName) },
-          { label: "End Time", value: formatTimeOnly(endTimeValue) },
+          { label: "End Time", value: session.completedAt ? format(new Date(session.completedAt), "HH:mm:ss") : "—" },
           { label: "Supervisor", value: dash(session.supervisorName) },
-        ];
+        ],
+      ];
 
-        const cols = 3;
-        const gap = 4;
-        const cardW = (pageWidth - margin * 2 - gap * (cols - 1)) / cols;
-        const cardH = 16;
-        const rows = Math.ceil(infoCards.length / cols);
-
-        infoCards.forEach((cell, index) => {
-          const col = index % cols;
-          const row = Math.floor(index / cols);
-          const x = margin + col * (cardW + gap);
-          const yy = currentY + row * (cardH + gap);
-
+      const colWidth = (pageWidth - margin * 2) / 5;
+      sessionInfoData.forEach((row) => {
+        let colX = margin;
+        row.forEach((cell) => {
           doc.setDrawColor(...toRgb(C_GREY_LIGHT));
-          doc.setLineWidth(0.35);
-          doc.rect(x, yy, cardW, cardH);
-
+          doc.setLineWidth(0.2);
+          doc.rect(colX, currentY, colWidth, 11);
+          
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(6.8);
+          doc.setFontSize(7);
           doc.setTextColor(...toRgb(C_GREY));
-          doc.text(cell.label, x + 3, yy + 2.8, { maxWidth: cardW - 6 });
-
+          doc.text(cell.label, colX + 1, currentY + 2);
+          
           doc.setFont("helvetica", "bold");
-          doc.setFontSize(8.2);
+          doc.setFontSize(8);
           doc.setTextColor(...toRgb(C_NAVY));
-          doc.text(cell.value, x + 3, yy + 9.2, { maxWidth: cardW - 6, ellipsis: true });
+          doc.text(cell.value, colX + 1, currentY + 6.5);
+          
+          colX += colWidth;
         });
-
-        currentY += rows * cardH + (rows - 1) * gap + 10;
-      };
+        currentY += 11;
+      });
 
       // ===== SECTION 3: COMPONENT VERIFICATION TABLE =====
       currentY += 2;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.setTextColor(...toRgb(C_NAVY));
-      doc.text("Component Verification Details", margin, currentY);
+      doc.text("■ Component Verification Details", margin, currentY);
       currentY += 3;
 
       const verifyTableData = tableRows.map((row: any) => {
@@ -421,7 +491,7 @@ export default function SessionReport() {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.setTextColor(...toRgb(C_NAVY));
-      doc.text("Verification Summary", margin, currentY);
+      doc.text("■ Verification Summary", margin, currentY);
       currentY += 4;
 
       const passCount = tableRows.filter((r: any) => String(r.scanStatus ?? "").toLowerCase() === "verified").length;
@@ -478,7 +548,7 @@ export default function SessionReport() {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
       doc.setTextColor(...toRgb(C_NAVY));
-      doc.text("Approvals & Sign-off", margin, currentY);
+      doc.text("■ Approvals & Sign-off", margin, currentY);
       currentY += 5;
 
       const approvalsData = [
@@ -521,7 +591,7 @@ export default function SessionReport() {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(7);
       doc.setTextColor(...toRgb(C_GREY));
-      const footerText = `SMTVerification System — Electronically Generated Report | Changeover: ${changeoverId} | Date: ${format(new Date(session.startedAt || new Date()), "dd-MMM-yyyy")} | BOM: ${dash(session.bomVersion)} | Mode: ${verificationMode} — STRICT | This document is valid without physical signature when QR-verified.`;
+      const footerText = `SMTVerification System — Electronically Generated Report | Changeover: CHG${changeoverId} | Date: ${format(new Date(session.startedAt || new Date()), "dd-MMM-yyyy")} | BOM: ${dash(session.bomVersion)} | Mode: ${verificationMode} — STRICT | This document is valid without physical signature when QR-verified.`;
       doc.text(footerText, margin, footerY, { maxWidth: pageWidth - margin * 2 });
 
       doc.save(`smt-changeover-report-${session.id}.pdf`);
@@ -575,7 +645,7 @@ export default function SessionReport() {
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-mono font-bold tracking-tight">{appConfig.systemTitle}</h1>
             <h2 className="text-lg sm:text-xl lg:text-2xl font-mono font-bold tracking-tight text-primary">REPORT</h2>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1 font-mono truncate">
-              {displaySessionCode} | {session.companyName}
+              {String(session.id)} | {session.companyName}
             </p>
           </div>
         </div>
@@ -644,32 +714,21 @@ export default function SessionReport() {
             {session.status}
           </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
-          {[
-            { label: "ID", value: displaySessionCode },
-            { label: "Panel", value: panelValue },
-            { label: "Shift", value: shiftValue },
-            { label: "Date", value: session.shiftDate || formatDateOnly(session.startedAt || session.startTime) },
-            { label: "Machine", value: "ML-001" },
-            { label: "Line", value: "PRIMARY" },
-            { label: "Customer", value: customerValue },
-            { label: "Operator", value: session.operatorName },
-            { label: "Supervisor", value: session.supervisorName },
-            { label: "BOM", value: session.bomName || (isFreeScanMode ? "FREE SCAN" : "N/A") },
-            { label: "Start", value: session.startTime ? formatTimeOnly(session.startTime) : (session.startedAt ? formatTimeOnly(session.startedAt) : "N/A") },
-            { label: "End", value: session.endTime ? formatTimeOnly(session.endTime) : (session.completedAt ? formatTimeOnly(session.completedAt) : "N/A") },
-            { label: "Duration", value: `${summary.durationMinutes || 0}m` },
-            { label: "QA", value: session.qaName || "N/A" },
-          ].map(({ label, value }) => (
-            <div key={label} className="min-w-0 rounded-sm border border-border bg-background px-3 py-2.5 shadow-sm">
-              <div className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-wide truncate">
-                {label}
-              </div>
-              <div className={`mt-1 text-xs sm:text-sm font-bold truncate ${label === "BOM" && isFreeScanMode ? "text-amber-600" : "text-foreground"}`}>
-                {value}
-              </div>
-            </div>
-          ))}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-2 sm:gap-x-4 lg:gap-x-8 gap-y-2 sm:gap-y-3 text-xs">
+          <div><span className="font-bold text-muted-foreground">ID:</span> <span className="truncate">{String(session.id)}</span></div>
+          <div><span className="font-bold text-muted-foreground">Panel:</span> <span className="truncate">{session.panelName}</span></div>
+          <div><span className="font-bold text-muted-foreground">Shift:</span> <span className="truncate">{session.shiftName}</span></div>
+          <div><span className="font-bold text-muted-foreground">Date:</span> <span className="truncate">{session.shiftDate}</span></div>
+          <div><span className="font-bold text-muted-foreground">Machine:</span> <span className="truncate">ML-001</span></div>
+          <div><span className="font-bold text-muted-foreground">Line:</span> <span className="truncate">PRIMARY</span></div>
+          <div><span className="font-bold text-muted-foreground">Cust:</span> <span className="truncate">{session.customerName || "N/A"}</span></div>
+          <div><span className="font-bold text-muted-foreground">Op:</span> <span className="truncate">{session.operatorName}</span></div>
+          <div><span className="font-bold text-muted-foreground">Sup:</span> <span className="truncate">{session.supervisorName}</span></div>
+          <div><span className="font-bold text-muted-foreground">BOM:</span> <span className={`truncate ${isFreeScanMode ? "text-amber-600 font-bold" : ""}`}>{session.bomName || (isFreeScanMode ? "FREE SCAN" : "N/A")}</span></div>
+          <div><span className="font-bold text-muted-foreground">Start:</span> <span className="truncate">{session.startTime ? format(new Date(session.startTime), "HH:mm:ss") : "N/A"}</span></div>
+          <div><span className="font-bold text-muted-foreground">End:</span> <span className="truncate">{session.endTime ? format(new Date(session.endTime), "HH:mm:ss") : "N/A"}</span></div>
+          <div><span className="font-bold text-muted-foreground">Dur:</span> <span className="truncate">{summary.durationMinutes || 0}m</span></div>
+          <div><span className="font-bold text-muted-foreground">QA:</span> <span className="truncate">{session.qaName || "N/A"}</span></div>
         </div>
       </div>
 
@@ -709,8 +768,8 @@ export default function SessionReport() {
                   </>
                 ) : (
                   <>
-                    {["Feeder No.", "Ref / Des", "Component", "Value", "Pkg Size", "Internal PN", "Expected MPN", "Scanned Spool", "Matched Field", "Lot Code", "Status", "Time"]
-                      .map((h) => (
+                    {["Feeder No.", "Ref / Des", "Component", "Expected MPN", showSpoolBarcode ? "Scanned Spool" : null, "Matched As", "Lot", "Status", "Time"]
+                      .filter(Boolean).map((h) => (
                       <TableHead key={h} className="font-mono font-bold text-white text-center border-r border-blue-800 last:border-0 text-xs sm:text-sm p-2 sm:p-3">{h}</TableHead>
                     ))}
                   </>
@@ -743,25 +802,19 @@ export default function SessionReport() {
                         ? "FAIL"
                         : "MISSING";
                     const matchedAs = buildMatchedAs(scan);
-                    
-                    // Color code scanned spool based on match type
-                    let scannedSpoolClass = "text-red-600 font-semibold"; // no match
-                    if (matchedAs.includes("MPN 1")) {
-                      scannedSpoolClass = "text-green-600 font-semibold";
-                    } else if (matchedAs.includes("MPN 2") || matchedAs.includes("MPN 3")) {
-                      scannedSpoolClass = "text-amber-600 font-semibold";
-                    }
+                    const scannedSpoolClass = matchedAs.includes("MPN 1") || matchedAs.includes("Primary")
+                      ? "text-green-600 font-semibold"
+                      : matchedAs.includes("MPN 2") || matchedAs.includes("MPN 3")
+                        ? "text-amber-600 font-semibold"
+                        : "text-red-600 font-semibold";
 
                     return (
                       <TableRow key={`${scan.feederNumber}-${idx}`} className={idx % 2 === 1 ? "bg-blue-50 dark:bg-blue-950/20" : ""}>
                         <TableCell className="font-mono font-bold text-center text-xs sm:text-sm p-2 sm:p-3">{scan.feederNumber}</TableCell>
                         <TableCell className="font-mono text-center text-xs p-2 sm:p-3">{scan.referenceLocation ?? "\u2014"}</TableCell>
                         <TableCell className="font-mono text-center text-xs sm:text-sm p-2 sm:p-3">{scan.description ?? "\u2014"}</TableCell>
-                        <TableCell className="font-mono text-center text-xs sm:text-sm p-2 sm:p-3">{scan.value ?? "\u2014"}</TableCell>
-                        <TableCell className="font-mono text-center text-xs sm:text-sm p-2 sm:p-3">{scan.packageType ?? "\u2014"}</TableCell>
-                        <TableCell className="font-mono text-center text-xs p-2 sm:p-3">{scan.internalPartNumber ?? "\u2014"}</TableCell>
                         <TableCell className="font-mono text-blue-600 text-xs sm:text-sm p-2 sm:p-3 truncate">{buildExpectedMpn(scan)}</TableCell>
-                        <TableCell className={`font-mono text-center text-xs p-2 sm:p-3 truncate ${scannedSpoolClass}`}>{scan.scannedValue ?? "\u2014"}{matchedAs.includes("MPN 2") || matchedAs.includes("MPN 3") ? " ▲" : ""}</TableCell>
+                        {showSpoolBarcode && <TableCell className={`font-mono text-center text-xs p-2 sm:p-3 truncate ${scannedSpoolClass}`}>{scan.scannedValue ?? "\u2014"}</TableCell>}
                         <TableCell className="font-mono text-center text-xs p-2 sm:p-3">{matchedAs}</TableCell>
                         <TableCell className="font-mono text-center text-muted-foreground text-xs p-2 sm:p-3">{scan.lotCode ?? "\u2014"}</TableCell>
                         <TableCell className={`font-mono font-black text-center text-xs sm:text-sm p-2 sm:p-3 ${status === "PASS" ? "text-success" : status === "FAIL" ? "text-destructive" : "text-amber-600"}`}>{status}</TableCell>
@@ -1047,15 +1100,15 @@ export default function SessionReport() {
       {/* Approvals */}
       <div className="bg-card border border-border rounded-sm p-6 font-mono">
         <div className="font-bold text-sm mb-6">Approvals :</div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 text-center">
+        <div className="grid grid-cols-3 gap-8 text-center">
           {[
             { title: "Supervisor", name: session.supervisorName },
             { title: "OPERATOR", name: session.operatorName },
             { title: "QA", name: session.qaName || "N/A" },
           ].map(({ title, name }) => (
-            <div key={title} className="flex flex-col items-center gap-2 min-w-0 rounded-sm border border-border bg-background px-4 py-5">
-              <span className={`font-bold text-sm tracking-wide ${title === "OPERATOR" ? "text-foreground uppercase" : "text-muted-foreground"}`}>{title}</span>
-              <span className="font-bold text-sm sm:text-base truncate w-full">{name}</span>
+            <div key={title} className="flex flex-col items-center gap-2">
+              <span className={`font-bold text-sm ${title === "OPERATOR" ? "text-foreground uppercase" : "text-muted-foreground"}`}>{title}</span>
+              <span className="font-bold">{name}</span>
               <span className="text-xs text-muted-foreground">Name & Date</span>
               <div className="w-full border-b-2 border-dashed border-border mt-4" />
             </div>

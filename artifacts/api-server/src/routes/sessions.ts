@@ -70,6 +70,15 @@ function buildExpectedMpnValues(bomRow: BomRowForMPN): string[] {
   return Array.from(new Set(values));
 }
 
+function formatMatchedAs(matchedField: string | null | undefined, matchedMake: string | null | undefined): string {
+  const field = String(matchedField ?? "").toLowerCase();
+  if (field === "mpn1") return `MPN 1${matchedMake ? ` (${matchedMake})` : ""}`;
+  if (field === "mpn2") return `MPN 2${matchedMake ? ` (${matchedMake})` : ""}`;
+  if (field === "mpn3") return `MPN 3${matchedMake ? ` (${matchedMake})` : ""}`;
+  if (field === "internalpartnumber") return "Internal P/N";
+  return "—";
+}
+
 type SessionReportPayload = {
   session: {
     id: number;
@@ -130,7 +139,9 @@ async function buildSessionReportPayload(sessionId: number): Promise<SessionRepo
         fs.scanned_at AS "scannedAt",
         bi.reference_location AS "referenceLocation",
         bi.description,
+        bi.values AS "value",
         bi.package_description AS "packageDescription",
+        bi.package_description AS "packageType",
         bi.internal_part_number AS "internalPartNumber",
         bi.make_1 AS make1,
         bi.mpn_1 AS mpn1,
@@ -155,7 +166,24 @@ async function buildSessionReportPayload(sessionId: number): Promise<SessionRepo
 
   if (joinedRows.length > 0) {
     const first = joinedRows[0];
-    const scansOnly = joinedRows.filter((r) => r.feederNumber != null);
+    const scansOnly = joinedRows
+      .filter((r) => r.feederNumber != null)
+      .map((r) => {
+        const normalizedScanStatus = String(r.scanStatus ?? "").toLowerCase();
+        const status = normalizedScanStatus === "verified"
+          ? "verified"
+          : normalizedScanStatus === "failed"
+            ? "failed"
+            : "missing";
+
+        return {
+          ...r,
+          status,
+          matchedAs: formatMatchedAs(r.matchedField, r.matchedMake),
+          verificationMode: r.verificationMode,
+          packageType: r.packageType ?? r.packageDescription ?? null,
+        };
+      });
     const passCount = scansOnly.filter((r) => String(r.scanStatus).toLowerCase() === "verified").length;
     const failCount = scansOnly.filter((r) => String(r.scanStatus).toLowerCase() === "failed").length;
     const warnCount = scansOnly.filter((r) => String(r.scanStatus).toLowerCase() === "duplicate").length;
@@ -271,7 +299,7 @@ async function buildSessionReportPayload(sessionId: number): Promise<SessionRepo
       id: sessionId,
       startedAt: session.startTime,
       completedAt: session.endTime,
-      status: session.status,
+      status: feederScan?.status === "ok" ? "verified" : feederScan?.status === "reject" ? "failed" : "missing",
       verificationMode: session.verificationMode ?? "manual",
       panelId: session.panelName,
       shift: session.shiftName,
@@ -287,12 +315,15 @@ async function buildSessionReportPayload(sessionId: number): Promise<SessionRepo
       scannedValue: scannedVal,
       matchedField: matchedField,
       matchedMake: matchedMake,
+      matchedAs: formatMatchedAs(matchedField, matchedMake),
       lotCode: feederScan?.lotNumber ?? null,
       scanStatus: feederScan?.status === "ok" ? "verified" : feederScan?.status === "reject" ? "failed" : null,
       scannedAt: feederScan?.scannedAt ?? null,
       referenceLocation: item.referenceLocation,
       description: item.description ?? item.itemName,
+      value: item.values ?? item.value ?? null,
       packageDescription: item.packageDescription,
+      packageType: item.packageDescription,
       internalPartNumber: item.internalPartNumber,
       make1: item.make1,
       mpn1: item.mpn1,
@@ -1169,9 +1200,17 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
 
     const { session: reportSession, summary, reportRows } = reportPayload;
 
+    const safeText = (value: any): string => String(value ?? "").trim() || "—";
+
     const rows = reportRows.map((row: any, rowIndex: number) => {
-      const scanStatus = String(row.scanStatus ?? "").toLowerCase();
-      const status = scanStatus === "verified" ? "verified" : scanStatus === "failed" ? "failed" : scanStatus === "duplicate" ? "duplicate" : "missing";
+      const scanStatus = String(row.scanStatus ?? row.status ?? "").toLowerCase();
+      const status = scanStatus === "verified" || scanStatus === "pass" || scanStatus === "ok"
+        ? "verified"
+        : scanStatus === "failed" || scanStatus === "reject"
+          ? "failed"
+          : scanStatus === "duplicate"
+            ? "duplicate"
+            : "missing";
 
       const matchedField = String(row.matchedField ?? "").toLowerCase();
       const matchedLabel = matchedField === "mpn1"
@@ -1184,17 +1223,12 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
               ? "Internal P/N"
               : "—";
 
-      // Format expected MPNs with ALL valid options separated by " / "
-      const expectedMpns = [
-        row.internalPartNumber,
-        row.mpn1,
-        row.mpn2,
-        row.mpn3,
-      ]
+      const expectedParts = [row.mpn1, row.mpn2, row.mpn3]
         .filter((val: any) => val && String(val).trim())
-        .join(" / ") || "—";
+        .map((val: any) => String(val).trim());
+      const expectedMpns = expectedParts.length > 0 ? expectedParts.join("\n") : "—";
 
-      const scannedValue = row.scannedValue || "—";
+      const scannedValue = safeText(row.scannedValue);
       const isAlternate = matchedField === "mpn2" || matchedField === "mpn3";
       const isFailed = status === "failed";
 
@@ -1206,18 +1240,18 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
 
       return {
         rowIndex,
-        feederNumber: row.feederNumber,
-        refDes: row.referenceLocation ?? "—",
-        component: row.description ?? "—",
-        value: row.description ?? "—",
-        pkgSize: row.packageDescription ?? "—",
-        internalPartNo: row.internalPartNumber ?? "—",
+        feederNumber: safeText(row.feederNumber),
+        refDes: safeText(row.referenceLocation),
+        component: safeText(row.description),
+        value: safeText(row.value),
+        pkgSize: safeText(row.packageDescription ?? row.packageType),
+        internalPartNo: safeText(row.internalPartNumber),
         expectedMpns,
         scannedText,
         matchedLabel,
-        lotCode: row.lotCode ?? "—",
+        lotCode: safeText(row.lotCode),
         modeText: String(row.verificationMode ?? reportSession.verificationMode ?? "AUTO").toUpperCase() === "MANUAL" ? "MAN" : "AUTO",
-        status: status.toUpperCase(),
+        status: status === "verified" ? "PASS" : status === "failed" ? "FAIL" : status === "duplicate" ? "DUP" : "MISS",
         scannedAt: row.scannedAt ? new Date(row.scannedAt).toLocaleTimeString("en-US", { hour12: true }) : "—",
         isAlternate,
         isFailed,
@@ -1259,12 +1293,15 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
     const C = {
       NAVY: "#1A3557",
       BLUE: "#1D4ED8",
+      BLUE_DARK: "#1E40AF",
       BLUE_LIGHT: "#EFF6FF",
       WHITE: "#FFFFFF",
       BLACK: "#0F172A",
       GREY_DARK: "#374151",
       GREY_MID: "#6B7280",
+      GREY_MUTED: "#9CA3AF",
       GREY_LIGHT: "#F3F4F6",
+      CARD_LIGHT: "#F8FAFC",
       GREY_BORDER: "#D1D5DB",
       GREEN: "#15803D",
       GREEN_BG: "#F0FDF4",
@@ -1287,152 +1324,172 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="SMT_Report_${reportSessionId}.pdf"`);
 
-    const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 18 });
+    const doc = new PDFDocument({
+      size: "A4",
+      layout: "landscape",
+      margins: { top: 20, bottom: 20, left: 20, right: 20 },
+    });
     doc.pipe(res);
 
     const pageW = doc.page.width;
     const pageH = doc.page.height;
-    const left = 18;
-    const right = pageW - 18;
-    let y = 18;
+    const left = 20;
+    const right = pageW - 20;
+    const usable = right - left;
+    let y = 20;
+
+    const getModeLabel = () => `Mode: ${String(reportSession.verificationMode ?? baseSession?.verificationMode ?? "AUTO").toUpperCase()} — STRICT`;
 
     const drawHeader = () => {
-      const bandH = 40;
+      const bandH = 56;
       doc.fillColor(C.NAVY).rect(left, y, right - left, bandH).fill();
 
       const logoPath = getLogoPath();
       if (logoPath) {
-        doc.image(logoPath, left + 8, y + 7, { fit: [45, 16] });
+        doc.image(logoPath, left + 6, y + 8, { fit: [64, 32] });
       } else {
-        doc.fillColor(C.WHITE).fontSize(20).font("Helvetica-Bold").text(CO_SHORT, left + 8, y + 7, { width: 60 });
-        doc.fillColor("#CBD5E1").fontSize(7).font("Helvetica").text(CO_NAME, left + 8, y + 27, { width: 70 });
+        doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(18).text(CO_SHORT, left + 8, y + 10, { width: 64 });
+        doc.fillColor("#CBD5E1").font("Helvetica").fontSize(6.5).text(CO_NAME, left + 8, y + 31, { width: 76 });
       }
 
-      doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(14).text(`${SYS_TITLE.toUpperCase()} REPORT`, left + 70, y + 9, {
-        width: 150,
+      const centerX = left + 80;
+      const centerW = usable - 240;
+      doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(14).text("SMT CHANGEOVER VERIFICATION REPORT", centerX, y + 9, {
+        width: centerW,
         align: "center",
       });
-      doc.fillColor("#BFDBFE").font("Helvetica").fontSize(8).text(CO_NAME, left + 70, y + 24, { width: 150, align: "center" });
-      doc.fillColor("#93C5FD").fontSize(7).text("SMT Manufacturing Quality System", left + 70, y + 34, { width: 150, align: "center" });
+      doc.fillColor("#BFDBFE").font("Helvetica").fontSize(8).text(CO_NAME, centerX, y + 27, {
+        width: centerW,
+        align: "center",
+      });
+      doc.fillColor("#93C5FD").font("Helvetica").fontSize(7).text("SMT Manufacturing Quality System", centerX, y + 38, {
+        width: centerW,
+        align: "center",
+      });
 
-      const modeText = String(reportSession.verificationMode ?? baseSession?.verificationMode ?? "AUTO").toUpperCase() === "MANUAL"
-        ? "MANUAL — STRICT"
-        : "AUTO — STRICT";
-      const modeColor = modeText.includes("MANUAL") ? "#FCD34D" : "#86EFAC";
+      const statusBoxX = right - 160;
+      const statusBoxW = 154;
+      doc.lineWidth(1).strokeColor(C.WHITE).roundedRect(statusBoxX, y + 8, statusBoxW, 38, 6).stroke();
+      doc.fillColor("#93C5FD").font("Helvetica").fontSize(6.5).text("Changeover ID", statusBoxX + 6, y + 10, {
+        width: statusBoxW - 12,
+        align: "right",
+      });
+      const idFontSize = doc.font("Helvetica-Bold").fontSize(10).widthOfString(reportSessionId) > statusBoxW - 14 ? 9 : 10;
+      doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(idFontSize).text(reportSessionId, statusBoxX + 6, y + 18, {
+        width: statusBoxW - 12,
+        align: "right",
+      });
+      doc.fillColor("#FCA5A5").font("Helvetica").fontSize(6.5).text(getModeLabel(), statusBoxX + 6, y + 31, {
+        width: statusBoxW - 12,
+        align: "right",
+      });
 
-      doc.fillColor("#93C5FD").fontSize(8).font("Helvetica").text("Changeover ID", right - 110, y + 8, { width: 100, align: "right" });
-      doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(11).text(reportSessionId, right - 110, y + 18, { width: 100, align: "right", ellipsis: false });
-      doc.fillColor(modeColor).font("Helvetica-Bold").fontSize(7.5).text(modeText, right - 110, y + 31, { width: 100, align: "right" });
-
-      doc.fillColor(C.BLUE_ACCENT).rect(left, y + bandH + 2, right - left, 3).fill();
-      y += bandH + 8;
+      doc.fillColor(C.NAVY).rect(left, y + bandH + 2, right - left, 3).fill();
+      y += bandH + 10;
     };
 
     const drawInfoGrid = () => {
-      const rowH = 17;
-      const totalCols = 10;
-      const colW = (right - left) / totalCols;
-
-      const kvRows = [
-        [
-          "Changeover ID",
-          reportSessionId,
-          "Panel ID",
-          String(reportSession.panelId ?? baseSession?.panelName ?? "—"),
-          "Shift",
-          String(reportSession.shift ?? baseSession?.shiftName ?? "—"),
-          "Date",
-          reportSession.startedAt ? new Date(reportSession.startedAt).toLocaleDateString("en-GB") : String(baseSession?.shiftDate ?? "—"),
-          "Duration",
-          `${Number(reportSession.durationMinutes ?? summary.durationMinutes ?? 0)} min`,
-        ],
-        [
-          "Customer",
-          String(reportSession.customer ?? baseSession?.customerName ?? "—"),
-          "Machine",
-          String(reportSession.machine ?? baseSession?.machineName ?? "—"),
-          "Operator",
-          String(reportSession.operatorName ?? baseSession?.operatorName ?? "—"),
-          "Start Time",
-          reportSession.startedAt ? new Date(reportSession.startedAt).toLocaleTimeString("en-US", { hour12: true }) : "—",
-          "BOM Version",
-          String(reportSession.bomVersion ?? bom?.name ?? "—"),
-        ],
-        [
-          "PCB / Part No.",
-          String(reportSession.pcbPartNumber ?? reportSession.panelId ?? baseSession?.panelName ?? "—"),
-          "Line",
-          String(reportSession.line ?? "—"),
-          "QA Engineer",
-          String(reportSession.qaName ?? baseSession?.qaName ?? "—"),
-          "End Time",
-          reportSession.completedAt ? new Date(reportSession.completedAt).toLocaleTimeString("en-US", { hour12: true }) : "In Progress",
-          "Supervisor",
-          String(reportSession.supervisorName ?? baseSession?.supervisorName ?? "—"),
-        ],
+      const infoCards = [
+        { label: "Changeover ID", value: reportSessionId },
+        { label: "Panel ID", value: String(reportSession.panelId ?? baseSession?.panelName ?? "—") },
+        { label: "Shift", value: String(reportSession.shift ?? baseSession?.shiftName ?? "—") },
+        { label: "Date", value: reportSession.startedAt ? new Date(reportSession.startedAt).toLocaleDateString("en-GB") : String(baseSession?.shiftDate ?? "—") },
+        { label: "Duration", value: `${Number(reportSession.durationMinutes ?? summary.durationMinutes ?? 0)} min` },
+        { label: "Customer", value: String(reportSession.customer ?? baseSession?.customerName ?? "—") },
+        { label: "Machine", value: String(reportSession.machine ?? baseSession?.machineName ?? "—") },
+        { label: "Operator", value: String(reportSession.operatorName ?? baseSession?.operatorName ?? "—") },
+        { label: "Start Time", value: reportSession.startedAt ? new Date(reportSession.startedAt).toLocaleTimeString("en-US", { hour12: true }) : "—" },
+        { label: "BOM Version", value: String(reportSession.bomVersion ?? bom?.name ?? "—") },
+        { label: "PCB / Part No.", value: String(reportSession.pcbPartNumber ?? reportSession.panelId ?? baseSession?.panelName ?? "—") },
+        { label: "Line", value: String(reportSession.line ?? "—") },
+        { label: "QA Engineer", value: String(reportSession.qaName ?? baseSession?.qaName ?? "—") },
+        { label: "End Time", value: reportSession.completedAt ? new Date(reportSession.completedAt).toLocaleTimeString("en-US", { hour12: true }) : "In Progress" },
+        { label: "Supervisor", value: String(reportSession.supervisorName ?? baseSession?.supervisorName ?? "—") },
       ];
 
-      doc.fillColor(C.GREY_LIGHT).rect(left, y, right - left, rowH * 3).fill();
-      doc.lineWidth(1).strokeColor(C.NAVY).rect(left, y, right - left, rowH * 3).stroke();
-      doc.lineWidth(0.4).strokeColor(C.GREY_BORDER);
+      const cols = 5;
+      const rows = 3;
+      const gap = 3;
+      const cardW = (usable - gap * (cols - 1)) / cols;
+      const cardH = 22;
 
-      for (let r = 1; r < 3; r += 1) doc.moveTo(left, y + rowH * r).lineTo(right, y + rowH * r).stroke();
-      for (let c = 1; c < totalCols; c += 1) doc.moveTo(left + colW * c, y).lineTo(left + colW * c, y + rowH * 3).stroke();
+      for (let index = 0; index < infoCards.length; index += 1) {
+        const card = infoCards[index];
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        const x = left + col * (cardW + gap);
+        const yy = y + row * (cardH + gap);
 
-      kvRows.forEach((row, rowIdx) => {
-        for (let i = 0; i < row.length; i += 2) {
-          const x = left + (i * colW) / 2 + 3;
-          const yy = y + rowIdx * rowH + 4;
-          doc.fillColor(C.GREY_MID).font("Helvetica-Bold").fontSize(6.5).text(String(row[i]), x, yy, { width: colW - 4 });
-          doc.fillColor(C.BLACK).font("Helvetica-Bold").fontSize(7.5).text(String(row[i + 1] || "—"), x, yy + 7, { width: colW - 4 });
-        }
-      });
+        doc.fillColor(C.CARD_LIGHT).rect(x, yy, cardW, cardH).fill();
+        doc.lineWidth(0.45).strokeColor(C.GREY_BORDER).rect(x, yy, cardW, cardH).stroke();
 
-      y += rowH * 3 + 8;
+        doc.fillColor(C.GREY_MID).font("Helvetica-Bold").fontSize(6).text(card.label.toUpperCase(), x + 3, yy + 3, { width: cardW - 6 });
+        const valueText = safeText(card.value);
+        const valueFontSize = doc.font("Helvetica-Bold").fontSize(8).widthOfString(valueText) > cardW - 6 ? 7 : 8;
+        doc.fillColor(C.BLACK).font("Helvetica-Bold").fontSize(valueFontSize).text(valueText, x + 3, yy + 10, {
+          width: cardW - 6,
+          align: "left",
+        });
+      }
+
+      y += rows * cardH + (rows - 1) * gap + 10;
     };
 
-    const colPct = [0.055, 0.05, 0.09, 0.07, 0.038, 0.09, 0.125, 0.125, 0.088, 0.075, 0.042, 0.045, 0.047];
+    const colWeights = [5.5, 4.5, 9.5, 8.0, 4.0, 9.0, 14.0, 13.0, 9.0, 7.5, 3.5, 4.5, 7.5];
     const getColWidths = (usableWidth: number) => {
-      const sum = colPct.reduce((a, b) => a + b, 0);
-      return colPct.map((p) => usableWidth * (p / sum));
+      const sum = colWeights.reduce((a, b) => a + b, 0);
+      return colWeights.map((p) => usableWidth * (p / sum));
+    };
+
+    const widths = getColWidths(usable);
+    const drawTableHeaderRow = () => {
+      const headers = [
+        "Feeder No.",
+        "Ref/Des",
+        "Description",
+        "Value",
+        "Pkg",
+        "Internal P/N",
+        "Expected MPN",
+        "Scanned Spool",
+        "Matched As",
+        "Lot Code",
+        "Mode",
+        "Status",
+        "Time",
+      ];
+      const headerHeight = 22;
+      let x = left;
+
+      headers.forEach((header, index) => {
+        const bg = index === 6 ? C.BLUE : index === 7 ? C.BLUE_DARK : C.NAVY;
+        doc.fillColor(bg).rect(x, y, widths[index], headerHeight).fill();
+        doc.strokeColor(C.GREY_BORDER).lineWidth(0.45).rect(x, y, widths[index], headerHeight).stroke();
+        doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(6.5).text(header, x + 2, y + 3, {
+          width: widths[index] - 4,
+          align: "center",
+        });
+        x += widths[index];
+      });
+
+      y += headerHeight;
+    };
+
+    const drawTableSectionHeader = () => {
+      doc.fillColor(C.NAVY).font("Helvetica-Bold").fontSize(10).text("Component Verification Details", left, y);
+      y += 16;
+      drawTableHeaderRow();
+    };
+
+    const measureCellHeight = (text: string, width: number, fontSize: number, bold = false) => {
+      doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(fontSize);
+      return doc.heightOfString(text, { width: width - 4 });
     };
 
     const drawTable = () => {
-      doc.fillColor(C.NAVY).font("Helvetica-Bold").fontSize(10).text("▌ Component Verification Details", left, y);
-      y += 16;
-
-      const headers = ["Feeder\nNo.", "Ref /\nDes", "Component\nDescription", "Value", "Pkg\nSize", "Internal\nPart No.", "Expected MPN\n(BOM — valid options)", "Scanned Spool\n(Actual Scan)", "Matched\nAs", "Lot\nCode", "Mode", "Status", "Time"];
-      const widths = getColWidths(right - left);
-      const rowH = 18;
-
-      const drawHeaderRow = () => {
-        let x = left;
-        headers.forEach((h, idx) => {
-          const bg = idx === 6 ? C.BLUE : idx === 7 ? C.BLUE_ACCENT : C.NAVY;
-          doc.fillColor(bg).rect(x, y, widths[idx], rowH).fill();
-          doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(6.5).text(h, x + 2, y + 4, {
-            width: widths[idx] - 4,
-            align: "center",
-          });
-          doc.strokeColor(C.GREY_BORDER).lineWidth(0.4).rect(x, y, widths[idx], rowH).stroke();
-          x += widths[idx];
-        });
-        y += rowH;
-      };
-
-      drawHeaderRow();
+      drawTableSectionHeader();
 
       rows.forEach((row) => {
-        if (y + 14 > pageH - 65) {
-          doc.addPage({ size: "A4", layout: "landscape", margin: 18 });
-          y = 18;
-          drawHeader();
-          drawInfoGrid();
-          drawHeaderRow();
-        }
-
-        const rowBg = row.isFailed ? C.RED_BG : row.isAlternate ? C.AMBER_BG : row.rowIndex % 2 === 0 ? C.WHITE : C.BLUE_LIGHT;
-        let x = left;
         const values = [
           row.feederNumber,
           row.refDes,
@@ -1449,28 +1506,47 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
           row.scannedAt,
         ];
 
+        const rowHeights = values.map((value, index) => {
+          const text = String(value ?? "—");
+          if (index === 6) return measureCellHeight(text, widths[index], 6, false);
+          if (index === 7) return measureCellHeight(text, widths[index], 6.5, true);
+          return measureCellHeight(text, widths[index], 7, index === 10 || index === 11);
+        });
+        const rowH = Math.max(16, Math.ceil(Math.max(...rowHeights) + 6));
+
+        if (y + rowH > pageH - 80) {
+          doc.addPage({ size: "A4", layout: "landscape", margins: { top: 20, bottom: 20, left: 20, right: 20 } });
+          y = 20;
+          drawHeader();
+          drawInfoGrid();
+          drawTableSectionHeader();
+        }
+
+        const rowBg = row.isFailed ? C.RED_BG : row.isAlternate ? C.AMBER_BG : row.rowIndex % 2 === 0 ? C.WHITE : C.BLUE_LIGHT;
+        let x = left;
+
         values.forEach((value, idx) => {
           const cellBg = idx === 6 ? C.BLUE_LIGHT : rowBg;
-          doc.fillColor(cellBg).rect(x, y, widths[idx], 14).fill();
+          doc.fillColor(cellBg).rect(x, y, widths[idx], rowH).fill();
 
           const textColor = idx === 7
             ? row.isFailed ? C.RED : row.isAlternate ? C.AMBER : C.GREEN
             : idx === 6 ? C.BLUE
-              : idx === 11 ? (row.status === "VERIFIED" ? C.GREEN : row.status === "FAILED" ? C.RED : C.AMBER)
+              : idx === 11 ? (row.status === "PASS" ? C.GREEN : row.status === "FAIL" ? C.RED : C.AMBER)
                 : idx === 10 ? (row.modeText === "MAN" ? C.AMBER : C.BLUE)
                   : C.BLACK;
 
-          doc.fillColor(textColor).font(idx === 7 || idx === 10 || idx === 11 ? "Helvetica-Bold" : "Helvetica").fontSize(6.5).text(String(value), x + 2, y + 4, {
+          const cellFontSize = idx === 6 ? 6 : idx === 7 ? 6.5 : 7;
+          doc.fillColor(textColor).font(idx === 7 || idx === 10 || idx === 11 ? "Helvetica-Bold" : "Helvetica").fontSize(cellFontSize).text(String(value ?? "—"), x + 2, y + 3, {
             width: widths[idx] - 4,
             align: idx >= 10 ? "center" : "left",
-            ellipsis: true,
           });
 
-          doc.strokeColor(C.GREY_BORDER).lineWidth(0.4).rect(x, y, widths[idx], 14).stroke();
+          doc.strokeColor(C.GREY_BORDER).lineWidth(0.4).rect(x, y, widths[idx], rowH).stroke();
           x += widths[idx];
         });
 
-        y += 14;
+        y += rowH;
       });
 
       y += 7;
@@ -1478,63 +1554,65 @@ router.get("/sessions/:sessionId/report/pdf", async (req, res) => {
         "Legend — Scanned Spool: Green = Primary MPN matched | Amber ▲ = Alternate MPN (BOM-approved) | Red ✗ = Mismatch (rejected) | Blue = Expected BOM options | AUTO STRICT: exact match only",
         left,
         y,
-        { width: right - left },
+        { width: usable },
       );
       y += 11;
     };
 
     const drawSummary = () => {
-      doc.fillColor(C.NAVY).font("Helvetica-Bold").fontSize(10).text("▌ Verification Summary", left, y);
+      doc.fillColor(C.NAVY).font("Helvetica-Bold").fontSize(10).text("Verification Summary", left, y);
       y += 13;
       const labels = ["Total Feeders", "PASS", "FAIL", "WARNING", "Pass Rate", "Status"];
       const values = [String(totalFeeders), String(passCount), String(failCount), String(warnCount), `${passRate}%`, passRate === 100 ? "COMPLETE" : "FAILED"];
       const colors = [C.NAVY, C.GREEN, C.RED, C.AMBER, C.BLUE, passRate === 100 ? C.GREEN : C.RED];
-      const cellW = (right - left) / 6;
+      const cellW = usable / 6;
+      const cellH = 30;
 
       for (let i = 0; i < 6; i += 1) {
         const x = left + i * cellW;
-        doc.fillColor(colors[i]).rect(x, y, cellW, 26).fill();
-        doc.fillColor(C.WHITE).font("Helvetica").fontSize(7).text(labels[i], x, y + 4, { width: cellW, align: "center" });
-        doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(15).text(values[i], x, y + 12, { width: cellW, align: "center" });
+        doc.fillColor(colors[i]).rect(x, y, cellW, cellH).fill();
+        doc.fillColor(C.WHITE).font("Helvetica").fontSize(7).text(labels[i], x, y + 5, { width: cellW, align: "center" });
+        doc.fillColor(C.WHITE).font("Helvetica-Bold").fontSize(16).text(values[i], x, y + 13, { width: cellW, align: "center" });
       }
 
-      doc.strokeColor(C.NAVY).lineWidth(1).rect(left, y, right - left, 26).stroke();
-      y += 34;
+      doc.strokeColor(C.NAVY).lineWidth(1).rect(left, y, usable, cellH).stroke();
+      y += 38;
     };
 
     const drawApprovals = () => {
-      doc.fillColor(C.NAVY).font("Helvetica-Bold").fontSize(9).text("▌ Approvals & Sign-off", left, y);
+      doc.fillColor(C.NAVY).font("Helvetica-Bold").fontSize(9).text("Approvals & Sign-off", left, y);
       y += 12;
       const roles = ["SUPERVISOR", "OPERATOR", "QA ENGINEER", "PRODUCTION MANAGER"];
       const names = [
         reportSession.supervisorName ?? baseSession?.supervisorName ?? "",
         reportSession.operatorName ?? baseSession?.operatorName ?? "",
         reportSession.qaName ?? baseSession?.qaName ?? "",
-        "",
+        "________________________",
       ];
-      const cellW = (right - left) / 4;
+      const cellW = usable / 4;
+      const cellH = 46;
 
       for (let i = 0; i < 4; i += 1) {
         const x = left + i * cellW;
-        doc.fillColor(C.GREY_LIGHT).rect(x, y, cellW, 36).fill();
-        doc.strokeColor(C.GREY_BORDER).lineWidth(0.5).rect(x, y, cellW, 36).stroke();
-        doc.fillColor(C.GREY_MID).font("Helvetica-Bold").fontSize(7.5).text(roles[i], x, y + 4, { width: cellW, align: "center" });
-        doc.strokeColor(C.GREY_BORDER).lineWidth(0.75).moveTo(x + cellW * 0.15, y + 22).lineTo(x + cellW * 0.85, y + 22).stroke();
-        doc.fillColor(C.BLACK).font("Helvetica-Bold").fontSize(8.5).text(names[i] || "", x, y + 24, { width: cellW, align: "center" });
-        doc.fillColor(C.GREY_MID).font("Helvetica").fontSize(6.5).text("Name / Signature / Date", x, y + 31, { width: cellW, align: "center" });
+        doc.fillColor(C.CARD_LIGHT).rect(x, y, cellW, cellH).fill();
+        doc.strokeColor(C.GREY_BORDER).lineWidth(0.5).rect(x, y, cellW, cellH).stroke();
+        doc.fillColor(C.GREY_DARK).font("Helvetica-Bold").fontSize(8).text(roles[i], x, y + 5, { width: cellW, align: "center" });
+        doc.strokeColor(C.GREY_BORDER).lineWidth(0.75).moveTo(x + cellW * 0.15, y + 28).lineTo(x + cellW * 0.85, y + 28).stroke();
+        doc.fillColor(C.BLACK).font("Helvetica-Bold").fontSize(9).text(names[i] || "—", x, y + 30, { width: cellW, align: "center" });
+        doc.fillColor(C.GREY_MUTED).font("Helvetica").fontSize(6).text("Name / Signature / Date", x, y + 39, { width: cellW, align: "center" });
       }
 
-      y += 44;
+      y += 54;
     };
 
     const drawFooter = () => {
       const now = new Date();
-      doc.strokeColor(C.GREY_BORDER).lineWidth(0.5).moveTo(left, pageH - 22).lineTo(right, pageH - 22).stroke();
-      doc.fillColor(C.GREY_MID).font("Helvetica").fontSize(5.5).text(
+      doc.strokeColor(C.GREY_BORDER).lineWidth(0.5).moveTo(left, pageH - 24).lineTo(right, pageH - 24).stroke();
+      doc.fillColor(C.GREY_MUTED).font("Helvetica").fontSize(5.5).text(
         `${SYS_TITLE} — Electronically Generated Report | Changeover: ${reportSessionId} | Date: ${now.toLocaleDateString("en-GB")} | BOM Version: ${reportSession.bomVersion ?? bom?.name ?? "—"} | Mode: ${String(reportSession.verificationMode ?? baseSession?.verificationMode ?? "AUTO").toUpperCase()} — STRICT | This document is valid without physical signature when QR-verified.`,
         left,
         pageH - 18,
-        { width: right - left, align: "center" },
+        { width: usable, align: "center" },
       );
     };
 

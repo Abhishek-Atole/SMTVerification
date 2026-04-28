@@ -1496,6 +1496,7 @@ export default function SessionActive() {
                   currentMode={verificationMode}
                   onModeChange={handleVerificationModeChange}
                   sessionId={String(sessionId)}
+                  sessionStartedAt={session.startedAt}
                 />
               </div>
 
@@ -1541,7 +1542,7 @@ export default function SessionActive() {
                   )}
 
                   <Button
-                    className="w-full bg-green-500 hover:bg-green-600 font-bold text-white"
+                    className="w-full bg-white text-navy border-navy border-2 hover:bg-gray-50 font-bold"
                     onClick={() => handleVerifyPendingScan()}
                     disabled={verificationLocked || verificationInProgress}
                   >

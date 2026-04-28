@@ -8,6 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { format } from "date-fns";
 import { Loader2, Search, ChevronRight } from "lucide-react";
 import { AppLogo } from "@/components/AppLogo";
+import { formatSmtSessionCode } from "@/lib/session-code";
 
 export default function SessionHistory() {
   const { data: sessions, isLoading } = useListSessions();
@@ -22,26 +23,28 @@ export default function SessionHistory() {
 
   // Defensive check: ensure sessions is an array
   const sessionsArray = Array.isArray(sessions) ? sessions : [];
-  
+  const sessionsWithChangeover = sessionsArray.map((session) => ({
+    ...session,
+    changeoverCode: formatSmtSessionCode(session.startTime, session.id),
+  }));
+
   // Get unique shifts and operators for filters
-  const availableShifts = [...new Set(sessionsArray.map(s => s.shiftName).filter(Boolean))].sort();
-  const availableOperators = [...new Set(sessionsArray.map(s => s.operatorName).filter(Boolean))].sort();
+  const availableShifts = [...new Set(sessionsWithChangeover.map((s) => s.shiftName).filter(Boolean))].sort();
+  const availableOperators = [...new Set(sessionsWithChangeover.map((s) => s.operatorName).filter(Boolean))].sort();
   
-  const filtered = sessionsArray
-    .filter(s => {
-      // Text search filter
-      const matchesSearch = 
-        s.panelName.toLowerCase().includes(search.toLowerCase()) ||
-        s.operatorName.toLowerCase().includes(search.toLowerCase()) ||
-        (s.bomName && s.bomName.toLowerCase().includes(search.toLowerCase()));
+  const filtered = sessionsWithChangeover
+    .filter((s) => {
+      const searchValue = search.toLowerCase();
+      const matchesSearch =
+        s.changeoverCode.toLowerCase().includes(searchValue) ||
+        s.panelName.toLowerCase().includes(searchValue) ||
+        s.operatorName.toLowerCase().includes(searchValue) ||
+        s.companyName.toLowerCase().includes(searchValue) ||
+        (s.customerName && s.customerName.toLowerCase().includes(searchValue)) ||
+        (s.bomName && s.bomName.toLowerCase().includes(searchValue));
       
-      // Date filter
       const matchesDate = !selectedDate || s.shiftDate === selectedDate;
-      
-      // Shift filter
       const matchesShift = !selectedShift || s.shiftName === selectedShift;
-      
-      // Operator filter
       const matchesOperator = !selectedOperator || s.operatorName === selectedOperator;
       
       return matchesSearch && matchesDate && matchesShift && matchesOperator;
@@ -149,9 +152,11 @@ export default function SessionHistory() {
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="font-mono text-xs sm:text-sm">DATE / TIME</TableHead>
+                  <TableHead className="font-mono text-xs sm:text-sm">CHANGEOVER ID</TableHead>
                   <TableHead className="font-mono text-xs sm:text-sm">PANEL</TableHead>
                   <TableHead className="font-mono text-xs sm:text-sm">BOM</TableHead>
                   <TableHead className="font-mono text-xs sm:text-sm">OPERATOR</TableHead>
+                  <TableHead className="font-mono text-xs sm:text-sm">SHIFT</TableHead>
                   <TableHead className="font-mono text-xs sm:text-sm">STATUS</TableHead>
                   <TableHead className="font-mono text-xs sm:text-sm text-right">ACTION</TableHead>
                 </TableRow>
@@ -159,16 +164,21 @@ export default function SessionHistory() {
               <TableBody>
                 {completedSessions.length === 0 ? (
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground font-mono text-sm">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground font-mono text-sm">
                       No completed sessions found.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  completedSessions.map(session => (
+                  completedSessions.map((session) => (
                     <TableRow key={session.id} className="border-border hover:bg-secondary/50 transition-colors">
                       <TableCell className="font-mono text-xs sm:text-sm">
                         <div>{format(new Date(session.startTime), "MMM dd, yyyy")}</div>
                         <div className="text-muted-foreground text-xs">{format(new Date(session.startTime), "HH:mm")}</div>
+                      </TableCell>
+                      <TableCell className="font-mono font-mono text-xs sm:text-sm text-foreground">
+                        <span className="inline-block px-2 py-1 rounded-sm bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100 text-[11px] tracking-wide font-semibold">
+                          {session.changeoverCode}
+                        </span>
                       </TableCell>
                       <TableCell className="font-mono font-bold text-primary text-sm">{session.panelName}</TableCell>
                       <TableCell className="font-mono text-xs sm:text-sm">
@@ -179,6 +189,7 @@ export default function SessionHistory() {
                         )}
                       </TableCell>
                       <TableCell className="font-mono text-xs sm:text-sm">{session.operatorName}</TableCell>
+                      <TableCell className="font-mono text-xs sm:text-sm">{session.shiftName || session.shiftDate}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 text-xs font-mono font-bold rounded-sm uppercase tracking-wider inline-block ${
                           session.status === 'completed' 
@@ -211,9 +222,11 @@ export default function SessionHistory() {
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="font-mono text-xs sm:text-sm">DATE / TIME</TableHead>
+                  <TableHead className="font-mono text-xs sm:text-sm">CHANGEOVER ID</TableHead>
                   <TableHead className="font-mono text-xs sm:text-sm">PANEL</TableHead>
                   <TableHead className="font-mono text-xs sm:text-sm">BOM</TableHead>
                   <TableHead className="font-mono text-xs sm:text-sm">OPERATOR</TableHead>
+                  <TableHead className="font-mono text-xs sm:text-sm">SHIFT</TableHead>
                   <TableHead className="font-mono text-xs sm:text-sm">STATUS</TableHead>
                   <TableHead className="font-mono text-xs sm:text-sm text-right">ACTION</TableHead>
                 </TableRow>
@@ -221,16 +234,21 @@ export default function SessionHistory() {
               <TableBody>
                 {pendingSessions.length === 0 ? (
                   <TableRow className="border-border hover:bg-transparent">
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground font-mono text-sm">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground font-mono text-sm">
                       No pending sessions found.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  pendingSessions.map(session => (
+                  pendingSessions.map((session) => (
                     <TableRow key={session.id} className="border-border hover:bg-secondary/50 transition-colors">
                       <TableCell className="font-mono text-xs sm:text-sm">
                         <div>{format(new Date(session.startTime), "MMM dd, yyyy")}</div>
                         <div className="text-muted-foreground text-xs">{format(new Date(session.startTime), "HH:mm")}</div>
+                      </TableCell>
+                      <TableCell className="font-mono font-mono text-xs sm:text-sm text-foreground">
+                        <span className="inline-block px-2 py-1 rounded-sm bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-100 text-[11px] tracking-wide font-semibold">
+                          {session.changeoverCode}
+                        </span>
                       </TableCell>
                       <TableCell className="font-mono font-bold text-primary text-sm">{session.panelName}</TableCell>
                       <TableCell className="font-mono text-xs sm:text-sm">
@@ -241,6 +259,7 @@ export default function SessionHistory() {
                         )}
                       </TableCell>
                       <TableCell className="font-mono text-xs sm:text-sm">{session.operatorName}</TableCell>
+                      <TableCell className="font-mono text-xs sm:text-sm">{session.shiftName || session.shiftDate}</TableCell>
                       <TableCell>
                         <span className="px-2 py-1 text-xs font-mono font-bold rounded-sm uppercase tracking-wider inline-block bg-primary/20 text-primary">
                           {session.status}
@@ -290,6 +309,28 @@ export default function SessionHistory() {
                       }`}>
                         {session.status}
                       </span>
+                    </div>
+
+                    <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <div className="text-xs text-muted-foreground font-mono">CHANGEOVER ID</div>
+                        <div className="font-mono font-semibold text-sm truncate">{session.changeoverCode}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-muted-foreground font-mono">SHIFT</div>
+                        <div className="font-mono text-sm truncate">{session.shiftName || session.shiftDate}</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div>
+                        <div className="text-xs text-muted-foreground font-mono">COMPANY</div>
+                        <div className="font-mono text-xs truncate">{session.companyName || "—"}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground font-mono">CUSTOMER</div>
+                        <div className="font-mono text-xs truncate">{session.customerName || "—"}</div>
+                      </div>
                     </div>
 
                     {/* Panel Name - Prominent */}
@@ -360,6 +401,28 @@ export default function SessionHistory() {
                       <span className="px-2 py-1 text-xs font-mono font-bold rounded-sm uppercase tracking-wider whitespace-nowrap flex-shrink-0 bg-primary/20 text-primary">
                         {session.status}
                       </span>
+                    </div>
+
+                    <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <div className="text-xs text-muted-foreground font-mono">CHANGEOVER ID</div>
+                        <div className="font-mono font-semibold text-sm truncate">{session.changeoverCode}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-muted-foreground font-mono">SHIFT</div>
+                        <div className="font-mono text-sm truncate">{session.shiftName || session.shiftDate}</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div>
+                        <div className="text-xs text-muted-foreground font-mono">COMPANY</div>
+                        <div className="font-mono text-xs truncate">{session.companyName || "—"}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground font-mono">CUSTOMER</div>
+                        <div className="font-mono text-xs truncate">{session.customerName || "—"}</div>
+                      </div>
                     </div>
 
                     {/* Panel Name - Prominent */}

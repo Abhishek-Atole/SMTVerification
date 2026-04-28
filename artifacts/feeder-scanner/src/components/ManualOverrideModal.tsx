@@ -203,7 +203,7 @@ export const ManualOverrideModal: React.FC<ManualOverrideModalProps> = ({
             <Button
               onClick={handleApprove}
               disabled={!password || loading}
-              className="flex-1 bg-blue-600 hover:bg-blue-700"
+              className="flex-1 bg-white text-navy border-navy border-2 hover:bg-gray-50"
             >
               {loading ? "Verifying..." : "Approve Override"}
             </Button>

@@ -7,8 +7,14 @@ export const bomsTable = pgTable("boms", {
   name: text("name").notNull(),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  deletedAt: timestamp("deleted_at"), // Soft delete timestamp
-  deletedBy: text("deleted_by"), // User who deleted
+  createdBy: text("created_by"),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: text("deleted_by"),
+  // Revision tracking
+  revisionLabel: text("revision_label"), // e.g., 'Rev A', 'Rev B'
+  parentBomId: integer("parent_bom_id"),
+  revisionNotes: text("revision_notes"),
+  isLatest: boolean("is_latest").default(true),
 });
 
 export const bomItemsTable = pgTable(
@@ -18,17 +24,29 @@ export const bomItemsTable = pgTable(
     bomId: integer("bom_id")
       .notNull()
       .references(() => bomsTable.id, { onDelete: "cascade" }),
-    // CSV Fields - Required
+    // Core 12 fields
     srNo: text("sr_no"),
     feederNumber: text("feeder_number").notNull(),
-    itemName: text("item_name").notNull(),
+    ucalIntPn: text("ucal_int_pn"),
+    quantity: numeric("quantity", { precision: 12, scale: 2 }).notNull(),
+    reference: text("reference"),
+    description: text("description"),
+    package: text("package"),
+    make1: text("make_1"),
+    mpn1: text("mpn_1"),
+    make2: text("make_2"),
+    mpn2: text("mpn_2"),
+    make3: text("make_3"),
+    mpn3: text("mpn_3"),
+    remarks: text("remarks"),
+    action: text("action"),
+    // Legacy
+    itemName: text("item_name"),
     rdeplyPartNo: text("rdeply_part_no"),
     referenceDesignator: text("reference_designator"),
     requiredQty: text("required_qty"),
     referenceLocation: text("reference_location"),
     internalPartNumber: text("internal_part_number"),
-    
-    // CSV Fields - Optional
     values: text("values"),
     packageDescription: text("package_description"),
     dnpParts: boolean("dnp_parts").default(false),
@@ -38,36 +56,27 @@ export const bomItemsTable = pgTable(
     partNo2: text("part_no_2"),
     supplier3: text("supplier_3"),
     partNo3: text("part_no_3"),
-    make1: text("make_1"),
-    mpn1: text("mpn_1"),
-    make2: text("make_2"),
-    mpn2: text("mpn_2"),
-    make3: text("make_3"),
-    mpn3: text("mpn_3"),
-    remarks: text("remarks"),
-    
-    // Legacy Fields (for backward compatibility)
-    partNumber: text("part_number").notNull(),
+    partNumber: text("part_number"),
     feederId: integer("feeder_id"),
     componentId: integer("component_id"),
     mpn: text("mpn"),
     manufacturer: text("manufacturer"),
     packageSize: text("package_size"),
     expectedMpn: text("expected_mpn"),
-    description: text("description"),
     location: text("location"),
-    quantity: integer("quantity").notNull().default(1),
     leadTime: integer("lead_time"),
     cost: numeric("cost", { precision: 10, scale: 4 }),
     isAlternate: boolean("is_alternate").default(false),
     parentItemId: integer("parent_item_id") as any,
-    internalId: text("internal_id"), // NEW: Internal ID for verification (optional)
+    internalId: text("internal_id"),
+    isDeleted: boolean("is_deleted").default(false),
     deletedAt: timestamp("deleted_at"),
     deletedBy: text("deleted_by"),
   } as any,
   (table: any) => ({
     bomIdIdx: index("bom_items_bom_id_idx").on(table.bomId),
     parentItemIdx: index("bom_items_parent_item_id_idx").on(table.parentItemId),
+    isDeletedIdx: index("bom_items_is_deleted_idx").on(table.isDeleted),
   })
 ) as any;
 
