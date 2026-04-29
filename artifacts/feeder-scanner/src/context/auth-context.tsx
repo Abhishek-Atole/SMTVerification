@@ -9,6 +9,7 @@ interface User {
 }
 
 interface AuthSessionResponse {
+  authenticated?: boolean;
   userId: number;
   username: string;
   role: Role;
@@ -23,6 +24,10 @@ function normalizeAuthSession(payload: unknown): AuthSessionResponse | null {
     ? (payload as { user: Record<string, unknown> }).user
     : (payload as Record<string, unknown>);
 
+  if (source.authenticated === false) {
+    return null;
+  }
+
   const userId = Number(source.userId ?? source.id);
   const username = typeof source.username === "string" ? source.username : "";
   const role = source.role;
@@ -32,6 +37,7 @@ function normalizeAuthSession(payload: unknown): AuthSessionResponse | null {
   }
 
   return {
+    authenticated: true,
     userId,
     username,
     role,
@@ -108,11 +114,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const sessionPayload = await fetchWithCredentials<unknown>("/api/auth/me");
         const session = normalizeAuthSession(sessionPayload);
-        if (!session) {
-          throw new Error("Invalid auth session payload");
-        }
         if (active) {
-          setUser({ userId: session.userId, name: session.username, role: session.role });
+          if (session) {
+            setUser({ userId: session.userId, name: session.username, role: session.role });
+          } else {
+            setUser(null);
+          }
         }
       } catch (error) {
         const isExpectedUnauthenticated =

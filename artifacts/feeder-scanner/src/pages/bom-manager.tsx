@@ -208,14 +208,14 @@ export default function BomManager() {
               <div className="flex gap-3">
                 <Button
                   onClick={() => setActiveTab("manual")}
-                  className="bg-navy hover:bg-blue-900 text-black hover:text-white flex items-center gap-2 shadow-md hover:shadow-xl transition-all duration-200 font-semibold px-5 py-2.5 hover:scale-105 hover:-translate-y-0.5"
+                  className="bg-navy hover:bg-blue-900 text-black hover:text-black flex items-center gap-2 shadow-md hover:shadow-xl transition-all duration-200 font-semibold px-5 py-2.5 hover:scale-105 hover:-translate-y-0.5"
                 >
                   <Plus className="w-5 h-5" /> Create Manual BOM
                 </Button>
                 <Button
                   onClick={() => setActiveTab("import")}
                   variant="outline"
-                  className="border-2 border-navy text-black hover:bg-navy hover:text-white flex items-center gap-2 shadow-sm hover:shadow-xl transition-all duration-200 font-semibold px-5 py-2.5 hover:scale-105 hover:-translate-y-0.5"
+                  className="border-2 border-navy text-black hover:bg-navy hover:text-black flex items-center gap-2 shadow-sm hover:shadow-xl transition-all duration-200 font-semibold px-5 py-2.5 hover:scale-105 hover:-translate-y-0.5"
                 >
                   <Upload className="w-5 h-5" /> Import CSV
                 </Button>

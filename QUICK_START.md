@@ -30,7 +30,7 @@ cd ../../artifacts/api-server
 Configure the report branding values in `.env`:
 
 ```bash
-COMPANY_NAME=UCAL Fuel Systems Limited
+COMPANY_NAME=UCAL Electronics PVT. LTD
 COMPANY_LOGO_PATH=./assets/company-logo.png
 ```
 

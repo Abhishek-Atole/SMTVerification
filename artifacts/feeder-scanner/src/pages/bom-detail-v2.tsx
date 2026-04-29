@@ -115,6 +115,10 @@ export default function BomDetailV2() {
 
   const totalPages = Math.ceil(items.length / pageSize);
 
+  const latestRevision = useMemo(() => {
+    return revisions.find((rev) => rev.isLatest) || null;
+  }, [revisions]);
+
   useEffect(() => {
     if (!bomId) return;
     fetchBomData();

@@ -711,7 +711,7 @@ Show every file and line.
 
 Add to `.env` (and `.env.example`):
 ```
-VITE_COMPANY_NAME=UCAL Fuel Systems Limited
+VITE_COMPANY_NAME=UCAL Electronics PVT. LTD
 VITE_COMPANY_SHORT=UCAL
 VITE_SYSTEM_TITLE=SMT Changeover Verification System
 VITE_SYSTEM_VERSION=2.0.0

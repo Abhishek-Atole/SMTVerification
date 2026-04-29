@@ -575,8 +575,8 @@ start_app_server() {
     return 1
   fi
 
-  log_info "Launching production frontend server..."
-  PORT="$FRONTEND_PORT" BASE_PATH=/ nohup pnpm run serve -- --port "$FRONTEND_PORT" --host 0.0.0.0 >> "$LOG_DIR/app-server.log" 2>&1 &
+  log_info "Launching frontend dev server..."
+  PORT="$FRONTEND_PORT" BASE_PATH=/ nohup pnpm run dev >> "$LOG_DIR/app-server.log" 2>&1 &
   local app_pid=$!
   sleep 2
   if ! kill -0 "$app_pid" 2>/dev/null; then

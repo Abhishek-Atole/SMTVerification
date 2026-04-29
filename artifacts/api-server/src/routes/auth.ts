@@ -154,12 +154,14 @@ router.post("/auth/logout", async (req, res) => {
 router.get("/auth/me", (req, res) => {
   const token = readTokenFromCookie(req);
   if (!token) {
+    res.clearCookie("smt_token", getCookieOptions());
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
 
   const payload = verifyToken(token);
   if (!payload) {
+    res.clearCookie("smt_token", getCookieOptions());
     res.status(401).json({ error: "Unauthorized" });
     return;
   }

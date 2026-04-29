@@ -2,7 +2,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { sessionsTable, scanRecordsTable, spliceRecordsTable, bomItemsTable, bomsTable, auditLogsTable } from "@workspace/db/schema";
-import { eq, and, sql, desc, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, sql, desc, isNull, isNotNull, count, inArray } from "drizzle-orm";
 import { TimestampService } from "../services/timestamp-service";
 import PDFDocument from "pdfkit";
 import fs from "node:fs";
@@ -25,8 +25,31 @@ type MatchResult = {
   matchedMake: string | null;
 } | null;
 
+type SpliceMatch = {
+  matchedField: "mpn1" | "mpn2" | "mpn3" | "internalPartNumber";
+  matchedAs: string;
+  matchedMake: string;
+  status: "verified" | "alternate";
+};
+
+type SpliceAuditPayload = {
+  feederNumber: string;
+  scannedValue: string;
+  matchedAs: string;
+  matchedField: string;
+  lotCode: string | null;
+  status: "verified" | "alternate" | "failed";
+  verificationMode: string;
+  operatorId: number | string;
+  splicedAt: string;
+};
+
 function normalizeExact(value: string | null | undefined): string {
-  return String(value ?? "").trim().toUpperCase();
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (["", "N/A", "NA", "-", "NONE"].includes(normalized)) {
+    return "";
+  }
+  return normalized;
 }
 
 function tokenizeInternalPartNumber(value: string | null | undefined): string[] {
@@ -59,6 +82,52 @@ function verifyMPN(scanned: string, bomRow: BomRowForMPN): MatchResult {
   return null;
 }
 
+function verifySpliceMpn(scanned: string, bomRow: BomRowForMPN): SpliceMatch | null {
+  const s = normalizeExact(scanned);
+
+  const mpn1 = normalizeExact(bomRow.mpn1);
+  if (mpn1 && mpn1 === s) {
+    return {
+      matchedField: "mpn1",
+      matchedAs: `MPN 1${bomRow.make1 ? ` (${bomRow.make1})` : ""}`,
+      matchedMake: bomRow.make1 ?? "",
+      status: "verified",
+    };
+  }
+
+  const mpn2 = normalizeExact(bomRow.mpn2);
+  if (mpn2 && mpn2 === s) {
+    return {
+      matchedField: "mpn2",
+      matchedAs: `MPN 2${bomRow.make2 ? ` (${bomRow.make2})` : ""}`,
+      matchedMake: bomRow.make2 ?? "",
+      status: "alternate",
+    };
+  }
+
+  const mpn3 = normalizeExact(bomRow.mpn3);
+  if (mpn3 && mpn3 === s) {
+    return {
+      matchedField: "mpn3",
+      matchedAs: `MPN 3${bomRow.make3 ? ` (${bomRow.make3})` : ""}`,
+      matchedMake: bomRow.make3 ?? "",
+      status: "alternate",
+    };
+  }
+
+  const tokens = tokenizeInternalPartNumber(bomRow.internalPartNumber);
+  if (tokens.includes(s)) {
+    return {
+      matchedField: "internalPartNumber",
+      matchedAs: "Internal ID",
+      matchedMake: "",
+      status: "alternate",
+    };
+  }
+
+  return null;
+}
+
 function buildExpectedMpnValues(bomRow: BomRowForMPN): string[] {
   const values = [
     ...tokenizeInternalPartNumber(bomRow.internalPartNumber),
@@ -68,6 +137,71 @@ function buildExpectedMpnValues(bomRow: BomRowForMPN): string[] {
   ].filter(Boolean);
 
   return Array.from(new Set(values));
+}
+
+function parseSpliceAuditPayload(value: string | null | undefined): SpliceAuditPayload | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Partial<SpliceAuditPayload>;
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    return {
+      feederNumber: String(parsed.feederNumber ?? ""),
+      scannedValue: String(parsed.scannedValue ?? ""),
+      matchedAs: String(parsed.matchedAs ?? ""),
+      matchedField: String(parsed.matchedField ?? ""),
+      lotCode: parsed.lotCode != null ? String(parsed.lotCode) : null,
+      status: parsed.status === "verified" || parsed.status === "alternate" ? parsed.status : "failed",
+      verificationMode: String(parsed.verificationMode ?? "AUTO"),
+      operatorId: parsed.operatorId ?? "",
+      splicedAt: String(parsed.splicedAt ?? ""),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildSpliceResponse(
+  splice: {
+    id: number;
+    sessionId: number;
+    feederNumber: string;
+    operatorId: string;
+    oldMpn: string | null;
+    newMpn: string | null;
+    oldSpoolBarcode: string;
+    newSpoolBarcode: string;
+    durationSeconds: number | null;
+    splicedAt: Date;
+  },
+  bomItem: any,
+  payload: SpliceAuditPayload | null,
+) {
+  const matchedField = payload?.matchedField ?? normalizeExact(splice.oldSpoolBarcode) ?? null;
+  const matchedAs = payload?.matchedAs ?? splice.oldMpn ?? "";
+  const scannedValue = payload?.scannedValue ?? splice.newMpn ?? splice.newSpoolBarcode ?? "";
+  const lotCode = payload?.lotCode ?? null;
+  const status = payload?.status ?? (matchedField === "mpn1" ? "verified" : matchedField ? "alternate" : "failed");
+  const verificationMode = payload?.verificationMode ?? "AUTO";
+
+  return {
+    ...splice,
+    bomItem,
+    expectedMpns: bomItem
+      ? [bomItem.mpn1, bomItem.mpn2, bomItem.mpn3].map((value: string | null | undefined) => normalizeExact(value)).filter(Boolean)
+      : [],
+    scannedValue,
+    matchedAs,
+    matchedField,
+    lotCode,
+    status,
+    verificationMode,
+  };
 }
 
 function formatMatchedAs(matchedField: string | null | undefined, matchedMake: string | null | undefined): string {
@@ -444,6 +578,22 @@ router.post("/sessions", async (req, res) => {
   }
 });
 
+// Deleted sessions route (must be before parametric routes to avoid :sessionId shadowing)
+router.get("/sessions/deleted", async (req, res) => {
+  try {
+    const deleted = await db
+      .select()
+      .from(sessionsTable)
+      .where(isNotNull(sessionsTable.deletedAt))
+      .orderBy(desc(sessionsTable.deletedAt));
+
+    return res.json(deleted);
+  } catch (err) {
+    req.log.error(err);
+    return res.status(500).json({ error: "Failed to fetch deleted sessions" });
+  }
+});
+
 // Trash bin routes (must be before parametric routes to avoid :sessionId shadowing)
 router.get("/sessions/trash/all", async (req, res) => {
   try {
@@ -519,12 +669,19 @@ router.get("/sessions/:sessionId", async (req, res) => {
     
     // Only query BOM if not in free scan mode (bomId is not NULL)
     let bomName = "";
+    let bomItemCount = 0;
     if (session.bomId !== null) {
       const [bom] = await db.select().from(bomsTable).where(eq(bomsTable.id, session.bomId));
       bomName = bom?.name ?? "";
+      
+      const [{ count: itemCount }] = await db
+        .select({ count: count() })
+        .from(bomItemsTable)
+        .where(and(eq(bomItemsTable.bomId, session.bomId), isNull(bomItemsTable.deletedAt)));
+      bomItemCount = Number(itemCount ?? 0);
     }
     
-    res.json({ ...session, bomName, scans });
+    res.json({ ...session, bomName, bomItemCount, scans });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to get session" });
@@ -990,12 +1147,59 @@ router.post("/sessions/:sessionId/scans", async (req, res) => {
 router.get("/sessions/:sessionId/splices", async (req, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
+    const [session] = await db.select().from(sessionsTable).where(eq(sessionsTable.id, sessionId));
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
     const splices = await db
       .select()
       .from(spliceRecordsTable)
       .where(eq(spliceRecordsTable.sessionId, sessionId))
       .orderBy(spliceRecordsTable.splicedAt);
-    res.json(splices);
+
+    const spliceEntityIds = splices.map((splice) => `splice_${splice.id}`);
+    const auditLogs = spliceEntityIds.length > 0
+      ? await db
+          .select()
+          .from(auditLogsTable)
+          .where(
+            and(
+              eq(auditLogsTable.entityType, "feeder_splice"),
+              inArray(auditLogsTable.entityId, spliceEntityIds),
+            ),
+          )
+      : [];
+
+    const auditPayloadMap = new Map<string, SpliceAuditPayload>();
+    for (const auditLog of auditLogs) {
+      const payload = parseSpliceAuditPayload(auditLog.newValue ?? auditLog.oldValue ?? null);
+      if (payload) {
+        auditPayloadMap.set(auditLog.entityId, payload);
+      }
+    }
+
+    const bomItems = session.bomId
+      ? await db
+          .select()
+          .from(bomItemsTable)
+          .where(and(eq(bomItemsTable.bomId, session.bomId), isNull(bomItemsTable.deletedAt)))
+      : [];
+
+    const bomItemMap = new Map<string, (typeof bomItems)[number]>();
+    for (const item of bomItems) {
+      bomItemMap.set(normalizeExact(item.feederNumber), item);
+    }
+
+    res.json(
+      splices.map((splice) => {
+        const bomItem = bomItemMap.get(normalizeExact(splice.feederNumber)) ?? null;
+        const payload = auditPayloadMap.get(`splice_${splice.id}`) ?? null;
+
+        return buildSpliceResponse(splice, bomItem, payload);
+      })
+    );
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ error: "Failed to list splices" });
@@ -1005,10 +1209,23 @@ router.get("/sessions/:sessionId/splices", async (req, res) => {
 router.post("/sessions/:sessionId/splices", async (req, res) => {
   try {
     const sessionId = Number(req.params.sessionId);
-    const { feederNumber, operatorId, oldSpoolBarcode, newSpoolBarcode, durationSeconds } = req.body;
+    const {
+      feederNumber,
+      operatorId,
+      newSpoolBarcode,
+      scannedValue,
+      lotCode,
+      verificationMode,
+      oldSpoolBarcode,
+      durationSeconds,
+      matchedAs,
+      matchedField,
+      status,
+    } = req.body;
 
-    if (!feederNumber || !operatorId || !oldSpoolBarcode || !newSpoolBarcode) {
-      res.status(400).json({ error: "feederNumber, operatorId, oldSpoolBarcode, and newSpoolBarcode are required" });
+    const scannedSpool = String(scannedValue ?? newSpoolBarcode ?? "").trim();
+    if (!feederNumber || !operatorId || !scannedSpool) {
+      res.status(400).json({ error: "feederNumber, operatorId, and scannedValue/newSpoolBarcode are required" });
       return;
     }
 
@@ -1020,7 +1237,8 @@ router.post("/sessions/:sessionId/splices", async (req, res) => {
     }
 
     // === STEP 2: Verify Feeder Was Scanned & Verified ===
-    const normalizedFeeder = feederNumber.trim().toUpperCase();
+    const normalizedFeeder = String(feederNumber).trim().toUpperCase();
+    const normalizedOperatorId = String(operatorId).trim();
     const feederScans = await db
       .select()
       .from(scanRecordsTable)
@@ -1032,31 +1250,36 @@ router.post("/sessions/:sessionId/splices", async (req, res) => {
         )
       );
 
-    if (feederScans.length === 0) {
-      // Feeder not verified - log attempted splice on unverified feeder
-      const operatorName = session.operatorName || "UNKNOWN";
-      await db.insert(auditLogsTable).values({
-        entityType: "feeder_splice",
-        entityId: `session_${sessionId}_feeder_${normalizedFeeder}`,
-        action: "splice_rejected",
-        oldValue: null,
-        newValue: JSON.stringify({
-          sessionId,
-          feederNumber: normalizedFeeder,
-          oldSpoolBarcode: oldSpoolBarcode.trim(),
-          newSpoolBarcode: newSpoolBarcode.trim(),
-          reason: "Feeder not verified before splicing",
-        }),
-        changedBy: operatorName,
-        description: `Splice attempt REJECTED: Feeder ${normalizedFeeder} not verified before splicing attempt`,
-        createdAt: TimestampService.createAuditTimestamp(),
-      });
+    const [bomItem] = await db
+      .select()
+      .from(bomItemsTable)
+      .where(and(eq(bomItemsTable.bomId, session.bomId), eq(bomItemsTable.feederNumber, normalizedFeeder), isNull(bomItemsTable.deletedAt)));
 
+    if (!bomItem) {
+      return res.status(404).json({ error: `Feeder ${normalizedFeeder} not found in BOM` });
+    }
+
+    const match = verifySpliceMpn(scannedSpool, {
+      internalPartNumber: bomItem.internalPartNumber,
+      mpn1: bomItem.mpn1,
+      mpn2: bomItem.mpn2,
+      mpn3: bomItem.mpn3,
+      make1: bomItem.make1,
+      make2: bomItem.make2,
+      make3: bomItem.make3,
+    });
+
+    if (!match) {
       return res.status(400).json({
-        error: `❌ Feeder ${normalizedFeeder} has not been verified. Please complete verification before splicing.`,
-        feederVerified: false,
+        error: `Wrong part. Expected: ${[bomItem.mpn1, bomItem.mpn2, bomItem.mpn3].filter(Boolean).join(" / ") || "No MPNs configured"}`,
+        status: "failed",
+        expectedMpns: [bomItem.mpn1, bomItem.mpn2, bomItem.mpn3].filter(Boolean),
       });
     }
+
+    const feederWasVerified = feederScans.length > 0;
+    const verificationModeValue = String(verificationMode ?? session.verificationMode ?? "AUTO").toUpperCase() === "MANUAL" ? "MANUAL" : "AUTO";
+    const splicedAt = TimestampService.createOperationTimestamp();
 
     // === STEP 3: Record Splice with Audit Log ===
     const [splice] = await db
@@ -1064,45 +1287,52 @@ router.post("/sessions/:sessionId/splices", async (req, res) => {
       .values({
         sessionId,
         feederNumber: normalizedFeeder,
-        operatorId: operatorId.trim(),
-        oldMpn: oldSpoolBarcode.trim(),
-        newMpn: newSpoolBarcode.trim(),
-        oldSpoolBarcode: oldSpoolBarcode.trim(),
-        newSpoolBarcode: newSpoolBarcode.trim(),
+        operatorId: normalizedOperatorId,
+        oldMpn: String(matchedAs ?? match.matchedAs).trim(),
+        newMpn: scannedSpool,
+        oldSpoolBarcode: String(matchedField ?? match.matchedField).trim(),
+        newSpoolBarcode: String(lotCode ?? scannedSpool).trim(),
         durationSeconds: durationSeconds ?? null,
-        splicedAt: TimestampService.createOperationTimestamp(),
+        splicedAt,
       })
       .returning();
 
     // === STEP 4: Create Comprehensive Audit Log for Splice ===
     const operatorName = session.operatorName || "UNKNOWN";
     const feederScan = feederScans[0];
+    const auditPayload: SpliceAuditPayload = {
+      feederNumber: normalizedFeeder,
+      scannedValue: scannedSpool,
+      matchedAs: match.matchedAs,
+      matchedField: match.matchedField,
+      lotCode: lotCode ?? null,
+      status: match.status,
+      verificationMode: verificationModeValue,
+      operatorId: normalizedOperatorId,
+      splicedAt: new Date(splicedAt).toISOString(),
+    };
     
     await db.insert(auditLogsTable).values({
       entityType: "feeder_splice",
-      entityId: `session_${sessionId}_feeder_${normalizedFeeder}`,
+      entityId: `splice_${splice.id}`,
       action: "splice_recorded",
       oldValue: JSON.stringify({
         feederNumber: normalizedFeeder,
-        spoolBarcode: oldSpoolBarcode.trim(),
-        scannedComponent: feederScan.internalIdScanned || feederScan.partNumber || "UNKNOWN",
+        scannedValue: scannedSpool,
       }),
-      newValue: JSON.stringify({
-        feederNumber: normalizedFeeder,
-        spoolBarcode: newSpoolBarcode.trim(),
-        replacementTime: new Date().toISOString(),
-        durationSeconds: durationSeconds ?? null,
-      }),
+      newValue: JSON.stringify(auditPayload),
       changedBy: operatorName,
-      description: `Feeder ${normalizedFeeder} spool replaced: Old spool ${oldSpoolBarcode.trim()} → New spool ${newSpoolBarcode.trim()}${durationSeconds ? ` (Duration: ${durationSeconds}s)` : ""}`,
+      description: `Feeder ${normalizedFeeder} splice recorded: ${match.matchedAs} (${match.status.toUpperCase()})${feederWasVerified ? "" : " [before feeder verification]"}${durationSeconds ? ` (Duration: ${durationSeconds}s)` : ""}`,
       createdAt: TimestampService.createAuditTimestamp(),
     });
 
     // === STEP 5: Return Response ===
     res.status(201).json({
-      splice,
-      message: `✅ Feeder ${normalizedFeeder} spool successfully replaced`,
-      feederVerified: true,
+      ...buildSpliceResponse(splice, bomItem, auditPayload),
+      message: feederWasVerified
+        ? `✅ Splice Approved — ${match.matchedAs}`
+        : `⚠ Splice Approved — ${match.matchedAs} (feeder not previously verified)`,
+      feederVerified: feederWasVerified,
       auditLogged: true,
     });
   } catch (err) {

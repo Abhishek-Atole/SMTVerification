@@ -279,7 +279,7 @@ export class SeedDataService {
           .insert(sessionsTable)
           .values({
             bomId: bom.id,
-            companyName: process.env.COMPANY_NAME ?? process.env.VITE_COMPANY_NAME ?? "UCAL ELECTRONICS PVT.LTD",
+            companyName: process.env.COMPANY_NAME ?? process.env.VITE_COMPANY_NAME ?? "UCAL Electronics PVT. LTD",
             customerName: "Test Customer",
             panelName: `PANEL-${Math.floor(Math.random() * 10000)
               .toString()

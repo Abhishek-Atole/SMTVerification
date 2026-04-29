@@ -39,6 +39,7 @@ import { useLogStore } from "@/store/useLogStore";
 import { useNotificationStore } from "@/store/useNotificationStore";
 import type { FeederScan, SplicingRecord } from "@/types";
 import { AppLogo } from "@/components/AppLogo";
+import { buildCandidates, normalizeMpn } from "@/utils/mpnUtils";
 
 type ScanStep = "feeder" | "spool" | "lot";
 type SpliceStep = "feeder" | "oldSpool" | "newSpool";
@@ -96,6 +97,64 @@ function normalizeScanValue(value: string): string {
   return value.trim().toUpperCase();
 }
 
+// Web Audio API sound generator
+function playBuzzer(type: "success" | "error" | "warning") {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = audioContext.currentTime;
+    
+    if (type === "success") {
+      // Success: two ascending beeps
+      const osc1 = audioContext.createOscillator();
+      const gain1 = audioContext.createGain();
+      osc1.connect(gain1);
+      gain1.connect(audioContext.destination);
+      osc1.frequency.value = 800;
+      gain1.gain.setValueAtTime(0.1, now);
+      gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+      osc1.start(now);
+      osc1.stop(now + 0.1);
+      
+      const osc2 = audioContext.createOscillator();
+      const gain2 = audioContext.createGain();
+      osc2.connect(gain2);
+      gain2.connect(audioContext.destination);
+      osc2.frequency.value = 1200;
+      gain2.gain.setValueAtTime(0.1, now + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+      osc2.start(now + 0.15);
+      osc2.stop(now + 0.25);
+    } else if (type === "error") {
+      // Error: three low beeps
+      for (let i = 0; i < 3; i++) {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.frequency.value = 400;
+        const startTime = now + i * 0.15;
+        gain.gain.setValueAtTime(0.1, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.1);
+        osc.start(startTime);
+        osc.stop(startTime + 0.1);
+      }
+    } else if (type === "warning") {
+      // Warning: single mid-range beep
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      osc.connect(gain);
+      gain.connect(audioContext.destination);
+      osc.frequency.value = 600;
+      gain.gain.setValueAtTime(0.1, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+      osc.start(now);
+      osc.stop(now + 0.2);
+    }
+  } catch (err) {
+    console.warn("Audio playback failed:", err);
+  }
+}
+
 function tokenizeInternalPartNumber(value: string | null | undefined): string[] {
   if (!value) return [];
   return value
@@ -104,38 +163,6 @@ function tokenizeInternalPartNumber(value: string | null | undefined): string[] 
     .map((token) => token.trim())
     .filter(Boolean)
     .map((token) => token.toUpperCase());
-}
-
-function normalizeMpn(val: string | null | undefined): string {
-  if (val === null || val === undefined) return "";
-  const s = String(val).trim().toUpperCase();
-  if (s === "" || s === "N/A" || s === "NA" || s === "-" || s === "NONE") return "";
-  return s;
-}
-
-function buildCandidates(bomItem: any): Array<{ value: string; label: string; isPrimary: boolean }> {
-  const candidates: Array<{ value: string; label: string; isPrimary: boolean }> = [];
-
-  const m1 = normalizeMpn(bomItem?.mpn1 ?? bomItem?.mpn_1);
-  if (m1) candidates.push({ value: m1, label: "MPN 1", isPrimary: true });
-
-  const m2 = normalizeMpn(bomItem?.mpn2 ?? bomItem?.mpn_2);
-  if (m2) candidates.push({ value: m2, label: "MPN 2", isPrimary: false });
-
-  const m3 = normalizeMpn(bomItem?.mpn3 ?? bomItem?.mpn_3);
-  if (m3) candidates.push({ value: m3, label: "MPN 3", isPrimary: false });
-
-  const ipn = normalizeMpn(bomItem?.internalPartNumber ?? bomItem?.internal_part_number);
-  if (ipn) {
-    ipn
-      .split(/\s+/)
-      .filter(Boolean)
-      .forEach((token) => {
-        candidates.push({ value: token, label: "Internal ID", isPrimary: false });
-      });
-  }
-
-  return candidates;
 }
 
 export default function SessionActive() {
@@ -355,7 +382,8 @@ export default function SessionActive() {
   const scannedFeeders = useVerificationStore((state) => state.scannedFeeders);
   const verificationScans = useMemo(() => Array.from(scannedFeeders.values()), [scannedFeeders]);
   const verificationProgress = useMemo(() => {
-    const totalRequired = verificationBomEntries.length;
+    // Use bomItemCount from API if available, otherwise fall back to BOM entries
+    const totalRequired = session?.bomItemCount ?? verificationBomEntries.length;
     const verifiedCount = scannedFeeders.size;
     const percentage = totalRequired === 0 ? 0 : Math.round((verifiedCount / totalRequired) * 100);
     const remainingFeeders = verificationBomEntries
@@ -369,7 +397,7 @@ export default function SessionActive() {
       remainingFeeders,
       isComplete: verifiedCount >= totalRequired && totalRequired > 0,
     };
-  }, [verificationBomEntries, scannedFeeders]);
+  }, [verificationBomEntries, scannedFeeders, session?.bomItemCount]);
   const clearSplicingRecords = useSplicingStore((state) => state.clearRecords);
   const hydrateSplicingRecords = useSplicingStore((state) => state.hydrateRecords);
   const appendSpliceRecord = useSplicingStore((state) => state.appendRecord);
@@ -520,6 +548,7 @@ export default function SessionActive() {
             `Feeder "${normalizedFeederNumber}" does not exist in the loaded BOM.\n\nPlease check the feeder number and try again.`,
             "high",
           );
+          playBuzzer("error");
           return;
         }
 
@@ -576,10 +605,12 @@ export default function SessionActive() {
             `Feeder "${normalizedFeederNumber}" has ${alternateItems.length} alternative component option(s).\n\nSelect from primary or alternatives, then press ENTER.`,
             "medium",
           );
+          playBuzzer("warning");
           return;
         }
 
         showSuccessAlert(`Feeder "${normalizedFeederNumber}" found in BOM`);
+        playBuzzer("success");
         setScanStep("spool");
         setNeedsAlternateSelection(false);
         return;
@@ -624,12 +655,14 @@ export default function SessionActive() {
 
         if (!normalizedScanned) {
           showErrorAlert("Empty scan — please scan the part MPN barcode", "high");
+          playBuzzer("error");
           clearScanInput();
           return;
         }
 
         if (!lockedFeeder) {
           showErrorAlert("No feeder locked — restart from feeder scan", "high");
+          playBuzzer("error");
           setScanStep("feeder");
           clearScanInput();
           return;
@@ -642,6 +675,7 @@ export default function SessionActive() {
 
         if (candidates.length === 0) {
           showErrorAlert("BOM item has no MPN data — contact engineer", "high");
+          playBuzzer("error");
           clearScanInput();
           return;
         }
@@ -654,6 +688,7 @@ export default function SessionActive() {
             `MPN Mismatch for Feeder ${lockedFeeder?.feederNumber ?? pendingFeeder}. Expected: ${expectedDisplay}`,
             "high",
           );
+          playBuzzer("error");
           clearScanInput();
           return;
         }
@@ -666,8 +701,10 @@ export default function SessionActive() {
 
         if (match.isPrimary) {
           showSuccessAlert(`✓ Primary Match — ${match.label}: ${match.value}`);
+          playBuzzer("success");
         } else {
           showWarningAlert(`⚠ Alternate Match — ${match.label}: ${match.value}`, "medium");
+          playBuzzer("warning");
         }
 
         setInternalIdInput(match.value);
@@ -707,6 +744,7 @@ export default function SessionActive() {
     } catch (err: any) {
       console.error('[SCAN ERROR]', err);
       showErrorAlert(err?.message || 'Unexpected scan error', 'high');
+      playBuzzer("error");
     } finally {
       setVerificationInProgress(false);
       scanningRef.current = false;
@@ -1052,6 +1090,7 @@ export default function SessionActive() {
 
       if (res.status === "ok") {
         showSuccessAlert(`MPN matched successfully for feeder ${pendingFeeder}.`);
+        playBuzzer("success");
         mirrorVerificationResult(pendingFeeder, mpnScanned, pendingAvailableOptions?.primary?.[0]?.partNumber);
         setSplicingPhaseActive(true);
         clearScanInput();
@@ -1071,6 +1110,7 @@ export default function SessionActive() {
         focusNextFrame(inputRef);
       } else {
         showErrorAlert(`MPN mismatch for feeder ${pendingFeeder}. ${res.message}`, "high");
+        playBuzzer("error");
         clearScanInput();
       }
     } catch (err: any) {
@@ -1289,29 +1329,46 @@ export default function SessionActive() {
       },
     });
 
+    // Clear all scan-related state
     setScanStep("feeder");
     setPendingFeeder("");
     setFeederScanTime(null);
     setInternalIdInput("");
+    setPendingMpnScan("");
+    setPendingScanDuration(undefined);
     setCaseConverted(false);
     setIsDuplicate(false);
     setPendingAvailableOptions(null);
     setSelectedItemIdForScan(null);
     setNeedsAlternateSelection(false);
     setPendingVerification(null);
+    
+    // Clear verification flags and refs
     setVerificationLocked(false);
     setVerificationInProgress(false);
+    scanningRef.current = false;
+    verificationInProgress.current = false;
+    verificationLocked.current = false;
+    
+    // Clear splicing-related state
     setSpliceStep("feeder");
     setSplicePendingFeeder("");
     setSplicePendingOldSpool("");
     setSpliceStartTime(null);
     setSpliceInput("");
+    setSplicingPhaseActive(false);
+    
+    // Clear UI state
     setLastScanResult(null);
     setScanInput("");
     setShowCompletionOverlay(false);
     setActiveTab("loading");
     lastNotifiedRef.current = "";
-
+    
+    // Focus input for next scan
+    focusNextFrame(inputRef);
+    
+    playBuzzer("success");
     showWarningAlert("Session scanner state has been reset.", "medium");
   };
 

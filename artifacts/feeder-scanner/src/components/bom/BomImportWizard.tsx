@@ -77,7 +77,7 @@ export function BomImportWizard({ onSuccess }: { onSuccess: (bomId?: number) => 
       "Required Qty",
       "Ref Location",
       "Description",
-      "Value",
+      "Values",
       "Package",
       "Make 1",
       "MPN 1",

@@ -154,6 +154,7 @@ router.get("/bom", async (req, res) => {
       description: b.description,
       itemCount: countMap.get(b.id) ?? 0,
       makesCount: (makesCountMap.get(b.id) as Set<string>)?.size ?? 0,
+      suppliersCount: (makesCountMap.get(b.id) as Set<string>)?.size ?? 0,
       createdAt: b.createdAt,
       deletedAt: b.deletedAt,
       deletedBy: b.deletedBy,
