@@ -98,6 +98,16 @@ export function ModeToggle({ currentMode, onModeChange, sessionId, sessionStarte
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Password</label>
+                <input
+                  type="text"
+                  name="username"
+                  autoComplete="username"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  className="sr-only"
+                  value="manual-mode"
+                  readOnly
+                />
                 <Input
                   type="password"
                   value={passwordInput}

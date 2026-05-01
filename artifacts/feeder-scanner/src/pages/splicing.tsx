@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, Circle, Scissors, TriangleAlert, XCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, Printer, Scissors, TriangleAlert, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,161 +15,295 @@ import { LogPanel } from "@/components/LogPanel";
 import { AppLogo } from "@/components/AppLogo";
 import { appConfig } from "@/lib/appConfig";
 import { useAuth } from "@/context/auth-context";
-import { BOM_DATA } from "@/data/bom";
-import { useIsVerificationComplete, useVerificationStore } from "@/store/useVerificationStore";
 import { useSession } from "@/context/session-context";
-import { getListSplicesQueryKey, useListSplices, useRecordSplice } from "@workspace/api-client-react";
-import { buildCandidates, normalizeMpn } from "@/utils/mpnUtils";
+import { getGetBomQueryKey, getGetSessionQueryKey, getListSplicesQueryKey, useGetBom, useGetSession, useListSplices, useRecordSplice } from "@workspace/api-client-react";
 
-type Step = "feeder" | "mpn" | "lot";
-type SpliceStatus = "verified" | "alternate";
+type WorkflowStep = "feeder" | "oldSpool" | "newSpool" | "confirm";
+type SpoolField = "mpn1" | "mpn2" | "mpn3" | "internalId";
+type RetryKey = WorkflowStep;
 
-type PseudoBomItem = {
+type BomLine = {
   feederNumber: string;
-  mpn1?: string | null;
-  mpn2?: string | null;
-  mpn3?: string | null;
-  internalPartNumber?: string | null;
-  make1?: string | null;
-  make2?: string | null;
-  make3?: string | null;
+  mpn1: string | null;
+  mpn2: string | null;
+  mpn3: string | null;
+  internalId: string | null;
+  description: string | null;
+  refDes: string | null;
+  quantity: string | null;
+  supplier: string | null;
 };
 
-type PendingSplice = {
+type SpoolLabel = {
+  raw: string;
+  mpn1: string | null;
+  mpn2: string | null;
+  mpn3: string | null;
+  internalId: string | null;
+  lotNo: string | null;
+  qty: string | null;
+  supplier: string | null;
+};
+
+type StepFailure = {
+  code: "NO_BOM_LOADED" | "FEEDER_NOT_IN_BOM" | "OLD_SPOOL_BOM_MISMATCH" | "NEW_SPOOL_MISMATCH" | "MAX_RETRY_EXCEEDED";
+  step: WorkflowStep;
+  message: string;
+};
+
+type MatchResult = {
+  field: SpoolField;
+  label: string;
+  expected: string;
+  received: string;
+};
+
+type FinalSummary = {
   feederNumber: string;
-  scannedValue: string;
-  matchedAs: string;
-  matchedField: "mpn1" | "mpn2" | "mpn3" | "internalPartNumber";
-  status: SpliceStatus;
-  operatorId: number;
+  bomPart: string;
+  bomRefDes: string;
+  oldSpoolId: string;
+  oldMatched: string;
+  oldLotQty: string;
+  newSpoolId: string;
+  newMatched: string;
+  newLotQty: string;
+  operatorId: string;
+  timestampUtc: string;
 };
 
-type SpliceLogEntry = PendingSplice & {
-  lotCode: string | null;
-  verificationMode: "AUTO" | "MANUAL";
-  splicedAt: Date;
-};
-
-type RemoteSpliceRecord = SpliceLogEntry & {
+type RemoteSpliceRecord = {
   id: number;
   sessionId: number;
-  bomItem?: PseudoBomItem | null;
-  expectedMpns?: string[];
+  feederNumber: string;
+  operatorId: string;
+  oldSpoolBarcode: string;
+  newSpoolBarcode: string;
+  durationSeconds?: number | null;
+  splicedAt: string;
   scannedValue?: string;
   matchedAs?: string;
   matchedField?: string | null;
   lotCode?: string | null;
-  status?: SpliceStatus | "failed";
+  status?: "verified" | "alternate" | "failed";
   verificationMode?: "AUTO" | "MANUAL";
+  bomItem?: unknown;
 };
 
-function playBuzzer(type: "success" | "error" | "warning") {
-  try {
-    const AudioCtor = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtor) return;
-    const audioContext = new AudioCtor();
-    const now = audioContext.currentTime;
+const FIELD_LABELS: Record<SpoolField, string> = {
+  mpn1: "MPN 1",
+  mpn2: "MPN 2",
+  mpn3: "MPN 3",
+  internalId: "Internal ID",
+};
 
-    const beep = (frequency: number, start: number, duration: number, gainValue = 0.08) => {
-      const osc = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-      osc.connect(gain);
-      gain.connect(audioContext.destination);
-      osc.frequency.value = frequency;
-      gain.gain.setValueAtTime(gainValue, start);
-      gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
-      osc.start(start);
-      osc.stop(start + duration);
-    };
+const RETRY_LIMIT = 3;
 
-    if (type === "success") {
-      beep(840, now, 0.09);
-      beep(1180, now + 0.12, 0.11);
-    } else if (type === "warning") {
-      beep(620, now, 0.16);
-    } else {
-      beep(420, now, 0.09);
-      beep(370, now + 0.14, 0.09);
-      beep(320, now + 0.28, 0.11);
+function normalizeValue(value: string | null | undefined): string {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (["", "N/A", "NA", "NONE", "-"].includes(normalized)) {
+    return "";
+  }
+  return normalized;
+}
+
+function parseLabelValue(source: string, keyPatterns: string[]): string | null {
+  for (const pattern of keyPatterns) {
+    const regex = new RegExp(`${pattern}\\s*[:=]\\s*([^\\n;|,]+)`, "i");
+    const match = source.match(regex);
+    if (match?.[1]) {
+      const value = match[1].trim();
+      if (value) return value;
     }
-  } catch (error) {
-    console.warn("Unable to play buzzer", error);
   }
+  return null;
 }
 
-function toPseudoBomItem(entry: { feederId: string; alternatives: Array<{ mpn: string; partId: string; description: string }> }): PseudoBomItem {
+function parseSpoolLabel(raw: string): SpoolLabel {
+  const trimmed = raw.trim();
+  const fallback = trimmed || "";
+
+  const fromJson = (() => {
+    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return null;
+    try {
+      return JSON.parse(trimmed) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  })();
+
+  const lookup = (keys: string[]) => {
+    if (fromJson && typeof fromJson === "object") {
+      const entries = Object.entries(fromJson).reduce<Record<string, unknown>>((acc, [key, value]) => {
+        acc[key.toLowerCase().replace(/[^a-z0-9]/g, "")] = value;
+        return acc;
+      }, {});
+      for (const key of keys) {
+        const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const value = entries[normalizedKey];
+        if (typeof value === "string" && value.trim()) {
+          return value.trim();
+        }
+        if (typeof value === "number" && Number.isFinite(value)) {
+          return String(value);
+        }
+      }
+    }
+
+    return parseLabelValue(trimmed, keys);
+  };
+
+  const mpn1 = lookup(["mpn1", "mpn_1", "mpn one", "mpn 1"]);
+  const mpn2 = lookup(["mpn2", "mpn_2", "mpn two", "mpn 2"]);
+  const mpn3 = lookup(["mpn3", "mpn_3", "mpn three", "mpn 3"]);
+  const internalId = lookup(["internalid", "internal_id", "internal id", "internal"]);
+  const lotNo = lookup(["lotno", "lot_no", "lot number", "lot"]);
+  const qty = lookup(["qty", "quantity", "remaining qty", "remaining quantity"]);
+  const supplier = lookup(["supplier", "vendor", "make"]);
+
   return {
-    feederNumber: entry.feederId,
-    mpn1: entry.alternatives[0]?.mpn ?? null,
-    mpn2: entry.alternatives[1]?.mpn ?? null,
-    mpn3: entry.alternatives[2]?.mpn ?? null,
-    internalPartNumber: entry.alternatives.map((item) => item.partId).join(" "),
-    make1: entry.alternatives[0]?.description ?? null,
-    make2: entry.alternatives[1]?.description ?? null,
-    make3: entry.alternatives[2]?.description ?? null,
+    raw: fallback,
+    mpn1: mpn1 || (fallback && !mpn2 && !mpn3 && !internalId ? fallback : null),
+    mpn2: mpn2 || null,
+    mpn3: mpn3 || null,
+    internalId: internalId || (fallback && !mpn1 && !mpn2 && !mpn3 ? fallback : null),
+    lotNo: lotNo || null,
+    qty: qty || null,
+    supplier: supplier || null,
   };
 }
 
-function resolveMatch(scanned: string, bomItem: PseudoBomItem) {
-  const normalized = normalizeMpn(scanned);
-  const found = buildCandidates(bomItem).find((candidate) => candidate.value === normalized);
-
-  if (!found) {
-    return null;
-  }
-
-  const matchedField =
-    found.label === "MPN 1"
-      ? "mpn1"
-      : found.label === "MPN 2"
-        ? "mpn2"
-        : found.label === "MPN 3"
-          ? "mpn3"
-          : "internalPartNumber";
+function normalizeBomLine(item: any): BomLine {
+  const feederNumber = normalizeValue(item.feederNumber ?? item.feeder_number);
+  const description = String(item.description ?? item.itemName ?? "").trim() || null;
+  const refDes = String(item.reference ?? item.referenceDesignator ?? item.reference_designator ?? "").trim() || null;
+  const internalId = String(item.internalId ?? item.ucalIntPn ?? item.internalPartNumber ?? item.partNumber ?? item.rdeplyPartNo ?? "").trim() || null;
+  const supplier = String(item.supplier1 ?? item.make1 ?? item.manufacturer ?? "").trim() || null;
 
   return {
-    match: true,
-    label: found.label,
-    make: found.make,
-    isPrimary: found.isPrimary,
-    matchedAs: `${found.label}${found.make ? ` (${found.make})` : ""}`,
-    matchedField: matchedField as PendingSplice["matchedField"],
-    status: found.isPrimary ? ("verified" as const) : ("alternate" as const),
+    feederNumber,
+    mpn1: normalizeValue(item.mpn1 ?? item.mpn_1) || null,
+    mpn2: normalizeValue(item.mpn2 ?? item.mpn_2) || null,
+    mpn3: normalizeValue(item.mpn3 ?? item.mpn_3) || null,
+    internalId: normalizeValue(internalId) || null,
+    description,
+    refDes,
+    quantity: String(item.quantity ?? item.requiredQty ?? item.required_qty ?? "").trim() || null,
+    supplier,
   };
 }
 
-function normalizeRemoteSpliceRecord(record: RemoteSpliceRecord): RemoteSpliceRecord {
+function getFieldValue(entity: Pick<SpoolLabel, "mpn1" | "mpn2" | "mpn3" | "internalId"> | BomLine, field: SpoolField): string {
+  return normalizeValue(entity[field]);
+}
+
+function findMatch(subject: Pick<SpoolLabel, "mpn1" | "mpn2" | "mpn3" | "internalId">, target: Pick<SpoolLabel, "mpn1" | "mpn2" | "mpn3" | "internalId"> | BomLine): MatchResult | null {
+  for (const field of ["mpn1", "mpn2", "mpn3", "internalId"] as SpoolField[]) {
+    const received = getFieldValue(subject, field);
+    const expected = getFieldValue(target, field);
+    if (received && expected && received === expected) {
+      return {
+        field,
+        label: FIELD_LABELS[field],
+        expected,
+        received,
+      };
+    }
+  }
+
+  return null;
+}
+
+function formatUTC(date: Date) {
+  return date.toISOString();
+}
+
+function normalizeRemoteRecord(record: RemoteSpliceRecord): RemoteSpliceRecord {
   return {
     ...record,
     feederNumber: String(record.feederNumber ?? ""),
+    operatorId: String(record.operatorId ?? ""),
+    oldSpoolBarcode: String(record.oldSpoolBarcode ?? ""),
+    newSpoolBarcode: String(record.newSpoolBarcode ?? ""),
+    splicedAt: new Date(record.splicedAt).toISOString(),
     scannedValue: String(record.scannedValue ?? record.newSpoolBarcode ?? ""),
     matchedAs: String(record.matchedAs ?? ""),
-    matchedField: (record.matchedField ?? null) as RemoteSpliceRecord["matchedField"],
+    matchedField: record.matchedField ?? null,
     lotCode: record.lotCode ?? null,
-    status: (record.status ?? "failed") as RemoteSpliceRecord["status"],
+    status: record.status ?? "failed",
     verificationMode: record.verificationMode ?? "AUTO",
-    splicedAt: new Date(record.splicedAt),
   };
+}
+
+async function postWorkflowAuditLog(payload: {
+  sessionId: number;
+  operatorId: string;
+  step: WorkflowStep;
+  code: StepFailure["code"];
+  feederNumber: string;
+  scannedValues: Record<string, unknown>;
+  expectedValues: Record<string, unknown>;
+  message: string;
+}) {
+  try {
+    await fetch("/api/audit/log", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entityType: "splice_workflow_error",
+        entityId: `session_${payload.sessionId}_feeder_${payload.feederNumber || "unassigned"}`,
+        action: payload.code,
+        oldValue: {
+          step: payload.step,
+          feederNumber: payload.feederNumber,
+          scannedValues: payload.scannedValues,
+          expectedValues: payload.expectedValues,
+          timestampUtc: formatUTC(new Date()),
+        },
+        newValue: {
+          code: payload.code,
+          message: payload.message,
+        },
+        changedBy: payload.operatorId,
+        description: payload.message,
+      }),
+    });
+  } catch (error) {
+    console.warn("Failed to record splice workflow audit log", error);
+  }
 }
 
 export default function SplicingPage() {
   const [, setLocation] = useLocation();
-  const isVerificationComplete = useIsVerificationComplete();
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { activeSession, loading: sessionLoading } = useSession();
-  const bomEntries = useVerificationStore((state) => state.bomEntries);
-  const scannedFeeders = useVerificationStore((state) => state.scannedFeeders);
-  const catalog = bomEntries.length > 0 ? bomEntries : BOM_DATA;
   const sessionId = Number(activeSession?.id ?? 0);
+  const bomId = Number(activeSession?.bomId ?? 0);
 
-  const spliceQuery = useListSplices(sessionId);
+  const sessionQuery = useGetSession(sessionId, {
+    query: { enabled: !!sessionId, queryKey: getGetSessionQueryKey(sessionId) },
+  });
+  const bomQuery = useGetBom(bomId, {
+    query: { enabled: !!bomId, queryKey: getGetBomQueryKey(bomId) },
+  });
+  const spliceQuery = useListSplices(sessionId, {
+    query: { enabled: !!sessionId, queryKey: getListSplicesQueryKey(sessionId) },
+  });
   const recordSpliceMutation = useRecordSplice();
 
-  const [step, setStep] = useState<Step>("feeder");
+  const [step, setStep] = useState<WorkflowStep>("feeder");
   const [feederNumber, setFeederNumber] = useState("");
-  const [lockedBomItem, setLockedBomItem] = useState<PseudoBomItem | null>(null);
-  const [pendingSplice, setPendingSplice] = useState<PendingSplice | null>(null);
+  const [lockedBomItem, setLockedBomItem] = useState<BomLine | null>(null);
+  const [oldSpool, setOldSpool] = useState<SpoolLabel | null>(null);
+  const [oldMatch, setOldMatch] = useState<MatchResult | null>(null);
+  const [newSpool, setNewSpool] = useState<SpoolLabel | null>(null);
+  const [newMatch, setNewMatch] = useState<MatchResult | null>(null);
+  const [workflowLocked, setWorkflowLocked] = useState(false);
+  const [retryCounts, setRetryCounts] = useState<Record<RetryKey, number>>({ feeder: 0, oldSpool: 0, newSpool: 0, confirm: 0 });
+  const [workflowFailure, setWorkflowFailure] = useState<StepFailure | null>(null);
+  const [finalizing, setFinalizing] = useState(false);
 
   const {
     notifications,
@@ -178,12 +312,6 @@ export default function SplicingPage() {
     showSuccessAlert,
     showWarningAlert,
   } = useNotification();
-
-  useEffect(() => {
-    if (!isVerificationComplete) {
-      setLocation("/verification");
-    }
-  }, [isVerificationComplete, setLocation]);
 
   useEffect(() => {
     if (!sessionLoading && !activeSession) {
@@ -195,347 +323,660 @@ export default function SplicingPage() {
     document.title = `${appConfig.companyShort} | Splicing`;
   }, []);
 
-  const currentLabel = useMemo(() => {
-    if (step === "feeder") return "STEP 1 / 3 - Scan FEEDER NUMBER";
-    if (step === "mpn") return `STEP 2 / 3 - Scan NEW SPOOL MPN for ${feederNumber}`;
-    return `STEP 3 / 3 - Enter LOT CODE (Enter = skip) for ${feederNumber}`;
-  }, [step, feederNumber]);
+  const bomItems = useMemo(() => (bomQuery.data?.items ?? []).map(normalizeBomLine).filter((item) => item.feederNumber), [bomQuery.data]);
+  const bomByFeeder = useMemo(() => new Map(bomItems.map((item) => [item.feederNumber.toUpperCase(), item] as const)), [bomItems]);
+  const records = useMemo(() => (spliceQuery.data ?? []).map((record) => normalizeRemoteRecord(record as RemoteSpliceRecord)), [spliceQuery.data]);
 
-  const lockedCandidates = useMemo(() => {
-    return lockedBomItem ? buildCandidates(lockedBomItem) : [];
-  }, [lockedBomItem]);
+  const bomLoaded = !!bomId && !bomQuery.isLoading && bomItems.length > 0;
+  const currentSessionVerificationMode = String(sessionQuery.data?.verificationMode ?? "AUTO").toUpperCase() === "MANUAL" ? "MANUAL" : "AUTO";
+  const operatorId = String(user?.userId ?? activeSession?.operatorId ?? "");
 
-  const expectedMpns = useMemo(() => {
-    if (!lockedBomItem) return [] as string[];
-    return buildCandidates(lockedBomItem).map((candidate) => candidate.value).filter(Boolean);
-  }, [lockedBomItem]);
+  const currentStepLabel = useMemo(() => {
+    if (workflowLocked) {
+      return `WORKFLOW LOCKED${workflowFailure?.code ? ` - ${workflowFailure.code}` : ""}`;
+    }
+    if (step === "feeder") return "STEP 1 / 5 - Scan FEEDER NUMBER";
+    if (step === "oldSpool") return `STEP 2 / 5 - Scan OLD SPOOL for ${feederNumber}`;
+    if (step === "newSpool") return `STEP 3 / 5 - Scan NEW SPOOL for ${feederNumber}`;
+    return `STEP 4 / 5 - Review and confirm splice for ${feederNumber}`;
+  }, [feederNumber, step, workflowFailure?.code, workflowLocked]);
 
-  const previousVerificationTime = useMemo(() => {
-    return scannedFeeders.get(feederNumber.toUpperCase())?.scannedAt ?? null;
-  }, [feederNumber, scannedFeeders]);
+  const summary = useMemo<FinalSummary | null>(() => {
+    if (!lockedBomItem || !oldSpool || !newSpool || !oldMatch || !newMatch) {
+      return null;
+    }
 
-  const records = useMemo(() => {
-    return (spliceQuery.data ?? []).map((record) => normalizeRemoteSpliceRecord(record as RemoteSpliceRecord));
-  }, [spliceQuery.data]);
+    return {
+      feederNumber,
+      bomPart: `${lockedBomItem.mpn1 || "-"} ${lockedBomItem.description ? `+ ${lockedBomItem.description}` : ""}`.trim(),
+      bomRefDes: lockedBomItem.refDes || "-",
+      oldSpoolId: `${oldSpool.internalId || oldSpool.raw || "-"} (${oldMatch.label}: ${oldMatch.received})`,
+      oldMatched: `${oldMatch.label}: ${oldMatch.received}`,
+      oldLotQty: `${oldSpool.lotNo || "-"} / ${oldSpool.qty || "-"}`,
+      newSpoolId: `${newSpool.internalId || newSpool.raw || "-"} (${newMatch.label}: ${newMatch.received})`,
+      newMatched: `${newMatch.label}: ${newMatch.received}`,
+      newLotQty: `${newSpool.lotNo || "-"} / ${newSpool.qty || "-"}`,
+      operatorId: operatorId || "-",
+      timestampUtc: formatUTC(new Date()),
+    };
+  }, [feederNumber, lockedBomItem, newMatch, newSpool, oldMatch, oldSpool, operatorId]);
 
-  const handleLotKeyDown = async (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (step !== "lot" || event.key !== "Enter") {
+  const currentBomItem = lockedBomItem;
+
+  const recordFailure = async (failure: StepFailure, scannedValues: Record<string, unknown>, expectedValues: Record<string, unknown>) => {
+    const nextCount = (retryCounts[failure.step] ?? 0) + 1;
+    const shouldLock = nextCount >= RETRY_LIMIT;
+
+    setRetryCounts((current) => ({ ...current, [failure.step]: nextCount }));
+    setWorkflowFailure(failure);
+
+    await postWorkflowAuditLog({
+      sessionId,
+      operatorId: operatorId || "system",
+      step: failure.step,
+      code: failure.code,
+      feederNumber,
+      scannedValues,
+      expectedValues,
+      message: failure.message,
+    });
+
+    if (shouldLock) {
+      setWorkflowLocked(true);
+      showErrorAlert(`MAX_RETRY_EXCEEDED - ${failure.message}. Supervisor override required.`, "high");
       return;
     }
 
-    event.preventDefault();
-    await finalizeSplice(value.trim().toUpperCase() || null);
+    showErrorAlert(`${failure.code} - ${failure.message}`, "high");
   };
 
-  const resetFlow = () => {
-    setStep("feeder");
-    setFeederNumber("");
-    setLockedBomItem(null);
-    setPendingSplice(null);
+  const clearStepInput = () => {
     reset();
   };
 
-  const finalizeSplice = async (nextLotCode: string | null) => {
-    if (!pendingSplice || !lockedBomItem || !sessionId) {
-      playBuzzer("error");
-      showErrorAlert("No locked feeder is ready to splice.", "high");
+  const resetWorkflow = () => {
+    setStep("feeder");
+    setFeederNumber("");
+    setLockedBomItem(null);
+    setOldSpool(null);
+    setOldMatch(null);
+    setNewSpool(null);
+    setNewMatch(null);
+    setWorkflowLocked(false);
+    setWorkflowFailure(null);
+    setRetryCounts({ feeder: 0, oldSpool: 0, newSpool: 0, confirm: 0 });
+    clearStepInput();
+  };
+
+  const onFinalize = async () => {
+    if (!summary || !lockedBomItem || !oldSpool || !newSpool || !oldMatch || !newMatch || !sessionId) {
+      showErrorAlert("No confirmed splice is ready to finalize.", "high");
       return;
     }
 
+    setFinalizing(true);
     try {
       const response = await recordSpliceMutation.mutateAsync({
         sessionId,
         data: {
-          feederNumber: pendingSplice.feederNumber,
-          scannedValue: pendingSplice.scannedValue,
-          matchedAs: pendingSplice.matchedAs,
-          matchedField: pendingSplice.matchedField,
-          lotCode: nextLotCode,
-          status: pendingSplice.status,
-          verificationMode: "AUTO",
-          splicedAt: new Date().toISOString(),
-          operatorId: pendingSplice.operatorId,
+          feederNumber,
+          operatorId: operatorId || "0",
+          scannedValue: newSpool.raw,
+          oldSpoolBarcode: oldSpool.raw,
+          newSpoolBarcode: newSpool.raw,
+          durationSeconds: 0,
+          matchedAs: newMatch.label,
+          matchedField: newMatch.field,
+          status: newMatch.field === "mpn1" ? "verified" : "alternate",
+          verificationMode: currentSessionVerificationMode,
         } as any,
       });
 
-      const normalizedRecord = normalizeRemoteSpliceRecord((response ?? {}) as RemoteSpliceRecord);
+      const normalized = normalizeRemoteRecord((response ?? {}) as RemoteSpliceRecord);
       queryClient.setQueryData(getListSplicesQueryKey(sessionId), (current: unknown) => {
         const currentList = Array.isArray(current) ? (current as RemoteSpliceRecord[]) : [];
-        return [normalizedRecord, ...currentList];
+        return [normalized, ...currentList];
       });
 
-      playBuzzer("success");
-      showSuccessAlert(
-        normalizedRecord.status === "verified"
-          ? `✓ Splice Approved — ${normalizedRecord.matchedAs}`
-          : `⚠ Splice Approved — Alternate ${normalizedRecord.matchedAs}`,
-        "medium",
-      );
-      resetFlow();
+      showSuccessAlert(`Splice saved successfully for feeder ${feederNumber}.`, "medium");
+      setTimeout(() => window.print(), 250);
+      resetWorkflow();
     } catch (error) {
-      playBuzzer("error");
       showErrorAlert(error instanceof Error ? error.message : "Failed to save splice.", "high");
+    } finally {
+      setFinalizing(false);
     }
   };
 
-  const onScan = async (raw: string) => {
-    const value = raw.trim().toUpperCase();
+  const handleWorkflowScan = async (raw: string) => {
+    if (workflowLocked) {
+      showWarningAlert("Workflow is locked. Supervisor override is required.", "high");
+      return;
+    }
+
+    const value = raw.trim();
     if (!value) return;
 
+    if (!bomLoaded) {
+      const failure: StepFailure = {
+        code: "NO_BOM_LOADED",
+        step: "feeder",
+        message: "A BOM must be loaded before splicing can begin.",
+      };
+      await recordFailure(failure, { scannedValue: value }, { bomLoaded: false });
+      clearStepInput();
+      return;
+    }
+
     if (step === "feeder") {
-      const bomEntry = catalog.find((entry) => entry.feederId.toUpperCase() === value);
-      if (!bomEntry) {
-        playBuzzer("error");
-        showErrorAlert(`Feeder ${value} was not found in the BOM.`, "high");
-        reset();
+      const normalizedFeeder = normalizeValue(value);
+      const bomItem = bomByFeeder.get(normalizedFeeder);
+      if (!bomItem) {
+        const failure: StepFailure = {
+          code: "FEEDER_NOT_IN_BOM",
+          step: "feeder",
+          message: `Feeder ${normalizedFeeder} was not found in the loaded BOM.`,
+        };
+        await recordFailure(failure, { feederNumber: normalizedFeeder }, { expectedFeeders: bomItems.map((item) => item.feederNumber) });
+        clearStepInput();
         return;
       }
 
-      const pseudoBomItem = toPseudoBomItem(bomEntry);
-      setFeederNumber(value);
-      setLockedBomItem(pseudoBomItem);
-      setStep("mpn");
-      reset();
-
-      if (scannedFeeders.has(value)) {
-        playBuzzer("success");
-        showSuccessAlert(`Feeder ${value} locked for splicing.`, "medium");
-      } else {
-        playBuzzer("warning");
-        showWarningAlert(`Feeder ${value} has not been verified yet. Proceeding with splice warning.`, "medium");
-      }
-
+      setFeederNumber(normalizedFeeder);
+      setLockedBomItem(bomItem);
+      setStep("oldSpool");
+      setWorkflowFailure(null);
+      setRetryCounts((current) => ({ ...current, feeder: 0 }));
+      clearStepInput();
+      showSuccessAlert(`Feeder ${normalizedFeeder} accepted. Scan the old spool now.`, "medium");
       return;
     }
 
-    if (step === "mpn") {
+    if (step === "oldSpool") {
       if (!lockedBomItem) {
-        playBuzzer("error");
         showErrorAlert("No feeder is locked. Scan a feeder first.", "high");
+        clearStepInput();
         return;
       }
 
-      const match = resolveMatch(value, lockedBomItem);
+      const parsed = parseSpoolLabel(value);
+      const match = findMatch(parsed, lockedBomItem);
       if (!match) {
-        playBuzzer("error");
-        showErrorAlert(`Wrong part. Expected: ${expectedMpns.join(" / ") || "No MPNs configured"}`, "high");
-        reset();
+        const failure: StepFailure = {
+          code: "OLD_SPOOL_BOM_MISMATCH",
+          step: "oldSpool",
+          message: `Old spool does not match BOM feeder ${feederNumber}.`,
+        };
+        await recordFailure(failure, parsed, { feederNumber, bom: lockedBomItem });
+        clearStepInput();
         return;
       }
 
-      setPendingSplice({
-        feederNumber,
-        scannedValue: value,
-        matchedAs: match.matchedAs,
-        matchedField: match.matchedField,
-        status: match.status,
-        operatorId: user?.userId ?? 0,
-      });
-      setStep("lot");
-      reset();
-
-      if (match.status === "verified") {
-        playBuzzer("success");
-        showSuccessAlert(`✓ Splice Approved — ${match.matchedAs}`);
-      } else {
-        playBuzzer("warning");
-        showWarningAlert(`⚠ Splice Approved — Alternate ${match.matchedAs}`);
-      }
-
+      setOldSpool(parsed);
+      setOldMatch(match);
+      setStep("newSpool");
+      setWorkflowFailure(null);
+      setRetryCounts((current) => ({ ...current, oldSpool: 0 }));
+      clearStepInput();
+      showSuccessAlert(`Old spool accepted via ${match.label}.`, "medium");
       return;
     }
 
-    if (step === "lot") {
-      await finalizeSplice(value || null);
+    if (step === "newSpool") {
+      if (!oldSpool || !oldMatch) {
+        showErrorAlert("Old spool must be confirmed before scanning the new spool.", "high");
+        clearStepInput();
+        return;
+      }
+
+      const parsed = parseSpoolLabel(value);
+      const sameFieldValue = normalizeValue(parsed[oldMatch.field]);
+      const oldFieldValue = normalizeValue(oldSpool[oldMatch.field]);
+      if (!sameFieldValue || !oldFieldValue || sameFieldValue !== oldFieldValue) {
+        const failure: StepFailure = {
+          code: "NEW_SPOOL_MISMATCH",
+          step: "newSpool",
+          message: `New spool does not match the accepted old spool field ${oldMatch.label}.`,
+        };
+        await recordFailure(failure, parsed, { feederNumber, oldSpool, acceptedField: oldMatch.field, acceptedValue: oldFieldValue });
+        clearStepInput();
+        return;
+      }
+
+      const newMatch = {
+        field: oldMatch.field,
+        label: oldMatch.label,
+        expected: oldFieldValue,
+        received: sameFieldValue,
+      };
+
+      setNewSpool(parsed);
+      setNewMatch(newMatch);
+      setStep("confirm");
+      setWorkflowFailure(null);
+      setRetryCounts((current) => ({ ...current, newSpool: 0 }));
+      clearStepInput();
+      showSuccessAlert(`New spool accepted via ${newMatch.label}. Review and confirm.`, "medium");
     }
   };
 
   const { inputRef, value, setValue, reset } = useScanner({
-    onSubmit: onScan,
+    onSubmit: handleWorkflowScan,
     autoFocus: true,
     resetAfterMs: 10000,
   });
 
   useAutoScan(value, {
-    onScan,
+    onScan: handleWorkflowScan,
     delayMs: 300,
     minLength: 1,
-    enabled: step !== "lot",
+    enabled: !workflowLocked && step !== "confirm",
   });
 
-  return (
-    <div className="min-h-screen bg-background p-4 md:p-6 app-noise">
-      <div className="mx-auto max-w-7xl space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <AppLogo className="h-10 w-10 shrink-0" />
-            <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold">Splicing Station</h1>
-              <p className="truncate text-xs text-muted-foreground">{appConfig.systemTitle}</p>
+  // ─── Loading state ────────────────────────────────────────────────────────────
+  if (sessionLoading || bomQuery.isLoading) {
+    return (
+      <div className="min-h-screen bg-background p-4 md:p-6">
+        <Card className="border-border shadow-sm">
+          <CardContent className="flex items-center justify-center py-16 text-muted-foreground">
+            Loading splice workflow...
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ─── No BOM state ─────────────────────────────────────────────────────────────
+  if (!bomLoaded) {
+    return (
+      <div className="min-h-screen bg-background p-4 md:p-6">
+        <div className="mx-auto max-w-2xl space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <AppLogo className="h-10 w-10 shrink-0" />
+              <div className="min-w-0">
+                <h1 className="truncate text-xl font-bold">Splicing Station</h1>
+                <p className="truncate text-xs text-muted-foreground">{appConfig.systemTitle}</p>
+              </div>
             </div>
+            <Button variant="outline" onClick={() => setLocation("/verification")}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back To Verification
+            </Button>
           </div>
-          <Button variant="outline" onClick={() => setLocation("/verification")}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back To Verification
-          </Button>
+
+          <Card className="border-border shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TriangleAlert className="h-5 w-5 text-red-600" /> Workflow blocked
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+                <div className="font-bold">NO_BOM_LOADED</div>
+                <div className="mt-1">Load a BOM into the active session before starting the splice workflow.</div>
+              </div>
+              <Button onClick={() => setLocation("/verification")}>Return to verification</Button>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-4">
-            <Card className="panel-pop scan-surface">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Scissors className="h-5 w-5" /> Splicing Workflow
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold uppercase tracking-wider">
-                  <div className={`rounded border px-3 py-2 ${step === "feeder" ? "border-amber-400 bg-amber-50 text-amber-700" : "border-border bg-muted/30 text-muted-foreground"}`}>1. Feeder</div>
-                  <div className={`rounded border px-3 py-2 ${step === "mpn" ? "border-amber-400 bg-amber-50 text-amber-700" : "border-border bg-muted/30 text-muted-foreground"}`}>2. New Spool MPN</div>
-                  <div className={`rounded border px-3 py-2 ${step === "lot" ? "border-amber-400 bg-amber-50 text-amber-700" : "border-border bg-muted/30 text-muted-foreground"}`}>3. Lot Code</div>
+        <ScanNotification notifications={notifications} onDismiss={dismissNotification} />
+        <LogPanel />
+      </div>
+    );
+  }
+
+  // ─── Main page ────────────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen overflow-y-auto bg-gradient-to-b from-background via-background to-muted/20 app-noise">
+
+      {/* Decorative blobs — fixed so they never push content */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -left-24 top-[-6rem] h-72 w-72 rounded-full bg-amber-500/10 blur-3xl" />
+        <div className="absolute right-[-5rem] top-24 h-80 w-80 rounded-full bg-slate-500/10 blur-3xl" />
+        <div className="absolute bottom-[-8rem] left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-emerald-500/10 blur-3xl" />
+      </div>
+
+      {/* ── Single scrollable column ─────────────────────────────────────────── */}
+      <div className="relative mx-auto w-full max-w-screen-2xl space-y-6 px-4 py-6 md:px-6">
+
+        {/* ═══════════════════════════════════════════════════════════════════════
+            SECTION 1 — PAGE HEADER (title + session pills)
+        ═══════════════════════════════════════════════════════════════════════ */}
+        <div className="overflow-hidden rounded-3xl border border-border/70 bg-card/85 shadow-[0_24px_80px_rgba(15,23,42,0.12)] backdrop-blur">
+          {/* Title bar */}
+          <div className="flex flex-col gap-4 border-b border-border/60 bg-gradient-to-r from-slate-950 via-slate-900 to-amber-900 px-5 py-5 text-white sm:flex-row sm:items-center sm:justify-between md:px-6">
+            <div className="flex min-w-0 items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 shadow-inner shadow-black/20">
+                <AppLogo className="h-9 w-9" />
+              </div>
+              <div className="min-w-0 space-y-1.5">
+                <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/30 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.28em] text-amber-200">
+                  <Scissors className="h-3.5 w-3.5" /> Guided Splice Station
+                </div>
+                <h1 className="truncate text-2xl font-black tracking-tight md:text-3xl">Splicing Station</h1>
+                <p className="max-w-2xl text-sm text-slate-300">
+                  Scan the feeder, old spool, and new spool in one flow. Every mismatch is logged and the final record is saved back to the session.
+                </p>
+              </div>
+            </div>
+            <div className="shrink-0">
+              <Button
+                variant="secondary"
+                className="border-white/10 bg-white/10 text-white hover:bg-white/20"
+                onClick={() => setLocation("/verification")}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back To Verification
+              </Button>
+            </div>
+          </div>
+
+          {/* Session summary pills */}
+          <div className="grid grid-cols-2 gap-3 px-5 py-4 md:px-6 lg:grid-cols-4">
+            {[
+              { label: "Session",  value: activeSession?.id || sessionId },
+              { label: "BOM",      value: activeSession?.bomId || bomId },
+              { label: "Operator", value: operatorId || "Unknown" },
+              { label: "Mode",     value: `${currentSessionVerificationMode} / ${workflowLocked ? "Locked" : "Ready"}` },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-2xl border border-border/70 bg-muted/30 p-3">
+                <div className="text-[11px] font-bold uppercase tracking-[0.24em] text-muted-foreground">{label}</div>
+                <div className="mt-1 truncate font-mono text-sm font-semibold">{String(value)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════════
+            SECTION 2 — SPLICING VERIFICATION (full-width, TOP priority)
+        ═══════════════════════════════════════════════════════════════════════ */}
+        <Card className="overflow-hidden border-border/70 bg-card/90 shadow-[0_16px_50px_rgba(15,23,42,0.08)] backdrop-blur">
+          <CardHeader className="border-b border-border/60 bg-gradient-to-r from-amber-50 via-background to-background pb-4">
+            <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+              <Scissors className="h-5 w-5 text-amber-600" /> Guided Splice Workflow
+            </CardTitle>
+            <p className="text-xs text-muted-foreground md:text-sm">
+              Follow the five-step flow below. The page locks down each step once it is accepted.
+            </p>
+          </CardHeader>
+
+          <CardContent className="space-y-5 p-4 md:p-6">
+
+            {/* Step progress tracker — full width across 5 cols */}
+            <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold uppercase tracking-[0.2em] sm:grid-cols-5">
+              {[
+                { key: "feeder",   label: "Feeder",    done: step !== "feeder" },
+                { key: "oldSpool", label: "Old Spool", done: step === "newSpool" || step === "confirm" },
+                { key: "newSpool", label: "New Spool", done: step === "confirm" },
+                { key: "confirm",  label: "Review",    done: step === "confirm" },
+                { key: "submit",   label: finalizing ? "Submitting" : "Submit", done: finalizing },
+              ].map((item, index) => {
+                const isActive =
+                  (item.key === "feeder"   && step === "feeder")   ||
+                  (item.key === "oldSpool" && step === "oldSpool") ||
+                  (item.key === "newSpool" && step === "newSpool") ||
+                  (item.key === "confirm"  && step === "confirm")  ||
+                  (item.key === "submit"   && finalizing);
+
+                return (
+                  <div
+                    key={item.key}
+                    className={`rounded-2xl border px-3 py-3 transition-all ${
+                      isActive
+                        ? "border-amber-400 bg-amber-50 text-amber-800 shadow-sm"
+                        : item.done
+                          ? "border-emerald-200 bg-emerald-50/70 text-emerald-700"
+                          : "border-border bg-muted/25 text-muted-foreground"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1 text-[10px]">
+                      <span>{index + 1}</span>
+                      <span className="tracking-[0.28em]">{item.done ? "OK" : isActive ? "NOW" : "WAIT"}</span>
+                    </div>
+                    <div className="mt-1.5 text-xs md:text-sm">{item.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Two-column: step context + scan input side by side on md+ */}
+            <div className="grid gap-4 md:grid-cols-2">
+
+              {/* Left col: current step status + feeder/BOM info */}
+              <div className={`rounded-2xl border p-4 ${workflowLocked ? "border-red-300 bg-red-50/80" : "border-border/70 bg-card shadow-inner"}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label className="text-sm font-semibold tracking-wide text-foreground md:text-base">{currentStepLabel}</Label>
+                  <div className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider ${workflowLocked ? "border-red-300 bg-red-100 text-red-700" : "border-border bg-muted/30 text-muted-foreground"}`}>
+                    {currentSessionVerificationMode} mode
+                  </div>
                 </div>
 
-                <Label className="text-sm font-semibold tracking-wide">{currentLabel}</Label>
-
-                {lockedBomItem && (
-                  <div className="rounded-2xl border border-amber-300 bg-amber-50/80 p-4 shadow-sm dark:border-amber-700 dark:bg-amber-950/30">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 text-base font-black text-amber-900 dark:text-amber-100">
-                          <Scissors className="h-4 w-4 shrink-0" />
-                          <span className="truncate">{feederNumber}</span>
-                        </div>
-                        <div className="mt-2 space-y-1 text-sm">
-                          <div className="font-semibold text-foreground">Expected:</div>
-                          <div className="font-mono text-xs text-muted-foreground">{expectedMpns.length > 0 ? expectedMpns.join(" / ") : "No MPNs configured"}</div>
-                          <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
-                            {lockedCandidates.length > 0 ? (
-                              lockedCandidates.map((candidate) => (
-                                <div key={`${candidate.label}-${candidate.value}`}>
-                                  {candidate.label}: {candidate.make || "-"}
-                                </div>
-                              ))
-                            ) : (
-                              <div>No makes configured.</div>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground">Previously verified: {previousVerificationTime ? `✓ ${previousVerificationTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "Not yet verified"}</div>
-                        </div>
-                      </div>
-                      <div className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-bold text-amber-700 shadow-sm dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-300">
-                        {step === "feeder" ? "Waiting" : step === "mpn" ? "Locked" : "Ready to Save"}
-                      </div>
-                    </div>
+                {workflowFailure && (
+                  <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+                    <div className="font-bold">{workflowFailure.code}</div>
+                    <div className="mt-1">{workflowFailure.message}</div>
                   </div>
                 )}
 
-                <Input
-                  ref={inputRef}
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  onKeyDown={step === "lot" ? handleLotKeyDown : undefined}
-                  placeholder={step === "feeder" ? "Scan feeder number" : step === "mpn" ? "Scan new spool MPN" : "Enter lot code or press Enter to skip"}
-                  className="scan-input-surface h-14 text-center font-mono text-xl"
-                  autoComplete="off"
-                />
+                {workflowLocked && (
+                  <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200">
+                    <div className="font-bold">MAX_RETRY_EXCEEDED</div>
+                    <div className="mt-1">Supervisor override required before the workflow can continue.</div>
+                  </div>
+                )}
 
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" className="flex-1" onClick={resetFlow}>
-                    Reset
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Feeder</div>
+                    <div className="mt-1 font-mono text-lg font-bold">{feederNumber || "—"}</div>
+                  </div>
+                  <div className="rounded-lg border bg-muted/20 p-3">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Matched BOM</div>
+                    <div className="mt-1 font-mono text-sm font-semibold">
+                      {lockedBomItem ? `${lockedBomItem.mpn1 || "-"} ${lockedBomItem.description ? `+ ${lockedBomItem.description}` : ""}`.trim() : "—"}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">{lockedBomItem?.refDes || "RefDes not set"}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right col: scan input box + action buttons */}
+              {step !== "confirm" && !workflowLocked ? (
+                <div className="flex flex-col gap-3 md:col-span-2">
+                  <div className="rounded-2xl border border-border/70 bg-background/90 p-4 shadow-sm md:p-6">
+                    <div className="mb-2 flex items-center justify-between gap-2 text-[11px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
+                      <span>Live scan input</span>
+                      <span>{step === "feeder" ? "Feeder" : step === "oldSpool" ? "Old spool" : "New spool"}</span>
+                    </div>
+                    <Input
+                      ref={inputRef}
+                      value={value}
+                      onChange={(e) => setValue(e.target.value)}
+                      placeholder={
+                        step === "feeder"   ? "Scan feeder number"
+                        : step === "oldSpool" ? "Scan old spool label"
+                        : "Scan new spool label"
+                      }
+                      className="h-24 border-2 border-dashed border-amber-200 bg-background/95 text-center font-mono text-2xl font-semibold tracking-[0.22em] shadow-inner focus-visible:border-amber-500 md:h-28 md:text-3xl lg:h-32 lg:text-4xl"
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  <div className="mt-auto grid gap-2 sm:grid-cols-2">
+                    <Button type="button" variant="outline" className="h-11 border-border/70 bg-background/80" onClick={resetWorkflow}>
+                      Reset Workflow
+                    </Button>
+                    {step === "oldSpool" && (
+                      <Button type="button" className="h-11 bg-amber-600 text-white hover:bg-amber-700" onClick={() => handleWorkflowScan(value)}>
+                        Validate Old Spool
+                      </Button>
+                    )}
+                    {step === "newSpool" && (
+                      <Button type="button" className="h-11 bg-amber-600 text-white hover:bg-amber-700" onClick={() => handleWorkflowScan(value)}>
+                        Validate New Spool
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Placeholder when scan input is hidden (confirm step or locked) */
+                <div className="flex items-center justify-center rounded-2xl border border-dashed border-border/70 bg-muted/10 p-6 text-sm text-muted-foreground">
+                  {workflowLocked ? "Workflow locked — supervisor override required." : "Review the summary below before submitting."}
+                </div>
+              )}
+            </div>
+
+            {/* Confirm & submit review — full width within the card */}
+            {step === "confirm" && summary && (
+              <div className="space-y-4 rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-background to-emerald-100/50 p-4 shadow-[0_16px_40px_rgba(16,185,129,0.12)] dark:border-emerald-900/40 dark:from-emerald-950/30 dark:via-background dark:to-emerald-900/10">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-[0.24em] text-emerald-700 dark:text-emerald-300">Final review</div>
+                    <div className="mt-1 text-sm text-muted-foreground">Confirm the record before it is written to the session log.</div>
+                  </div>
+                  <Button type="button" variant="ghost" size="sm" className="border border-emerald-200 bg-white/70 hover:bg-white" onClick={() => window.print()}>
+                    <Printer className="mr-2 h-4 w-4" /> Print
                   </Button>
-                  {step === "lot" && (
-                    <Button type="button" className="flex-1" onClick={() => finalizeSplice(value.trim().toUpperCase() || null)}>
-                      Save Lot
-                    </Button>
-                  )}
-                  {step === "lot" && (
-                    <Button type="button" variant="secondary" className="flex-1" onClick={() => finalizeSplice(null)}>
-                      Skip Lot
-                    </Button>
-                  )}
                 </div>
 
-                <div className="rounded-lg border border-dashed border-border bg-background/60 p-3 text-xs text-muted-foreground">
-                  Step 1 validates the feeder against the BOM. Step 2 requires the replacement spool to match MPN 1, 2, 3, or an internal ID token for that same feeder. Step 3 saves the lot code if provided.
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {[
+                    { label: "Feeder No.",   value: summary.feederNumber, note: "Locked from Step 1" },
+                    { label: "BOM Part",     value: summary.bomPart || "-", note: `RefDes: ${summary.bomRefDes}` },
+                    { label: "Old Spool ID", value: summary.oldSpoolId, note: `Old Lot / Qty: ${summary.oldLotQty}` },
+                    { label: "New Spool ID", value: summary.newSpoolId, note: `New Lot / Qty: ${summary.newLotQty}` },
+                    { label: "Operator ID", value: summary.operatorId, note: "Current operator" },
+                    { label: "Timestamp",    value: summary.timestampUtc, note: "UTC time" },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-2xl border border-border/70 bg-background/90 p-3 shadow-sm">
+                      <div className="text-[11px] font-bold uppercase tracking-[0.24em] text-muted-foreground">{item.label}</div>
+                      <div className="mt-2 break-words font-mono text-sm font-semibold text-foreground">{item.value}</div>
+                      <div className="mt-2 text-xs text-muted-foreground">{item.note}</div>
+                    </div>
+                  ))}
                 </div>
-              </CardContent>
-            </Card>
 
-            <Card className="panel-pop scan-surface">
-              <CardHeader>
-                <CardTitle>Splice Log</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <div className="grid grid-cols-6 gap-2 rounded bg-muted/40 px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button type="button" variant="outline" className="h-11 border-border/70 bg-background/80" onClick={resetWorkflow}>
+                    Start Over
+                  </Button>
+                  <Button type="button" className="h-11 bg-emerald-600 text-white hover:bg-emerald-700" onClick={onFinalize} disabled={finalizing}>
+                    {finalizing ? "Submitting..." : "Submit & Finalize"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Info footer */}
+            <div className="rounded-2xl border border-dashed border-border/70 bg-muted/20 p-3 text-xs leading-relaxed text-muted-foreground">
+              Step 1 checks the feeder against the loaded BOM. Step 2 requires the old spool to match one BOM field. Step 3 requires the new spool to match the same field from the old spool. Step 4 reviews the final record before submission.
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Loaded BOM line */}
+        <Card className="overflow-hidden border-border/70 bg-card/90 shadow-[0_8px_30px_rgba(15,23,42,0.07)]">
+            <CardHeader className="border-b border-border/60 bg-gradient-to-r from-slate-50 via-background to-background py-3">
+              <CardTitle className="text-sm">Loaded BOM Line</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 p-3 text-sm">
+              {currentBomItem ? (
+                <>
+                  {[
+                    { label: "Feeder",      value: currentBomItem.feederNumber, mono: true, bold: true },
+                    { label: "MPN1",        value: currentBomItem.mpn1 || "-", mono: true },
+                    { label: "Description", value: currentBomItem.description || "-" },
+                    { label: "RefDes",      value: currentBomItem.refDes || "-" },
+                    { label: "Internal ID", value: currentBomItem.internalId || "-", mono: true },
+                  ].map(({ label, value, mono, bold }) => (
+                    <div key={label} className="flex items-center justify-between rounded-xl border border-border/70 bg-muted/20 px-3 py-2">
+                      <span className="shrink-0 text-xs text-muted-foreground">{label}</span>
+                      <span className={`ml-2 min-w-0 truncate text-right text-xs ${mono ? "font-mono" : ""} ${bold ? "font-bold" : ""}`}>{value}</span>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 p-4 text-center text-xs text-muted-foreground">
+                  Scan a feeder to lock the BOM line.
+                </div>
+              )}
+            </CardContent>
+        </Card>
+
+        {/* ═══════════════════════════════════════════════════════════════════════
+            SECTION 4 — LOGS (always at the bottom)
+        ═══════════════════════════════════════════════════════════════════════ */}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+          {/* Splice log */}
+          <Card className="overflow-hidden border-border/70 bg-card/90 shadow-[0_16px_50px_rgba(15,23,42,0.08)]">
+            <CardHeader className="border-b border-border/60 bg-gradient-to-r from-amber-50 via-background to-background">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Scissors className="h-4 w-4 text-amber-600" /> Splice Log
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+              <div className="mb-2 hidden sm:block">
+                <div className="grid min-w-[600px] grid-cols-6 gap-2 rounded-xl border border-border/70 bg-muted/35 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
                   <div>Time</div>
                   <div>Feeder</div>
-                  <div>Scanned MPN</div>
+                  <div>Old / New</div>
                   <div>Matched As</div>
                   <div>Lot</div>
                   <div>Status</div>
                 </div>
+              </div>
 
-                {records.length === 0 ? (
-                  <div className="rounded border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No splices yet.</div>
-                ) : (
-                  records.map((row, idx) => (
-                    <div key={`${row.id}-${idx}`} className="grid grid-cols-6 gap-2 rounded border p-2 text-sm">
-                      <div className="font-mono text-xs text-muted-foreground">{row.splicedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</div>
-                      <div className="font-mono font-semibold">{row.feederNumber}</div>
-                      <div className="font-mono truncate">{row.scannedValue}</div>
-                      <div className="truncate text-xs">{row.matchedAs}</div>
-                      <div className="font-mono truncate">{row.lotCode || "-"}</div>
+              {records.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border/70 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+                  No splices yet. The last finalized splice will appear here.
+                </div>
+              ) : (
+                <div className="space-y-2 overflow-x-auto">
+                  {records.map((row, idx) => (
+                    <div
+                      key={`${row.id}-${idx}`}
+                      className="grid min-w-[600px] grid-cols-6 gap-2 rounded-xl border border-border/70 bg-background/95 p-3 text-sm shadow-sm transition-colors hover:border-amber-300 hover:bg-amber-50/40"
+                    >
+                      <div className="font-mono text-xs text-muted-foreground">
+                        {new Date(row.splicedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                      </div>
+                      <div className="font-mono font-semibold text-foreground">{row.feederNumber}</div>
+                      <div className="truncate font-mono text-xs text-muted-foreground">{row.oldSpoolBarcode} → {row.newSpoolBarcode}</div>
+                      <div className="truncate text-xs text-foreground">{row.matchedAs || "—"}</div>
+                      <div className="font-mono truncate text-muted-foreground">{row.lotCode || "-"}</div>
                       <div>
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${row.status === "verified" ? "bg-green-100 text-green-700" : row.status === "alternate" ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"}`}>
-                          {row.status}
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                          row.status === "verified"   ? "bg-emerald-100 text-emerald-700"
+                          : row.status === "alternate" ? "bg-amber-100 text-amber-700"
+                          : "bg-red-100 text-red-700"
+                        }`}>
+                          {row.status || "failed"}
                         </span>
                       </div>
                     </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-          <div className="space-y-4">
-            <Card className="panel-pop scan-surface">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" /> Validation Status
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex items-center justify-between rounded border p-2">
-                  <span>Verification complete</span>
-                  <span className={isVerificationComplete ? "text-green-600" : "text-amber-600"}>{isVerificationComplete ? "Yes" : "No"}</span>
-                </div>
-                <div className="flex items-center justify-between rounded border p-2">
-                  <span>Known feeders</span>
-                  <span>{bomEntries.length}</span>
-                </div>
-                <div className="flex items-center justify-between rounded border p-2">
-                  <span>Splice records</span>
-                  <span>{records.length}</span>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Activity log */}
+          <Card className="overflow-hidden border-border/70 bg-card/90 shadow-[0_16px_50px_rgba(15,23,42,0.08)]">
+            <CardHeader className="border-b border-border/60 bg-gradient-to-r from-emerald-50 via-background to-background">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Activity Log
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4">
+              <LogPanel />
+            </CardContent>
+          </Card>
 
-            <Card className="panel-pop scan-surface">
-              <CardHeader>
-                <CardTitle>Scan Guidance</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-xs text-muted-foreground">
-                <div className="flex items-start gap-2"><Circle className="mt-0.5 h-3.5 w-3.5 text-amber-500" /> Step 1 scans feeder and warns if it has not been verified yet.</div>
-                <div className="flex items-start gap-2"><CheckCircle2 className="mt-0.5 h-3.5 w-3.5 text-green-600" /> Step 2 approves only exact MPN 1, 2, 3 or internal ID tokens for the same feeder.</div>
-                <div className="flex items-start gap-2"><TriangleAlert className="mt-0.5 h-3.5 w-3.5 text-amber-500" /> Alternate parts are saved as alternate, and mismatches stay on the same step.</div>
-                <div className="flex items-start gap-2"><XCircle className="mt-0.5 h-3.5 w-3.5 text-red-600" /> Step 3 can be skipped or saved with a lot code.</div>
-              </CardContent>
-            </Card>
-          </div>
         </div>
-      </div>
+      </div>{/* end scrollable column */}
 
       <ScanNotification notifications={notifications} onDismiss={dismissNotification} />
-      <LogPanel />
     </div>
   );
 }

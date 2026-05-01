@@ -15,6 +15,25 @@ interface AuthSessionResponse {
   role: Role;
 }
 
+const AUTH_SESSION_HINT_KEY = "feeder-scanner-auth-session";
+
+function hasAuthSessionHint() {
+  return typeof window !== "undefined" && window.localStorage.getItem(AUTH_SESSION_HINT_KEY) === "true";
+}
+
+function setAuthSessionHint(isAuthenticated: boolean) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (isAuthenticated) {
+    window.localStorage.setItem(AUTH_SESSION_HINT_KEY, "true");
+    return;
+  }
+
+  window.localStorage.removeItem(AUTH_SESSION_HINT_KEY);
+}
+
 function normalizeAuthSession(payload: unknown): AuthSessionResponse | null {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -108,6 +127,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    if (!hasAuthSessionHint()) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
     let active = true;
 
     void (async () => {
@@ -117,8 +142,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (active) {
           if (session) {
             setUser({ userId: session.userId, name: session.username, role: session.role });
+            setAuthSessionHint(true);
           } else {
             setUser(null);
+            setAuthSessionHint(false);
           }
         }
       } catch (error) {
@@ -132,6 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (active) {
           setUser(null);
+          setAuthSessionHint(false);
         }
       } finally {
         if (active) {
@@ -169,6 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setUser({ userId: session.userId, name: session.username, role: session.role });
+    setAuthSessionHint(true);
   };
 
   const logout = async () => {
@@ -177,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       method: "POST",
     });
     setUser(null);
+    setAuthSessionHint(false);
     setLoading(false);
   };
 

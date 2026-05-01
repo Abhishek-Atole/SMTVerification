@@ -95,17 +95,18 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-const localDevOriginPattern = /^http:\/\/localhost:\d+$/;
+const localOriginPattern = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
+const allowAnyLocalhostOrigin = allowedOrigins.some((origin) => localOriginPattern.test(origin));
 
 app.use(
   cors({
     origin: (origin, callback) => {
+      const isLocalOrigin = typeof origin === "string" && localOriginPattern.test(origin);
       const isLocalDevOrigin =
-        process.env.NODE_ENV !== "production" &&
-        typeof origin === "string" &&
-        localDevOriginPattern.test(origin);
+        isLocalOrigin && process.env.NODE_ENV !== "production";
+      const isAllowedLocalhostOrigin = isLocalOrigin && allowAnyLocalhostOrigin;
 
-      if (isLocalDevOrigin) {
+      if (isLocalDevOrigin || isAllowedLocalhostOrigin) {
         callback(null, true);
         return;
       }
@@ -116,7 +117,7 @@ app.use(
         return;
       }
 
-      if (allowedOrigins.includes(origin || "")) {
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
         return;
       }

@@ -1,13 +1,15 @@
 // @ts-nocheck
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useListBoms, useCreateSession } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format } from "date-fns";
-import { Loader2, Upload } from "lucide-react";
+import { ChevronDown, Loader2, Search, Upload } from "lucide-react";
 import { appConfig } from "@/lib/appConfig";
 import { AppLogo } from "@/components/AppLogo";
 
@@ -74,6 +76,8 @@ export default function SessionNew() {
   const createSession = useCreateSession();
 
   const [bomId, setBomId] = useState("");
+  const [bomSearch, setBomSearch] = useState("");
+  const [bomPickerOpen, setBomPickerOpen] = useState(false);
   const [freeScanMode, setFreeScanMode] = useState(false);
   const [companyName, setCompanyName] = useState(appConfig.companyName);
   const [customerName, setCustomerName] = useState("");
@@ -127,6 +131,16 @@ export default function SessionNew() {
 
   // Defensive check: ensure boms is an array
   const bomsArray = Array.isArray(boms) ? boms : [];
+  const normalizedBomSearch = bomSearch.trim().toLowerCase();
+  const showBomSearchResults = normalizedBomSearch.length >= 1;
+  const filteredBoms = showBomSearchResults
+    ? bomsArray.filter((bom) => {
+        const name = (bom.name || "").toLowerCase();
+        const description = (bom.description || "").toLowerCase();
+        return name.includes(normalizedBomSearch) || description.includes(normalizedBomSearch);
+      })
+    : bomsArray;
+  const selectedBom = bomsArray.find((bom) => bom.id.toString() === bomId);
 
   return (
     <div className="w-full space-y-4 sm:space-y-6 lg:space-y-8 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 max-w-4xl mx-auto">
@@ -266,18 +280,80 @@ export default function SessionNew() {
               {!freeScanMode && (
                 <div>
                   <Label className="text-sm font-medium">Bill of Materials (BOM) *</Label>
-                  <Select value={bomId} onValueChange={setBomId} required>
-                    <SelectTrigger className="bg-background rounded-sm border-primary text-sm h-10 sm:h-10">
-                      <SelectValue placeholder="Select a BOM..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {bomsArray.map((bom) => (
-                        <SelectItem key={bom.id} value={bom.id.toString()}>
-                          {bom.name} ({bom.itemCount} items)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover
+                    open={bomPickerOpen}
+                    onOpenChange={(open) => {
+                      setBomPickerOpen(open);
+                      if (!open) {
+                        setBomSearch("");
+                      }
+                    }}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex w-full items-center justify-between whitespace-nowrap border px-3 py-2 shadow-sm ring-offset-background bg-background rounded-sm border-primary text-sm h-10 sm:h-10"
+                        aria-expanded={bomPickerOpen}
+                      >
+                        <span className="truncate">
+                          {selectedBom ? `${selectedBom.name} (${selectedBom.itemCount} items)` : "Select a BOM..."}
+                        </span>
+                        <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <div className="border-b px-3 py-2">
+                        <div className="flex items-center gap-2 rounded-sm border border-input bg-background px-3 py-2">
+                          <Search className="h-4 w-4 shrink-0 opacity-50" />
+                          <Input
+                            value={bomSearch}
+                            onChange={(e) => setBomSearch(e.target.value)}
+                            placeholder="Type to search BOMs..."
+                            className="h-auto border-0 bg-transparent p-0 shadow-none focus-visible:ring-0"
+                            autoComplete="off"
+                          />
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {showBomSearchResults
+                            ? `${filteredBoms.length} BOM${filteredBoms.length === 1 ? "" : "s"} found`
+                            : "Start typing to see BOMs..."}
+                        </p>
+                      </div>
+                      <ScrollArea className="h-72 w-full">
+                        <div className="p-1">
+                          {filteredBoms.length === 0 ? (
+                            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                              No BOMs match your search.
+                            </div>
+                          ) : (
+                            filteredBoms.map((bom) => {
+                              const isSelected = bomId === bom.id.toString();
+                              return (
+                                <button
+                                  key={bom.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setBomId(bom.id.toString());
+                                    setBomPickerOpen(false);
+                                    setBomSearch("");
+                                  }}
+                                  className={`flex w-full items-center justify-between rounded-sm px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground ${
+                                    isSelected ? "bg-accent text-accent-foreground" : ""
+                                  }`}
+                                >
+                                  <span className="truncate">{bom.name}</span>
+                                  <span className="ml-3 shrink-0 text-xs text-muted-foreground">
+                                    {bom.itemCount} items
+                                  </span>
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               )}
               {freeScanMode && (

@@ -176,6 +176,16 @@ export const ManualOverrideModal: React.FC<ManualOverrideModalProps> = ({
               <Lock className="w-4 h-4" />
               Password
             </Label>
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="sr-only"
+              value="manual-override"
+              readOnly
+            />
             <Input
               id="password"
               type="password"
